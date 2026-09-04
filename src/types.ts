@@ -142,6 +142,8 @@ export interface TaskNotesAIHelperSettings {
 	language: string;
 	// 报告模板列表
 	templates: ReportTemplate[];
+	// 上次选择的模板 ID（空字符串表示不选模板，极简模式）
+	selectedTemplateId: string;
 }
 
 /** 旧版单一模型配置（用于迁移） */
@@ -170,6 +172,7 @@ export const DEFAULT_SETTINGS: TaskNotesAIHelperSettings = {
 				"请根据以下任务数据，生成一份工作周报。\n\n报告时间范围：{{range}}\n\n要求：\n- 客观基于给定任务数据，不编造不存在的任务或事实。\n- 语言精炼、条理清晰，适合向上汇报。\n- 使用 Markdown 格式。\n\n任务数据如下：\n{{tasks}}",
 		},
 	],
+	selectedTemplateId: "",
 };
 
 /**
@@ -199,6 +202,17 @@ export function normalizeSettings(raw: unknown): TaskNotesAIHelperSettings {
 				name: t.name,
 				content: t.content,
 			}));
+	}
+
+	// 上次选择的模板 ID：仅在模板存在时保留，否则回退为不选模板
+	if (typeof data.selectedTemplateId === "string") {
+		settings.selectedTemplateId = data.selectedTemplateId;
+	}
+	if (
+		settings.selectedTemplateId !== "" &&
+		!settings.templates.some((t) => t.id === settings.selectedTemplateId)
+	) {
+		settings.selectedTemplateId = "";
 	}
 
 	// 供应商：优先使用新结构；否则用预设（不含固定 custom）

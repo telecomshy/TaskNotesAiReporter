@@ -10,6 +10,35 @@ test("normalizeSettings 空数据返回默认预设（4个预设供应商，无�
 	for (const p of settings.providers) {
 		assert.deepEqual(p.models, []);
 	}
+	assert.equal(settings.selectedTemplateId, "", "默认不选择模板");
+});
+
+test("normalizeSettings 保留存在的 selectedTemplateId", () => {
+	const raw = {
+		providers: PRESET_PROVIDERS.map((p) => ({ ...p, apiKey: "", authType: "bearer" as const })),
+		templates: [
+			{ id: "tpl_a", name: "周报", content: "x {{tasks}}" },
+			{ id: "tpl_b", name: "月报", content: "y {{tasks}}" },
+		],
+		selectedTemplateId: "tpl_b",
+	};
+	const settings = normalizeSettings(raw);
+	assert.equal(settings.selectedTemplateId, "tpl_b");
+});
+
+test("normalizeSettings 引用的模板不存在时重置 selectedTemplateId 为空", () => {
+	const raw = {
+		providers: PRESET_PROVIDERS.map((p) => ({ ...p, apiKey: "", authType: "bearer" as const })),
+		templates: [{ id: "tpl_a", name: "周报", content: "x" }],
+		selectedTemplateId: "tpl_removed",
+	};
+	const settings = normalizeSettings(raw);
+	assert.equal(settings.selectedTemplateId, "");
+});
+
+test("normalizeSettings 非字符串 selectedTemplateId 回退为空", () => {
+	const settings = normalizeSettings({ selectedTemplateId: 123 }) as any;
+	assert.equal(settings.selectedTemplateId, "");
 });
 
 test("normalizeSettings 迁移旧版 DeepSeek 配置到预设供应商", () => {

@@ -21,13 +21,16 @@ export class ReportModal extends Modal {
 	private listWrapEl!: HTMLElement;
 	private footerEl!: HTMLElement;
 	private generating = false;
-	private selectedTemplateId = ""; // 空字符串表示不选模板（极简模式）
+	// 记录并记住上次选择的模板（空字符串表示不选模板，极简模式）
+	private selectedTemplateId = "";
 
 	constructor(
 		app: App,
 		private plugin: TaskNotesAIHelperPlugin
 	) {
 		super(app);
+		// 打开弹窗时恢复上次选择的模板
+		this.selectedTemplateId = this.plugin.settings.selectedTemplateId ?? "";
 	}
 
 	async onOpen(): Promise<void> {
@@ -230,6 +233,9 @@ export class ReportModal extends Modal {
 		templateSelect.value = this.selectedTemplateId;
 		templateSelect.addEventListener("change", () => {
 			this.selectedTemplateId = templateSelect.value;
+			// 记住本次选择，下次打开弹窗自动恢复
+			this.plugin.settings.selectedTemplateId = templateSelect.value;
+			void this.plugin.saveSettings();
 		});
 
 		const btn = actions.createEl("button", { text: "生成报告" });
@@ -300,7 +306,8 @@ export class ReportModal extends Modal {
 				this.plugin.settings.reportFolder,
 				this.reportType,
 				range,
-				content
+				content,
+				template?.name
 			);
 			new Notice(`报告已保存：${path}`);
 			const file = this.app.vault.getAbstractFileByPath(path);

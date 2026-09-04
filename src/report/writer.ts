@@ -4,7 +4,7 @@
 
 import { normalizePath, type App } from "obsidian";
 import type { DateRange, ReportType } from "../types";
-import { buildReportFilename } from "../core/filename";
+import { buildDatedReportFilename } from "../core/filename";
 
 /** 生成报告正文的 YAML frontmatter 头部 */
 export function buildReportFrontmatter(type: ReportType, range: DateRange): string {
@@ -31,16 +31,19 @@ export function buildReportFrontmatter(type: ReportType, range: DateRange): stri
 /**
  * 将报告内容写入 vault，返回最终文件路径。
  * - 自动创建输出文件夹。
- * - 若同名文件已存在（避免覆盖历史），追加时间戳后缀。
+ * - 文件名格式：模板名称YYYYMMDDHHMM。
+ * - 若同一分钟已存在同名文件（避免覆盖历史），追加时间戳后缀。
  */
 export async function saveReport(
 	app: App,
 	folder: string,
 	type: ReportType,
 	range: DateRange,
-	content: string
+	content: string,
+	templateName?: string
 ): Promise<string> {
-	const baseName = buildReportFilename(type, range);
+	const now = new Date();
+	const baseName = buildDatedReportFilename(templateName ?? "", now);
 	const folderPath = normalizePath(folder || "");
 
 	if (folderPath && !(await app.vault.adapter.exists(folderPath))) {
@@ -51,9 +54,12 @@ export async function saveReport(
 	let filePath = folderPath ? `${folderPath}/${filename}` : filename;
 	filePath = normalizePath(filePath);
 
-	// 避免覆盖历史：同名已存在时加时间戳后缀
+	// 避免覆盖历史：同名已存在时加时间戳后缀（精确到秒）
 	if (await app.vault.adapter.exists(filePath)) {
-		const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+		const ts = new Date()
+			.toISOString()
+			.replace(/[:.]/g, "-")
+			.slice(0, 19);
 		filename = `${baseName}-${ts}.md`;
 		filePath = folderPath ? `${folderPath}/${filename}` : filename;
 		filePath = normalizePath(filePath);
