@@ -1,0 +1,10 @@
+{
+	"id": "tasknotes-aihelper",
+	"name": "TaskNotes AI Reporter",
+	"version": "0.1.0",
+	"minAppVersion": "1.12.2",
+	"description": "为 TaskNotes 生成 AI 周报/月报/年报：自定义 OpenAI 兼容模型，可以按多种条件筛选任务并支持手动增删。",
+	"author": "TeleAgent",
+	"authorUrl": "https://github.com",
+	"isDesktopOnly": false
+}

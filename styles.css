@@ -1,0 +1,906 @@
+/* TaskNotes AI Helper 样式 */
+
+/* 左侧 Ribbon 按钮置底 */
+.tah-ribbon-bottom {
+	margin-top: auto !important;
+}
+
+/* ===== 设置页 ===== */
+
+.tah-settings {
+	display: flex;
+	flex-direction: column;
+}
+
+.tah-tab-bar {
+	display: flex;
+	gap: 0.3rem;
+	margin-bottom: 1.25rem;
+	padding-bottom: 0;
+}
+
+.tah-tab-btn {
+	padding: 0.45rem 1.1rem;
+	border: none;
+	background: transparent;
+	cursor: pointer;
+	font-weight: 500;
+	font-size: 0.88rem;
+	color: var(--text-muted);
+	border-radius: 6px;
+	transition: all 0.15s ease;
+}
+
+.tah-tab-btn:hover {
+	color: var(--text-normal);
+	background: var(--background-modifier-hover);
+}
+
+.tah-tab-active {
+	color: var(--text-on-accent);
+	background: var(--interactive-accent);
+	font-weight: 600;
+}
+
+.tah-tab-content {
+	min-width: 0;
+}
+
+/* 当前选用模型摘要 */
+.tah-active-summary {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	padding: 0.6rem 0.8rem;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	margin-bottom: 1rem;
+	background: var(--background-secondary);
+}
+
+.tah-active-label {
+	font-weight: 500;
+}
+
+.tah-active-empty {
+	color: var(--text-muted);
+}
+
+.tah-test-btn {
+	padding: 0.3rem 0.9rem;
+	cursor: pointer;
+}
+
+.tah-provider-title {
+	margin: 1.25rem 0 0.25rem;
+}
+
+/* 添加模型供应商按钮 */
+.tah-add-provider-row {
+	margin-top: 1rem;
+}
+
+.tah-add-provider-btn {
+	padding: 0.6rem 1.2rem;
+	border: 1px dashed var(--background-modifier-border);
+	border-radius: 8px;
+	background: transparent;
+	cursor: pointer;
+	font-size: 0.88rem;
+	color: var(--text-muted);
+	transition: all 0.15s;
+	width: 100%;
+}
+
+.tah-add-provider-btn:hover {
+	border-color: var(--interactive-accent);
+	color: var(--interactive-accent);
+	background: rgba(var(--interactive-accent-rgb), 0.05);
+}
+
+/* 供应商删除按钮 */
+.tah-provider-delete-btn {
+	border: none;
+	background: transparent;
+	cursor: pointer;
+	color: var(--text-faint);
+	font-size: 0.9rem;
+	padding: 0.15rem 0.4rem;
+	border-radius: 4px;
+	flex-shrink: 0;
+}
+
+.tah-provider-delete-btn:hover {
+	color: var(--text-error);
+	background: rgba(var(--text-error-rgb), 0.1);
+}
+
+/* 供应商卡片 */
+.tah-provider-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+	margin-top: 0.75rem;
+}
+
+.tah-provider-card {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	overflow: hidden;
+}
+
+.tah-provider-header {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	padding: 0.8rem 0.9rem;
+	cursor: pointer;
+	user-select: none;
+}
+
+.tah-provider-header:hover {
+	background: var(--background-modifier-hover);
+}
+
+.tah-provider-arrow {
+	color: var(--text-muted);
+	font-size: 0.8rem;
+	width: 1rem;
+	text-align: center;
+	flex-shrink: 0;
+}
+
+.tah-provider-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--text-faint);
+	flex-shrink: 0;
+}
+
+.tah-provider-configured .tah-provider-dot {
+	background: var(--interactive-accent);
+}
+
+.tah-provider-name {
+	font-weight: 500;
+	flex: 1;
+}
+
+.tah-provider-count {
+	font-size: 0.8rem;
+	color: var(--text-muted);
+}
+
+.tah-provider-status {
+	font-size: 0.75rem;
+	padding: 0.15rem 0.55rem;
+	border-radius: 10px;
+	background: var(--background-modifier-hover);
+	color: var(--text-muted);
+	flex-shrink: 0;
+}
+
+.tah-provider-configured .tah-provider-status {
+	background: rgba(var(--interactive-accent-rgb), 0.15);
+	color: var(--interactive-accent);
+}
+
+.tah-provider-body {
+	padding: 1rem 1rem 1.1rem;
+	border-top: 1px solid var(--background-modifier-border);
+	display: flex;
+	flex-direction: column;
+	gap: 1.25rem;
+}
+
+.tah-provider-field {
+	display: flex;
+	align-items: center;
+	gap: 0.7rem;
+}
+.tah-provider-field-label {
+	width: 5.5rem;
+	font-size: 0.85rem;
+	color: var(--text-muted);
+	flex-shrink: 0;
+}
+
+.tah-provider-input {
+	flex: 1;
+	min-width: 0;
+}
+
+.tah-provider-action {
+	display: flex;
+	gap: 0.5rem;
+	margin-top: 0.25rem;
+}
+
+.tah-fetch-models-btn,
+.tah-test-custom-btn,
+.tah-save-custom-btn {
+	padding: 0.35rem 0.9rem;
+	cursor: pointer;
+}
+
+.tah-test-custom-btn {
+	background: var(--background-primary);
+	color: var(--text-normal);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	font-weight: 500;
+}
+
+.tah-test-custom-btn:hover {
+	background: var(--background-modifier-hover);
+}
+
+.tah-save-custom-btn {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border: none;
+	border-radius: 6px;
+	font-weight: 500;
+}
+
+.tah-save-custom-btn:hover {
+	opacity: 0.9;
+}
+
+/* 自定义供应商卡片展开区：每行配置明确留出垂直间距 */
+.tah-provider-custom .tah-provider-field {
+	margin-bottom: 1.05rem;
+}
+.tah-provider-custom .tah-provider-field:last-child,
+.tah-provider-custom .tah-provider-action {
+	margin-bottom: 0;
+}
+.tah-provider-custom .tah-provider-action {
+	margin-top: 0.4rem;
+}
+
+.tah-provider-models-label {
+	font-size: 0.85rem;
+	color: var(--text-muted);
+	margin-top: 0.5rem;
+	margin-bottom: 0.4rem;
+}
+
+.tah-provider-models {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.45rem;
+	align-items: center;
+}
+
+.tah-model-tag {
+	padding: 0.3rem 0.75rem;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	font-size: 0.85rem;
+	cursor: pointer;
+	background: var(--background-primary);
+}
+
+.tah-model-tag:hover {
+	background: var(--background-modifier-hover);
+}
+
+.tah-model-more {
+	font-size: 0.8rem;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.tah-model-more:hover {
+	color: var(--text-normal);
+}
+
+/* 认证方式按钮 */
+.tah-auth-group {
+	display: flex;
+	gap: 0.4rem;
+}
+
+.tah-auth-btn {
+	padding: 0.3rem 0.8rem;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	cursor: pointer;
+	background: var(--background-primary);
+}
+
+.tah-auth-active {
+	background: rgba(var(--interactive-accent-rgb), 0.15);
+	border-color: var(--interactive-accent);
+	color: var(--interactive-accent);
+	font-weight: 500;
+}
+
+/* 自定义供应商：模型列表与单行配置 */
+.tah-custom-models-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.55rem;
+}
+
+.tah-custom-model-row {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	padding: 0.6rem 0.7rem;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	background: var(--background-primary);
+	flex-wrap: wrap;
+}
+
+.tah-custom-model-group {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	flex: 1;
+	min-width: 7rem;
+}
+
+.tah-custom-model-label {
+	font-size: 0.75rem;
+	color: var(--text-muted);
+}
+
+.tah-custom-model-actions {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	flex-shrink: 0;
+}
+
+.tah-model-test-btn {
+	padding: 0.3rem 0.85rem;
+	cursor: pointer;
+	background: var(--background-primary);
+	color: var(--text-normal);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	font-weight: 500;
+}
+
+.tah-model-test-btn:hover {
+	background: var(--background-modifier-hover);
+}
+
+.tah-model-del-btn {
+	border: none;
+	background: transparent;
+	cursor: pointer;
+	color: var(--text-faint);
+	font-size: 0.9rem;
+	padding: 0.3rem 0.45rem;
+	border-radius: 4px;
+	flex-shrink: 0;
+}
+
+.tah-model-del-btn:hover {
+	color: var(--text-error);
+	background: rgba(var(--text-error-rgb), 0.1);
+}
+
+/* 新增模型按钮 */
+.tah-add-model-row {
+	margin-top: 0.35rem;
+}
+
+.tah-add-model-btn {
+	padding: 0.45rem 1rem;
+	border: 1px dashed var(--background-modifier-border);
+	border-radius: 6px;
+	background: transparent;
+	cursor: pointer;
+	font-size: 0.85rem;
+	color: var(--text-muted);
+	transition: all 0.15s;
+}
+
+.tah-add-model-btn:hover {
+	border-color: var(--interactive-accent);
+	color: var(--interactive-accent);
+	background: rgba(var(--interactive-accent-rgb), 0.05);
+}
+
+/* ===== 生成报告弹窗 ===== */
+
+/* 覆盖 Obsidian 默认 .modal 的宽度限制，避免横向滚动条 */
+.tah-modal-root {
+	max-width: min(92vw, 960px) !important;
+	width: min(92vw, 960px) !important;
+}
+
+/* 主窗口（单栏任务列表）窄宽度 */
+.tah-modal-root-narrow {
+	max-width: min(92vw, 560px) !important;
+	width: min(92vw, 560px) !important;
+}
+
+/* 选择任务窗口（筛选区 + 任务列表上下排列）窄宽度 */
+.tah-modal-root-picker {
+	max-width: min(92vw, 520px) !important;
+	width: min(92vw, 520px) !important;
+}
+
+.tah-modal {
+	display: flex;
+	flex-direction: column;
+	max-height: 85vh;
+	width: 100%;
+	box-sizing: border-box;
+	overflow-x: hidden;
+}
+
+/* 主窗口单栏布局 */
+.tah-main {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.tah-main-header h3 {
+	margin: 0 0 0.5rem;
+}
+
+.tah-modal-main {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	gap: 1.25rem;
+	overflow-y: auto;
+	overflow-x: hidden;
+	align-items: stretch;
+	min-width: 0;
+}
+
+.tah-pane {
+	flex: 1;
+	min-width: 0;
+}
+
+.tah-pane-left {
+	flex: 0 0 18rem;
+	border-right: 1px solid var(--background-modifier-border);
+	padding-right: 1.25rem;
+	min-width: 0;
+}
+
+.tah-pane-right {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.tah-modal-footer {
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	padding-top: 0.75rem;
+	margin-top: 0.75rem;
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.tah-footer-count {
+	font-size: 0.85rem;
+	color: var(--text-muted);
+}
+
+.tah-footer-actions {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+}
+
+/* 快捷按钮 */
+.tah-quick-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+	margin-bottom: 0.75rem;
+}
+
+.tah-quick-btn {
+	padding: 0.3rem 0.7rem;
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+.tah-range-label {
+	font-size: 0.85rem;
+	color: var(--text-muted);
+	margin: 0.5rem 0;
+}
+
+/* 日历 */
+.tah-calendar-container {
+	margin-top: 0.5rem;
+}
+
+.tah-calendar-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 0.5rem;
+}
+
+.tah-calendar-nav {
+	border: none;
+	background: transparent;
+	cursor: pointer;
+	font-size: 1.1rem;
+	padding: 0.2rem 0.5rem;
+}
+
+.tah-calendar-title {
+	font-weight: 600;
+}
+
+.tah-calendar-weekdays,
+.tah-calendar-grid {
+	display: grid;
+	grid-template-columns: repeat(7, 1fr);
+	gap: 2px;
+}
+
+.tah-calendar-weekday {
+	text-align: center;
+	font-size: 0.8rem;
+	color: var(--text-muted);
+	padding: 0.3rem 0;
+}
+
+.tah-calendar-cell {
+	text-align: center;
+	padding: 0.4rem 0;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 0.85rem;
+}
+
+.tah-calendar-cell:hover {
+	background: var(--background-modifier-hover);
+}
+
+.tah-calendar-empty {
+	cursor: default;
+}
+
+.tah-calendar-today {
+	outline: 1px solid var(--interactive-accent);
+}
+
+.tah-calendar-selected {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.tah-calendar-edge {
+	font-weight: 700;
+}
+
+/* 任务列表 */
+.tah-task-toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+	margin-bottom: 0.5rem;
+}
+
+.tah-count {
+	font-size: 0.85rem;
+	color: var(--text-muted);
+}
+
+.tah-batch-actions {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+}
+
+.tah-select-all {
+	display: flex;
+	align-items: center;
+	gap: 0.3rem;
+	font-size: 0.85rem;
+	cursor: pointer;
+	color: var(--text-muted);
+}
+
+.tah-select-all input[type="checkbox"] {
+	margin: 0;
+}
+
+.tah-batch-remove-btn {
+	padding: 0.2rem 0.6rem;
+	font-size: 0.8rem;
+	cursor: pointer;
+}
+
+.tah-batch-remove-btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.tah-task-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+	flex: 0 0 auto;
+	max-height: 22rem;
+	overflow-y: auto;
+	overflow-x: hidden;
+	padding-right: 0.25rem;
+}
+
+.tah-task-item {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 0.5rem;
+	padding: 0.4rem 0.6rem;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	flex-shrink: 0;
+}
+
+.tah-task-checkbox {
+	margin: 0;
+	flex-shrink: 0;
+}
+
+.tah-task-info {
+	min-width: 0;
+	flex: 1;
+}
+
+.tah-task-title {
+	font-weight: 500;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.tah-task-meta {
+	font-size: 0.75rem;
+	color: var(--text-muted);
+}
+
+.tah-remove-btn {
+	padding: 0.2rem 0.5rem;
+	font-size: 0.8rem;
+	cursor: pointer;
+	flex-shrink: 0;
+}
+
+.tah-add-row {
+	margin-top: 0.75rem;
+}
+
+.tah-add-btn {
+	padding: 0.35rem 0.8rem;
+	cursor: pointer;
+}
+
+.tah-hint {
+	margin-top: 0.4rem;
+	font-size: 0.75rem;
+	color: var(--text-muted);
+}
+
+.tah-generate-btn {
+	padding: 0.5rem 1.6rem;
+	cursor: pointer;
+	font-weight: 600;
+	font-size: 0.85rem;
+	line-height: 1.5;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+/* 模板下拉 — 无边框透明样式，只保留原生下拉箭头 */
+.tah-template-select {
+	padding: 0.5rem 1.4rem 0.5rem 0.4rem;
+	border: none;
+	border-radius: 0;
+	background: transparent !important;
+	max-width: 18rem;
+	min-width: 8rem;
+	cursor: pointer;
+	font-size: 0.85rem;
+	line-height: 1.5;
+	height: auto;
+	color: var(--text-normal);
+	transition: color 0.15s;
+	appearance: auto !important;
+	-webkit-appearance: auto !important;
+	-moz-appearance: auto !important;
+	box-shadow: none !important;
+	vertical-align: middle;
+}
+
+.tah-template-select:hover {
+	color: var(--text-normal);
+}
+
+.tah-template-select:focus,
+.tah-template-select:focus-visible {
+	border: none;
+	outline: none;
+	box-shadow: none !important;
+	color: var(--text-normal) !important;
+}
+
+/* 模板配置 Tab */
+.tah-template-add-row {
+	margin: 0.5rem 0 0.75rem;
+}
+
+.tah-template-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.6rem;
+}
+
+.tah-template-item {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	padding: 0.6rem 0.8rem;
+}
+
+.tah-template-item-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+	margin-bottom: 0.4rem;
+}
+
+.tah-template-item-name {
+	font-weight: 600;
+}
+
+.tah-template-item-actions {
+	display: flex;
+	gap: 0.4rem;
+}
+
+.tah-template-item-preview {
+	font-size: 0.8rem;
+	color: var(--text-muted);
+	white-space: pre-wrap;
+	max-height: 6rem;
+	overflow-y: auto;
+	background: var(--background-secondary);
+	border-radius: 4px;
+	padding: 0.4rem 0.5rem;
+}
+
+/* 模板编辑弹窗 */
+.tah-template-name-input {
+	width: 100%;
+	box-sizing: border-box;
+	margin-bottom: 0.5rem;
+}
+
+.tah-template-content-title {
+	margin: 0.75rem 0 0.25rem;
+}
+
+.tah-template-content-input {
+	width: 100%;
+	box-sizing: border-box;
+	resize: vertical;
+}
+
+/* 编辑模板弹窗：底部按钮组，与内容区留白，按钮等宽等高 */
+.tah-preview-actions {
+	display: flex;
+	justify-content: flex-end;
+	align-items: center;
+	gap: 0.6rem;
+	margin-top: 1.5rem;
+}
+
+.tah-preview-actions button {
+	min-width: 6.5rem;
+	height: 2.3rem;
+	padding: 0 1.2rem;
+	font-size: 0.85rem;
+	line-height: 1.4;
+	cursor: pointer;
+	border-radius: 6px;
+	box-sizing: border-box;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.tah-loading,
+.tah-empty {
+	color: var(--text-muted);
+	padding: 1rem 0;
+}
+
+.tah-error {
+	color: var(--text-error);
+	padding: 1rem 0;
+}
+
+/* ===== 选择任务窗口 ===== */
+
+/* 固定高度，任务列表内部滚动，整个窗口不滚动 */
+.tah-modal-root-picker .tah-modal {
+	height: min(80vh, 640px);
+	max-height: none;
+	overflow-y: hidden;
+}
+
+.tah-picker-tabs {
+	margin-bottom: 0.75rem;
+	flex-shrink: 0;
+}
+
+.tah-picker-filter {
+	margin-bottom: 0.75rem;
+	flex-shrink: 0;
+}
+
+/* 搜索框 */
+.tah-search-row {
+	margin-bottom: 0.5rem;
+}
+
+.tah-search-input {
+	width: 100%;
+	box-sizing: border-box;
+}
+
+.tah-picker-list-title {
+	margin: 0.5rem 0;
+	flex-shrink: 0;
+}
+
+.tah-picker-hint {
+	font-size: 0.75rem;
+	color: var(--text-muted);
+	margin-bottom: 0.5rem;
+	flex-shrink: 0;
+}
+
+.tah-picker-list {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	overflow-x: hidden;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	padding: 0.5rem;
+}
+
+.tah-picker-footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: 0.5rem;
+	margin-top: 1rem;
+	padding-top: 0.75rem;
+	border-top: 1px solid var(--background-modifier-border);
+	flex-shrink: 0;
+}
+
+.tah-picker-footer .tah-generate-btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}

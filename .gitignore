@@ -1,0 +1,16 @@
+# 依赖
+node_modules/
+
+# 中间/临时文件
+.temp/
+
+# 第三方参考项目（非本项目代码）
+tasknotes-main/
+
+# 构建/缓存产物（保留 main.js 便于直接部署，如不需要可放开注释）
+# main.js
+
+# 系统与编辑器杂项
+.DS_Store
+Thumbs.db
+*.log
