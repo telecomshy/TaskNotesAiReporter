@@ -6,7 +6,7 @@
 import { App, Modal, Notice, TFile } from "obsidian";
 import type TaskNotesAIHelperPlugin from "../../main";
 import { resolveActiveModelConfig, type DateRange, type ReportType, type TaskInfo } from "../types";
-import { loadAllTasks } from "../tasks/source";
+import { loadAllTasks, hydrateTaskDetails } from "../tasks/source";
 import { buildReportPrompt } from "../core/prompt";
 import { chatCompletion, AIClientError } from "../ai/client";
 import { saveReport } from "../report/writer";
@@ -281,7 +281,14 @@ export class ReportModal extends Modal {
 			const template = this.plugin.settings.templates.find(
 				(t) => t.id === this.selectedTemplateId
 			);
-			const prompt = buildReportPrompt(tasks, {
+
+			// 补充任务详情：TaskNotes 公开 API 的 list() 不读取正文，details 为空。
+			// 这里读取任务笔记正文回填到 details，避免报告缺失任务详细内容。
+			const tasksWithDetails = await Promise.all(
+				tasks.map((task) => hydrateTaskDetails(this.app, task))
+			);
+
+			const prompt = buildReportPrompt(tasksWithDetails, {
 				range,
 				type: this.reportType,
 				language: this.plugin.settings.language,

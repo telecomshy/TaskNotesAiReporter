@@ -19,6 +19,50 @@ export function getTaskNotesApi(app: App): TaskNotesPublicApi | null {
 	}
 }
 
+/** 去掉 markdown 开头的 YAML frontmatter，返回正文（尾部空白修剪）。 */
+export function stripFrontmatter(content: string): string {
+	const trimmed = content.replace(/^\uFEFF/, "");
+	if (trimmed.startsWith("---")) {
+		const end = trimmed.indexOf("\n---", 3);
+		if (end !== -1) {
+			return trimmed.slice(end + 4).replace(/^\n+/, "").trimEnd();
+		}
+	}
+	return trimmed.trimEnd();
+}
+
+/**
+ * 将读取到的正文回填到 task.details（纯逻辑，可单元测试）。
+ * body 为空时保留原 details 不变。
+ */
+export function applyHydratedDetails(task: TaskInfo, body: string): TaskInfo {
+	const detail = body.trim();
+	if (!detail) return task;
+	return { ...task, details: detail };
+}
+
+/**
+ * 通过 Obsidian Vault API 读取任务对应的笔记正文，回填到 task.details。
+ * 若读取失败或文件不存在，保持 task.details 不变（不覆盖已有详情）。
+ */
+export async function hydrateTaskDetails(
+	app: App,
+	task: TaskInfo
+): Promise<TaskInfo> {
+	if (!task.path) return task;
+	try {
+		const file = app.vault.getAbstractFileByPath(task.path);
+		// Obsidian 中非 TFile（如文件夹）没有 read 方法，读取会失败并由 catch 兜底
+		const reader = file as { read?: () => Promise<string> } | null;
+		if (typeof reader?.read !== "function") return task;
+		const content = await reader.read();
+		const body = stripFrontmatter(content);
+		return applyHydratedDetails(task, body);
+	} catch {
+		return task;
+	}
+}
+
 /** 读取全部未归档任务。返回 null 表示 TaskNotes API 不可用。 */
 export async function loadAllTasks(app: App): Promise<TaskInfo[] | null> {
 	const api = getTaskNotesApi(app);

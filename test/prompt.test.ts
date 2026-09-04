@@ -65,3 +65,12 @@ test("groupTasksByProject 归类正确", () => {
 	assert.equal(map.get("项目A")?.length, 1);
 	assert.equal(map.get("（未归属项目）")?.length, 1);
 });
+
+test("formatTaskLine 完整保留超长详情（不限 200 字）", () => {
+	const longDetail = "很长的详细描述".repeat(60); // 远超 200 字
+	const t: TaskInfo = { ...task, details: longDetail };
+	const line = formatTaskLine(t);
+	assert.ok(line.includes(longDetail), "超长详情应完整出现在行内");
+	assert.ok(!line.includes("…"), "不应出现截断省略号");
+});
+

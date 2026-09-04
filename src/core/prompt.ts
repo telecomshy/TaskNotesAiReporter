@@ -51,7 +51,7 @@ export function formatTaskLine(task: TaskInfo): string {
 	if (minutes > 0) parts.push(`耗时：${formatMinutes(minutes)}`);
 	if (task.details && task.details.trim()) {
 		const detail = task.details.trim().replace(/\s+/g, " ");
-		parts.push(`详情：${detail.length > 200 ? detail.slice(0, 200) + "…" : detail}`);
+		parts.push(`详情：${detail}`);
 	}
 	return parts.join("，");
 }
