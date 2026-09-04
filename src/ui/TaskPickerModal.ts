@@ -35,6 +35,10 @@ export class TaskPickerModal extends Modal {
 	private searchInput!: HTMLInputElement;
 	private confirmBtn!: HTMLButtonElement;
 
+	// 按标题页的全选 / 清空复选框
+	private selectAllBox!: HTMLInputElement;
+	private clearBox!: HTMLInputElement;
+
 	constructor(
 		app: App,
 		private allTasks: TaskInfo[],
@@ -156,6 +160,31 @@ export class TaskPickerModal extends Modal {
 			this.refresh();
 		});
 
+		// 全选 / 清空（仅作用于按标题页当前展示的任务）
+		const actionRow = this.filterEl.createDiv({ cls: "tah-picker-actions" });
+		const allLabel = actionRow.createEl("label", { cls: "tah-select-all" });
+		this.selectAllBox = allLabel.createEl("input", { type: "checkbox" });
+		allLabel.createSpan({ text: "全选" });
+		this.selectAllBox.addEventListener("change", () => {
+			const current = this.titleTasks;
+			if (this.selectAllBox.checked) {
+				for (const task of current) this.checkedPaths.add(task.path);
+			} else {
+				for (const task of current) this.checkedPaths.delete(task.path);
+			}
+			this.renderList();
+		});
+
+		const clearLabel = actionRow.createEl("label", { cls: "tah-select-clear" });
+		this.clearBox = clearLabel.createEl("input", { type: "checkbox" });
+		clearLabel.createSpan({ text: "清空" });
+		this.clearBox.addEventListener("change", () => {
+			for (const task of this.titleTasks) this.checkedPaths.delete(task.path);
+			// 一次性动作，勾选后自动复位
+			this.clearBox.checked = false;
+			this.renderList();
+		});
+
 		this.labelEl = this.filterEl.createDiv({ cls: "tah-range-label" });
 	}
 
@@ -214,8 +243,7 @@ export class TaskPickerModal extends Modal {
 			this.titleTasks = kw
 				? this.allTasks.filter((t) => t.title.toLowerCase().includes(kw))
 				: [...this.allTasks];
-			// 默认全选
-			for (const task of this.titleTasks) this.checkedPaths.add(task.path);
+			// 按标题页：默认都不勾选，由用户通过「全选」或单个勾选自行选择
 		}
 
 		this.updateLabel();
@@ -270,6 +298,19 @@ export class TaskPickerModal extends Modal {
 		const count = this.checkedPaths.size;
 		this.confirmBtn.setText(`加入选中（${count}）`);
 		this.confirmBtn.disabled = count === 0;
+
+		// 按标题页：同步「全选」复选框状态
+		if (this.currentTab === "title" && this.selectAllBox) {
+			const shown = this.titleTasks;
+			if (shown.length === 0) {
+				this.selectAllBox.checked = false;
+				this.selectAllBox.indeterminate = false;
+			} else {
+				const checkedInShown = shown.filter((t) => this.checkedPaths.has(t.path)).length;
+				this.selectAllBox.checked = checkedInShown === shown.length;
+				this.selectAllBox.indeterminate = checkedInShown > 0 && checkedInShown < shown.length;
+			}
+		}
 	}
 
 	private confirm(): void {

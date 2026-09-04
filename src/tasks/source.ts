@@ -43,7 +43,8 @@ export function applyHydratedDetails(task: TaskInfo, body: string): TaskInfo {
 
 /**
  * 通过 Obsidian Vault API 读取任务对应的笔记正文，回填到 task.details。
- * 若读取失败或文件不存在，保持 task.details 不变（不覆盖已有详情）。
+ * 若读取失败、文件不存在或不是普通文件，保持 task.details 不变（不覆盖已有详情）。
+ * 注意：Obsidian 的 TFile 没有 read() 方法，读取必须使用 app.vault.read(file)。
  */
 export async function hydrateTaskDetails(
 	app: App,
@@ -52,10 +53,9 @@ export async function hydrateTaskDetails(
 	if (!task.path) return task;
 	try {
 		const file = app.vault.getAbstractFileByPath(task.path);
-		// Obsidian 中非 TFile（如文件夹）没有 read 方法，读取会失败并由 catch 兜底
-		const reader = file as { read?: () => Promise<string> } | null;
-		if (typeof reader?.read !== "function") return task;
-		const content = await reader.read();
+		if (!file) return task;
+		// 非文件（如文件夹）传给 vault.read 会抛错，由 catch 兜底返回原 task
+		const content = await app.vault.read(file as import("obsidian").TFile);
 		const body = stripFrontmatter(content);
 		return applyHydratedDetails(task, body);
 	} catch {

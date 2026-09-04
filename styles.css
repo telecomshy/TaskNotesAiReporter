@@ -519,7 +519,7 @@
 .tah-range-label {
 	font-size: 0.85rem;
 	color: var(--text-muted);
-	margin: 0.5rem 0;
+	margin: 0.5rem 0 0.15rem;
 }
 
 /* 日历 */
@@ -861,6 +861,27 @@
 /* 搜索框 */
 .tah-search-row {
 	margin-bottom: 0.5rem;
+}
+
+/* 按标题页：全选/清空操作行 */
+.tah-picker-actions {
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+	margin-bottom: 0.4rem;
+}
+
+.tah-select-clear {
+	display: flex;
+	align-items: center;
+	gap: 0.3rem;
+	font-size: 0.85rem;
+	cursor: pointer;
+	color: var(--text-muted);
+}
+
+.tah-select-clear input[type="checkbox"] {
+	margin: 0;
 }
 
 .tah-search-input {
