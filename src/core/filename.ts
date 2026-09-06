@@ -4,14 +4,7 @@
 
 import type { DateRange, ReportType } from "../types";
 import { fromDateString, getISOWeekNumber, getISOWeekYear } from "./dates";
-
-/** 报告类型的中文前缀 */
-const REPORT_TYPE_LABEL: Record<ReportType, string> = {
-	week: "周报",
-	month: "月报",
-	year: "年报",
-	custom: "报告",
-};
+import { REPORT_TYPE_LABEL } from "./reportType";
 
 /**
  * 根据报告类型与日期范围生成文件名（不含扩展名）。

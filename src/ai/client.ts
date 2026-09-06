@@ -1,8 +1,12 @@
 /**
- * OpenAI 兼容大模型客户端，基于 Obsidian 的 requestUrl 实现。
+ * OpenAI 兼容大模型客户端。
+ *
+ * 本模块（client.ts）不直接静态依赖 obsidian：底层 HTTP 传输通过可注入的
+ * RequestFn 提供，默认实现位于 transport.ts（包装 obsidian 的 requestUrl）。
+ * 请求参数通过可选参数 request 注入，便于单元测试。
  */
 
-import { requestUrl } from "obsidian";
+import { requestUrlTransport } from "./transport";
 import { buildChatCompletionsUrl, buildModelsUrl } from "../core/aiUrl";
 
 export interface ChatMessage {
@@ -26,11 +30,37 @@ export class AIClientError extends Error {
 	}
 }
 
+/** HTTP 响应的最小形态（兼容 obsidian requestUrl 响应） */
+export interface HttpResponse {
+	status: number;
+	json: unknown;
+	text: string;
+}
+
+/** 请求参数（兼容 obsidian requestUrl 参数） */
+export interface RequestParams {
+	url: string;
+	method: "GET" | "POST";
+	headers: Record<string, string>;
+	body?: string;
+	throw: boolean;
+}
+
+/** 可注入的请求函数，便于测试 mock；默认走 obsidian requestUrl（见 transport.ts） */
+export type RequestFn = (params: RequestParams) => Promise<HttpResponse>;
+
+const defaultRequest: RequestFn = requestUrlTransport;
+
 /**
  * 动态获取供应商支持的模型列表（GET /models）。
  * 返回模型 ID 数组；失败时抛出 AIClientError。
  */
-export async function listModels(baseUrl: string, apiKey: string, timeoutSeconds = 30): Promise<string[]> {
+export async function listModels(
+	baseUrl: string,
+	apiKey: string,
+	timeoutSeconds = 30,
+	request: RequestFn = defaultRequest
+): Promise<string[]> {
 	const url = buildModelsUrl(baseUrl);
 
 	// 认证头：apiKey 为空即无认证，此时不附带 Authorization
@@ -42,7 +72,7 @@ export async function listModels(baseUrl: string, apiKey: string, timeoutSeconds
 	let response;
 	try {
 		response = await withTimeout(
-			requestUrl({
+			request({
 				url,
 				method: "GET",
 				headers,
@@ -57,7 +87,7 @@ export async function listModels(baseUrl: string, apiKey: string, timeoutSeconds
 	if (response.status < 200 || response.status >= 300) {
 		let detail = "";
 		try {
-			const body = response.json;
+			const body = response.json as Record<string, any> | null;
 			detail =
 				(body?.error?.message as string) ||
 				(body?.message as string) ||
@@ -85,7 +115,8 @@ export async function listModels(baseUrl: string, apiKey: string, timeoutSeconds
  */
 export async function chatCompletion(
 	config: AIClientConfig,
-	messages: ChatMessage[]
+	messages: ChatMessage[],
+	request: RequestFn = defaultRequest
 ): Promise<string> {
 	const url = buildChatCompletionsUrl(config.baseUrl);
 
@@ -103,7 +134,7 @@ export async function chatCompletion(
 			headers.Authorization = `Bearer ${config.apiKey}`;
 		}
 		response = await withTimeout(
-			requestUrl({
+			request({
 				url,
 				method: "POST",
 				headers,
@@ -125,7 +156,7 @@ export async function chatCompletion(
 	if (response.status < 200 || response.status >= 300) {
 		let detail = "";
 		try {
-			const body = response.json;
+			const body = response.json as Record<string, any> | null;
 			detail =
 				(body?.error?.message as string) ||
 				(body?.message as string) ||
@@ -152,8 +183,11 @@ export async function chatCompletion(
 }
 
 /** 测试连接：发送一条极简请求以校验配置是否可用。 */
-export async function testConnection(config: AIClientConfig): Promise<void> {
-	await chatCompletion(config, [{ role: "user", content: "ping" }]);
+export async function testConnection(
+	config: AIClientConfig,
+	request: RequestFn = defaultRequest
+): Promise<void> {
+	await chatCompletion(config, [{ role: "user", content: "ping" }], request);
 }
 
 /** 钳制 maxTokens 到安全范围（>0 且 ≤ 384K）。 */

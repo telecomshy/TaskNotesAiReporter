@@ -3,13 +3,7 @@
  */
 
 import type { DateRange, ReportType, TaskInfo } from "../types";
-
-const REPORT_TYPE_LABEL: Record<ReportType, string> = {
-	week: "周报",
-	month: "月报",
-	year: "年报",
-	custom: "报告",
-};
+import { REPORT_TYPE_LABEL } from "./reportType";
 
 /** 将耗时分钟数格式化为可读文本 */
 function formatMinutes(minutes: number): string {

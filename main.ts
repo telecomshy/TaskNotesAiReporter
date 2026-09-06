@@ -1,12 +1,12 @@
 /**
- * TaskNotes AI Helper 主插件入口。
+ * TaskNotes AI Reporter 主插件入口。
  * 提供：设置页、左侧 Ribbon 按钮、命令面板命令，打开"生成报告"交互弹窗。
  */
 
 import { Plugin } from "obsidian";
 import { TaskNotesAIHelperSettingTab } from "./src/settings";
 import { ReportModal } from "./src/ui/ReportModal";
-import { normalizeSettings, type TaskNotesAIHelperSettings } from "./src/types";
+import { normalizeSettings, type TaskNotesAIHelperSettings } from "./src/settings/logic";
 
 export default class TaskNotesAIHelperPlugin extends Plugin {
 	settings: TaskNotesAIHelperSettings;

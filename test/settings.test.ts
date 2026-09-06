@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeSettings, resolveActiveModelConfig, PRESET_PROVIDERS } from "../src/types";
+import { normalizeSettings, resolveActiveModelConfig } from "../src/settings/logic";
+import { PRESET_PROVIDERS } from "../src/types";
 
 test("normalizeSettings 空数据返回默认预设（4个预设供应商，无固定 custom）", () => {
 	const settings = normalizeSettings({});

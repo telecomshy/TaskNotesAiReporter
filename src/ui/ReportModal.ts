@@ -5,9 +5,11 @@
 
 import { App, Modal, Notice, TFile } from "obsidian";
 import type TaskNotesAIHelperPlugin from "../../main";
-import { resolveActiveModelConfig, type DateRange, type ReportType, type TaskInfo } from "../types";
+import { resolveActiveModelConfig } from "../settings/logic";
+import type { DateRange, ReportType, TaskInfo } from "../types";
 import { loadAllTasks, hydrateTaskDetails } from "../tasks/source";
 import { buildReportPrompt } from "../core/prompt";
+import { getWeekRange } from "../core/dates";
 import { chatCompletion, AIClientError } from "../ai/client";
 import { saveReport } from "../report/writer";
 import { TaskPickerModal } from "./TaskPickerModal";
@@ -347,21 +349,6 @@ export class ReportModal extends Modal {
 			dates.sort();
 			return { start: dates[0], end: dates[dates.length - 1] };
 		}
-		const now = new Date();
-		return getWeekRangeFallback(now, this.plugin.settings.weekStartsOnMonday);
-	}}
-
-/** 本周范围兜底 */
-function getWeekRangeFallback(anchor: Date, weekStartsOnMonday: boolean): DateRange {
-	const day = anchor.getDay();
-	const diff = weekStartsOnMonday ? (day === 0 ? -6 : 1 - day) : -day;
-	const start = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() + diff);
-	const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6);
-	const fmt = (d: Date) => {
-		const y = d.getFullYear();
-		const m = String(d.getMonth() + 1).padStart(2, "0");
-		const dd = String(d.getDate()).padStart(2, "0");
-		return `${y}-${m}-${dd}`;
-	};
-	return { start: fmt(start), end: fmt(end) };
+		return getWeekRange(new Date(), this.plugin.settings.weekStartsOnMonday);
+	}
 }

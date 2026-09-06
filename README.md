@@ -9,7 +9,7 @@ AIGC:
   ReservedCode2: '47ffad8f-dc66-48e6-98d4-509556ff5697'
 ---
 
-# TaskNotes AI Helper
+# TaskNotes AI Reporter
 
 为 [TaskNotes](https://github.com/callumalpass/tasknotes) 生成 AI 周报 / 月报 / 年报的独立辅助插件。
 
@@ -31,17 +31,17 @@ AIGC:
    npm run build
    ```
 
-2. 将以下文件复制到你的 vault 的 `.obsidian/plugins/tasknotes-aihelper/` 目录：
+2. 将以下文件复制到你的 vault 的 `.obsidian/plugins/tasknotes-aireporter/` 目录：
 
    - `manifest.json`
    - `main.js`
    - `styles.css`
 
-3. 在 Obsidian 的「第三方插件」中启用 **TaskNotes AI Helper**。
+3. 在 Obsidian 的「第三方插件」中启用 **TaskNotes AI Reporter**。
 
 ## 配置
 
-打开「设置 → 社区插件 → TaskNotes AI Helper」：
+打开「设置 → 社区插件 → TaskNotes AI Reporter」：
 
 1. **AI 模型配置**：填写 Base URL、API Key、模型名称，点「测试连接」验证。
    - 示例（DeepSeek）：Base URL `https://api.deepseek.com/v1`，模型 `deepseek-chat`

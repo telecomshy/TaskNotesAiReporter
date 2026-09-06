@@ -5,24 +5,19 @@
 import { normalizePath, type App } from "obsidian";
 import type { DateRange, ReportType } from "../types";
 import { buildDatedReportFilename } from "../core/filename";
+import { REPORT_TYPE_LABEL } from "../core/reportType";
 
 /** 生成报告正文的 YAML frontmatter 头部 */
 export function buildReportFrontmatter(type: ReportType, range: DateRange): string {
-	const typeLabel: Record<ReportType, string> = {
-		week: "周报",
-		month: "月报",
-		year: "年报",
-		custom: "报告",
-	};
 	const now = new Date().toISOString();
 	return [
 		"---",
-		`title: "${typeLabel[type]} ${range.start} ~ ${range.end}"`,
+		`title: "${REPORT_TYPE_LABEL[type]} ${range.start} ~ ${range.end}"`,
 		`type: ${type}`,
 		`start: "${range.start}"`,
 		`end: "${range.end}"`,
 		`generatedAt: "${now}"`,
-		`generator: tasknotes-aihelper`,
+		`generator: tasknotes-aireporter`,
 		"---",
 		"",
 	].join("\n");

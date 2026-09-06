@@ -1,12 +1,12 @@
 {
-	"name": "tasknotes-aihelper",
+	"name": "tasknotes-aireporter",
 	"version": "0.1.0",
 	"description": "为 TaskNotes 生成 AI 周报/月报/年报的独立辅助插件",
 	"main": "main.js",
 	"scripts": {
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"dev": "node esbuild.config.mjs",
-		"test": "node --test --experimental-strip-types test/"
+		"test": "node --import tsx --experimental-test-module-mocks --test \"test/*.test.ts\""
 	},
 	"keywords": [],
 	"author": "TeleAgent",
