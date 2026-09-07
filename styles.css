@@ -525,6 +525,8 @@
 /* 日历 */
 .tah-calendar-container {
 	margin-top: 0.5rem;
+	padding: 0 0.25rem;
+	box-sizing: border-box;
 }
 
 .tah-calendar-header {
@@ -549,7 +551,7 @@
 .tah-calendar-weekdays,
 .tah-calendar-grid {
 	display: grid;
-	grid-template-columns: repeat(7, 1fr);
+	grid-template-columns: repeat(7, minmax(0, 1fr));
 	gap: 2px;
 }
 

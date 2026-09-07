@@ -9,7 +9,7 @@
 		"test": "node --import tsx --experimental-test-module-mocks --test \"test/*.test.ts\""
 	},
 	"keywords": [],
-	"author": "TeleAgent",
+	"author": "TelecomShy",
 	"license": "MIT",
 	"devDependencies": {
 		"@types/node": "^24.3.0",
