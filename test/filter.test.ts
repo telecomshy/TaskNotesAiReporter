@@ -7,6 +7,7 @@ import {
 	hasNoDate,
 	parseTitleQuery,
 	filterTasksByTitleQuery,
+	isTitleQueryEmpty,
 } from "../src/core/filter";
 import type { DateField, TaskInfo } from "../src/types";
 
@@ -116,13 +117,20 @@ test("filterTasksByTitleQuery 仅关键字匹配标题（兼容原行为）", ()
 	const result = filterTasksByTitleQuery(tasks, { keywords: ["bug"], tags: [], contexts: [] });
 	assert.deepEqual(result.map((t) => t.path), ["a"]);
 
-	// 多个关键字之间为 AND
+	// 同一维度内多个关键字为 OR：命中任一即可
 	const result2 = filterTasksByTitleQuery(tasks, {
-		keywords: ["修复", "登录"],
+		keywords: ["修复", "文档"],
 		tags: [],
 		contexts: [],
 	});
-	assert.deepEqual(result2.map((t) => t.path), ["a"]);
+	assert.deepEqual(result2.map((t) => t.path).sort(), ["a", "b"]);
+});
+
+test("isTitleQueryEmpty 判断三个维度是否全空", () => {
+	assert.equal(isTitleQueryEmpty({ keywords: [], tags: [], contexts: [] }), true);
+	assert.equal(isTitleQueryEmpty({ keywords: ["a"], tags: [], contexts: [] }), false);
+	assert.equal(isTitleQueryEmpty({ keywords: [], tags: ["a"], contexts: [] }), false);
+	assert.equal(isTitleQueryEmpty({ keywords: [], tags: [], contexts: ["a"] }), false);
 });
 
 test("filterTasksByTitleQuery 标签命中（OR）并排除归档", () => {

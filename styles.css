@@ -684,7 +684,7 @@
 }
 
 /* 标签 / 上下文分组：最多显示 3 个，超出用 +N，悬浮显示全部 */
-.tah-task-token-group {
+.tah-task-tag-context {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.2rem;
@@ -698,7 +698,7 @@
 	cursor: default;
 }
 
-.tah-task-token-more {
+.tah-task-tag-context-more {
 	color: var(--text-faint);
 	font-size: 0.7rem;
 }

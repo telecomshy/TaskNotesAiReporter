@@ -97,6 +97,11 @@ export function parseTitleQuery(input: string): TitleQuery {
 	return { keywords, tags, contexts };
 }
 
+/** 判断标题查询是否为空（关键字、标签、上下文三个维度均无条件）。 */
+export function isTitleQueryEmpty(query: TitleQuery): boolean {
+	return query.keywords.length === 0 && query.tags.length === 0 && query.contexts.length === 0;
+}
+
 /** 标签是否命中查询：支持层级前缀匹配（#work 命中 work 及 work/xxx 子级）。 */
 function matchesTag(taskTag: string, queryTag: string): boolean {
 	return taskTag === queryTag || taskTag.startsWith(queryTag + "/");
@@ -105,7 +110,7 @@ function matchesTag(taskTag: string, queryTag: string): boolean {
 /**
  * 按标题搜索查询筛选任务（纯函数）：
  * - 关键字、标签、上下文三个维度之间为 AND，均需满足；
- * - 同一维度内多个条件为 OR（标签带层级前缀匹配；上下文精确匹配）；
+ * - 同一维度内多个条件为 OR（关键字任一命中即可；标签带层级前缀匹配；上下文精确匹配）；
  * - 仅有关键字时退化为标题包含关键字（兼容原行为）。
  */
 export function filterTasksByTitleQuery(tasks: TaskInfo[], query: TitleQuery): TaskInfo[] {
@@ -114,7 +119,7 @@ export function filterTasksByTitleQuery(tasks: TaskInfo[], query: TitleQuery): T
 		if (task.archived) return false;
 		if (keywords.length > 0) {
 			const title = (task.title ?? "").toLowerCase();
-			if (!keywords.every((k) => title.includes(k))) return false;
+			if (!keywords.some((k) => title.includes(k))) return false;
 		}
 		if (tags.length > 0) {
 			const taskTags = (task.tags ?? []).map((t) => t.toLowerCase());

@@ -10,6 +10,7 @@ import { renderTaskMeta } from "./taskMeta";
 import {
 	filterTasksByDateRange,
 	filterTasksByTitleQuery,
+	isTitleQueryEmpty,
 	parseTitleQuery,
 	type TitleQuery,
 } from "../core/filter";
@@ -227,11 +228,7 @@ export class TaskPickerModal extends Modal {
 			}
 		} else {
 			const query = parseTitleQuery(this.keyword);
-			const isEmpty =
-				query.keywords.length === 0 &&
-				query.tags.length === 0 &&
-				query.contexts.length === 0;
-			if (isEmpty) {
+			if (isTitleQueryEmpty(query)) {
 				this.labelEl.textContent = `全部任务（共 ${this.titleTasks.length} 个）`;
 			} else {
 				this.labelEl.textContent = `搜索「${this.keyword.trim()}」（匹配 ${this.titleTasks.length} 个）`;
@@ -254,13 +251,7 @@ export class TaskPickerModal extends Modal {
 			for (const task of this.timeTasks) this.checkedPaths.add(task.path);
 		} else {
 			const query = parseTitleQuery(this.keyword);
-			const isEmpty =
-				query.keywords.length === 0 &&
-				query.tags.length === 0 &&
-				query.contexts.length === 0;
-			this.titleTasks = isEmpty
-				? [...this.allTasks]
-				: filterTasksByTitleQuery(this.allTasks, query);
+			this.titleTasks = filterTasksByTitleQuery(this.allTasks, query);
 			this.updateParseLabel(query);
 			// 按标题页：默认都不勾选，由用户通过「全选」或单个勾选自行选择
 		}
