@@ -14,6 +14,10 @@ import { chatCompletion, AIClientError } from "../ai/client";
 import { saveReport } from "../report/writer";
 import { TaskPickerModal } from "./TaskPickerModal";
 import { renderTaskMeta } from "./taskMeta";
+import {
+	applyGenerateButtonState,
+	getGenerateButtonState,
+} from "./generateButton";
 
 export class ReportModal extends Modal {
 	private allTasks: TaskInfo[] = [];
@@ -23,6 +27,7 @@ export class ReportModal extends Modal {
 
 	private listWrapEl!: HTMLElement;
 	private footerEl!: HTMLElement;
+	private generateBtn: HTMLButtonElement | null = null;
 	private generating = false;
 	// 记录并记住上次选择的模板（空字符串表示不选模板，极简模式）
 	private selectedTemplateId = "";
@@ -237,6 +242,7 @@ export class ReportModal extends Modal {
 		const btn = actions.createEl("button", { text: "生成报告" });
 		btn.addClass("tah-generate-btn");
 		btn.addEventListener("click", () => void this.generate());
+		this.generateBtn = btn;
 	}
 
 	private updateFooterCount(): void {
@@ -265,10 +271,8 @@ export class ReportModal extends Modal {
 		}
 
 		this.generating = true;
-		const btn = this.contentEl.querySelector(".tah-generate-btn");
-		if (btn) {
-			btn.textContent = "生成中…";
-			btn.setAttribute("disabled", "true");
+		if (this.generateBtn) {
+			applyGenerateButtonState(this.generateBtn, getGenerateButtonState(true));
 		}
 
 		try {
@@ -323,9 +327,8 @@ export class ReportModal extends Modal {
 			new Notice(`生成失败：${msg}`);
 		} finally {
 			this.generating = false;
-			if (btn) {
-				btn.textContent = "生成报告";
-				btn.removeAttribute("disabled");
+			if (this.generateBtn) {
+				applyGenerateButtonState(this.generateBtn, getGenerateButtonState(false));
 			}
 		}
 	}

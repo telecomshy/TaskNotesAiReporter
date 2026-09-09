@@ -736,6 +736,28 @@
 	justify-content: center;
 }
 
+/* 生成中：按钮文字清空，改为旋转图标并禁用 */
+.tah-generate-btn-loading {
+	min-width: 6.5rem;
+	cursor: default;
+}
+
+.tah-generate-btn-loading::after {
+	content: "";
+	width: 1em;
+	height: 1em;
+	border: 2px solid currentColor;
+	border-top-color: transparent;
+	border-radius: 50%;
+	animation: tah-spin 0.7s linear infinite;
+}
+
+@keyframes tah-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
 /* 模板下拉 — 无边框透明样式，只保留原生下拉箭头 */
 .tah-template-select {
 	padding: 0.5rem 1.4rem 0.5rem 0.4rem;
