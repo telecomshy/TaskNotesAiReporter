@@ -13,6 +13,7 @@ import { getWeekRange } from "../core/dates";
 import { chatCompletion, AIClientError } from "../ai/client";
 import { saveReport } from "../report/writer";
 import { TaskPickerModal } from "./TaskPickerModal";
+import { renderTaskMeta } from "./taskMeta";
 
 export class ReportModal extends Modal {
 	private allTasks: TaskInfo[] = [];
@@ -165,14 +166,7 @@ export class ReportModal extends Modal {
 			const info = item.createDiv({ cls: "tah-task-info" });
 			const titleEl = info.createDiv({ cls: "tah-task-title" });
 			titleEl.setText(task.title);
-
-			const meta = info.createDiv({ cls: "tah-task-meta" });
-			const metaText: string[] = [];
-			if (task.status) metaText.push(`状态:${task.status}`);
-			if (task.priority) metaText.push(`优先级:${task.priority}`);
-			if (task.completedDate) metaText.push(`完成:${task.completedDate}`);
-			if (task.due) metaText.push(`到期:${task.due}`);
-			meta.setText(metaText.join(" · "));
+			renderTaskMeta(info, task);
 		}
 
 		refreshSelectAll();
