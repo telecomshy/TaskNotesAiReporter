@@ -185,3 +185,13 @@ test("filterTasksByTitleQuery 空查询返回全部非归档任务", () => {
 	const result = filterTasksByTitleQuery(tasks, { keywords: [], tags: [], contexts: [] });
 	assert.deepEqual(result.map((t) => t.path), ["a"]);
 });
+
+test("filterTasksByTitleQuery 上下文为精确匹配，不做子串匹配", () => {
+	const tasks = [
+		makeTask({ path: "a", title: "A", contexts: ["office"] }),
+		makeTask({ path: "b", title: "B", contexts: ["workplace"] }),
+	];
+	// @office 只匹配精确等于 office 的上下文，不匹配 workplace 的子串 office
+	const result = filterTasksByTitleQuery(tasks, { keywords: [], tags: [], contexts: ["office"] });
+	assert.deepEqual(result.map((t) => t.path), ["a"]);
+});

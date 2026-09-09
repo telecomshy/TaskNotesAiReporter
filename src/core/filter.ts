@@ -123,7 +123,7 @@ export function filterTasksByTitleQuery(tasks: TaskInfo[], query: TitleQuery): T
 		}
 		if (contexts.length > 0) {
 			const taskCtx = (task.contexts ?? []).map((c) => c.toLowerCase());
-			if (!contexts.some((q) => taskCtx.includes(q))) return false;
+			if (!contexts.some((q) => taskCtx.some((c) => c === q))) return false;
 		}
 		return true;
 	});
