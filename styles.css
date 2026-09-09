@@ -674,6 +674,12 @@
 	text-overflow: ellipsis;
 }
 
+/* 主窗口已选中的任务：整体置灰，提示不可在本窗口重复操作 */
+.tah-task-item-selected .tah-task-title,
+.tah-task-item-selected .tah-task-meta {
+	opacity: 0.55;
+}
+
 .tah-task-meta {
 	font-size: 0.75rem;
 	color: var(--text-muted);

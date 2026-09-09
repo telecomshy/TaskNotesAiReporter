@@ -214,7 +214,8 @@ export class ReportModal extends Modal {
 				} else {
 					new Notice(`已加入 ${added} 个任务`);
 				}
-			}
+			},
+			new Set(this.candidateTasks.keys())
 		).open();
 	}
 
