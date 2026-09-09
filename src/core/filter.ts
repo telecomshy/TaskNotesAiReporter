@@ -63,3 +63,68 @@ export function filterTasksWithoutDate(
 export function hasNoDate(task: TaskInfo, dateFields: DateField[]): boolean {
 	return dateFields.every((field) => !task[field]);
 }
+
+/**
+ * 标题搜索查询：把用户输入拆成关键字 / 标签 / 上下文三类条件。
+ * - 裸词 → 标题关键字
+ * - #标签 → 标签条件（去 # 前缀）
+ * - @上下文 → 上下文条件（去 @ 前缀）
+ * 三者用空格区分；大小写不敏感，统一转小写保存。
+ */
+export interface TitleQuery {
+	keywords: string[];
+	tags: string[];
+	contexts: string[];
+}
+
+/** 解析标题搜索输入。 */
+export function parseTitleQuery(input: string): TitleQuery {
+	const keywords: string[] = [];
+	const tags: string[] = [];
+	const contexts: string[] = [];
+	for (const token of input.trim().split(/\s+/)) {
+		if (!token) continue;
+		if (token.startsWith("#")) {
+			const t = token.slice(1).toLowerCase();
+			if (t) tags.push(t);
+		} else if (token.startsWith("@")) {
+			const c = token.slice(1).toLowerCase();
+			if (c) contexts.push(c);
+		} else {
+			keywords.push(token.toLowerCase());
+		}
+	}
+	return { keywords, tags, contexts };
+}
+
+/** 标签是否命中查询：支持层级前缀匹配（#work 命中 work 及 work/xxx 子级）。 */
+function matchesTag(taskTag: string, queryTag: string): boolean {
+	return taskTag === queryTag || taskTag.startsWith(queryTag + "/");
+}
+
+/**
+ * 按标题搜索查询筛选任务（纯函数）：
+ * - 关键字、标签、上下文三个维度之间为 AND，均需满足；
+ * - 同一维度内多个条件为 OR（标签带层级前缀匹配；上下文精确匹配）；
+ * - 仅有关键字时退化为标题包含关键字（兼容原行为）。
+ */
+export function filterTasksByTitleQuery(tasks: TaskInfo[], query: TitleQuery): TaskInfo[] {
+	const { keywords, tags, contexts } = query;
+	return tasks.filter((task) => {
+		if (task.archived) return false;
+		if (keywords.length > 0) {
+			const title = (task.title ?? "").toLowerCase();
+			if (!keywords.every((k) => title.includes(k))) return false;
+		}
+		if (tags.length > 0) {
+			const taskTags = (task.tags ?? []).map((t) => t.toLowerCase());
+			const hit = taskTags.some((t) => tags.some((q) => matchesTag(t, q)));
+			if (!hit) return false;
+		}
+		if (contexts.length > 0) {
+			const taskCtx = (task.contexts ?? []).map((c) => c.toLowerCase());
+			if (!contexts.some((q) => taskCtx.includes(q))) return false;
+		}
+		return true;
+	});
+}

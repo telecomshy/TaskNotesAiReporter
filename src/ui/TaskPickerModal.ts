@@ -6,7 +6,12 @@
 
 import { App, Modal } from "obsidian";
 import { CalendarWidget } from "./Calendar";
-import { filterTasksByDateRange } from "../core/filter";
+import {
+	filterTasksByDateRange,
+	filterTasksByTitleQuery,
+	parseTitleQuery,
+	type TitleQuery,
+} from "../core/filter";
 import { getMonthRange, getQuarterRange, getWeekRange, getYearRange } from "../core/dates";
 import type { DateField, DateRange, TaskInfo } from "../types";
 
@@ -34,6 +39,8 @@ export class TaskPickerModal extends Modal {
 	private labelEl!: HTMLElement;
 	private searchInput!: HTMLInputElement;
 	private confirmBtn!: HTMLButtonElement;
+	// 标题页：解析提示行（展示输入被解析成哪些关键字/标签/上下文）
+	private parseLabelEl!: HTMLElement;
 
 	// 按标题页的全选 / 清空复选框
 	private selectAllBox!: HTMLInputElement;
@@ -151,11 +158,11 @@ export class TaskPickerModal extends Modal {
 
 	private renderTitleFilter(): void {
 		const searchRow = this.filterEl.createDiv({ cls: "tah-search-row" });
-		this.searchInput = searchRow.createEl("input", { type: "text", placeholder: "输入关键字筛选任务…" });
+		this.searchInput = searchRow.createEl("input", { type: "text", placeholder: "关键字 #标签 @上下文（空格分隔）…" });
 		this.searchInput.addClass("tah-search-input");
 		this.searchInput.value = this.keyword;
 		this.searchInput.addEventListener("input", () => {
-			this.keyword = this.searchInput.value.trim();
+			this.keyword = this.searchInput.value;
 			this.checkedPaths.clear();
 			this.refresh();
 		});
@@ -186,6 +193,7 @@ export class TaskPickerModal extends Modal {
 		});
 
 		this.labelEl = this.filterEl.createDiv({ cls: "tah-range-label" });
+		this.parseLabelEl = this.filterEl.createDiv({ cls: "tah-parse-label tah-range-label" });
 	}
 
 	// ===== 底部 =====
@@ -217,10 +225,15 @@ export class TaskPickerModal extends Modal {
 				this.labelEl.textContent = `当前筛选：${this.timeMode.range.start} ~ ${this.timeMode.range.end}`;
 			}
 		} else {
-			if (!this.keyword) {
+			const query = parseTitleQuery(this.keyword);
+			const isEmpty =
+				query.keywords.length === 0 &&
+				query.tags.length === 0 &&
+				query.contexts.length === 0;
+			if (isEmpty) {
 				this.labelEl.textContent = `全部任务（共 ${this.titleTasks.length} 个）`;
 			} else {
-				this.labelEl.textContent = `搜索「${this.keyword}」（匹配 ${this.titleTasks.length} 个）`;
+				this.labelEl.textContent = `搜索「${this.keyword.trim()}」（匹配 ${this.titleTasks.length} 个）`;
 			}
 		}
 	}
@@ -239,15 +252,31 @@ export class TaskPickerModal extends Modal {
 			// 默认全选
 			for (const task of this.timeTasks) this.checkedPaths.add(task.path);
 		} else {
-			const kw = this.keyword.toLowerCase();
-			this.titleTasks = kw
-				? this.allTasks.filter((t) => t.title.toLowerCase().includes(kw))
-				: [...this.allTasks];
+			const query = parseTitleQuery(this.keyword);
+			const isEmpty =
+				query.keywords.length === 0 &&
+				query.tags.length === 0 &&
+				query.contexts.length === 0;
+			this.titleTasks = isEmpty
+				? [...this.allTasks]
+				: filterTasksByTitleQuery(this.allTasks, query);
+			this.updateParseLabel(query);
 			// 按标题页：默认都不勾选，由用户通过「全选」或单个勾选自行选择
 		}
 
 		this.updateLabel();
 		this.renderList();
+	}
+
+	/** 更新标题页的解析提示行：展示输入被解析成哪些条件。 */
+	private updateParseLabel(query: TitleQuery): void {
+		if (!this.parseLabelEl) return;
+		const parts: string[] = [];
+		if (query.keywords.length > 0) parts.push(`关键字：${query.keywords.join(" ")}`);
+		if (query.tags.length > 0) parts.push(`标签：${query.tags.map((t) => `#${t}`).join(" ")}`);
+		if (query.contexts.length > 0)
+			parts.push(`上下文：${query.contexts.map((c) => `@${c}`).join(" ")}`);
+		this.parseLabelEl.setText(parts.length > 0 ? parts.join("  ·  ") : "");
 	}
 
 	private renderList(): void {

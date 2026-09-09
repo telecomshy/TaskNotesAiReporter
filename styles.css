@@ -865,6 +865,14 @@
 	margin-bottom: 0.5rem;
 }
 
+/* 标题页：已解析条件的提示行（关键字 / 标签 / 上下文） */
+.tah-parse-label {
+	margin: 0.25rem 0 0.5rem;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
 /* 按标题页：全选/清空操作行 */
 .tah-picker-actions {
 	display: flex;
