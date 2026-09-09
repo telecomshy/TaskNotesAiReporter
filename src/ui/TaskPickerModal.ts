@@ -29,9 +29,6 @@ export class TaskPickerModal extends Modal {
 	// 勾选状态（仅当前 Tab 有效）
 	private checkedPaths = new Set<string>();
 
-	// 主窗口已选中的任务（仅用于标记显示，不参与勾选逻辑）
-	private readonly alreadySelected: Set<string>;
-
 	private filterEl!: HTMLElement;
 	private listEl!: HTMLElement;
 	private labelEl!: HTMLElement;
@@ -47,11 +44,9 @@ export class TaskPickerModal extends Modal {
 		private allTasks: TaskInfo[],
 		private dateFields: DateField[],
 		private weekStartsOnMonday: boolean,
-		private onConfirm: (tasks: TaskInfo[]) => void,
-		alreadySelected?: Set<string>
+		private onConfirm: (tasks: TaskInfo[]) => void
 	) {
 		super(app);
-		this.alreadySelected = alreadySelected ?? new Set();
 	}
 
 	onOpen(): void {
@@ -241,10 +236,8 @@ export class TaskPickerModal extends Modal {
 					this.dateFields
 				);
 			}
-			// 默认全选（已选中的任务除外，避免重复添加）
-			for (const task of this.timeTasks) {
-				if (!this.alreadySelected.has(task.path)) this.checkedPaths.add(task.path);
-			}
+			// 默认全选
+			for (const task of this.timeTasks) this.checkedPaths.add(task.path);
 		} else {
 			const kw = this.keyword.toLowerCase();
 			this.titleTasks = kw
@@ -271,16 +264,10 @@ export class TaskPickerModal extends Modal {
 
 		for (const task of tasks) {
 			const item = this.listEl.createDiv({ cls: "tah-task-item" });
-			const isSelected = this.alreadySelected.has(task.path);
 
 			const checkbox = item.createEl("input", { type: "checkbox" });
 			checkbox.addClass("tah-task-checkbox");
-			// 主窗口已选中的任务：置灰禁用，显示为已勾选，无法在本窗口再操作
-			checkbox.checked = isSelected || this.checkedPaths.has(task.path);
-			if (isSelected) {
-				checkbox.disabled = true;
-				item.addClass("tah-task-item-selected");
-			}
+			checkbox.checked = this.checkedPaths.has(task.path);
 			checkbox.addEventListener("change", () => {
 				if (checkbox.checked) {
 					this.checkedPaths.add(task.path);
