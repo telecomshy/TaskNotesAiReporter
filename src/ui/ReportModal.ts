@@ -14,10 +14,14 @@ import { chatCompletion, AIClientError } from "../ai/client";
 import { saveReport } from "../report/writer";
 import { TaskPickerModal } from "./TaskPickerModal";
 import { renderTaskMeta } from "./taskMeta";
+import { computeSelectAllState } from "./taskSelection";
 import {
 	applyGenerateButtonState,
 	getGenerateButtonState,
 } from "./generateButton";
+
+/** 主窗口没有「已加入」的外部概念，复用共享三态逻辑时传空集。 */
+const NO_EXTERNAL_SELECTED: Set<string> = new Set();
 
 export class ReportModal extends Modal {
 	private allTasks: TaskInfo[] = [];
@@ -114,11 +118,10 @@ export class ReportModal extends Modal {
 		resetBtn.addClass("tah-batch-remove-btn");
 
 		const refreshSelectAll = () => {
-			const allChecked = tasks.length > 0 && tasks.every((t) => this.checkedPaths.has(t.path));
-			const someChecked = tasks.some((t) => this.checkedPaths.has(t.path));
-			selectAllBox.checked = allChecked;
-			selectAllBox.indeterminate = !allChecked && someChecked;
-			uncheckBtn.disabled = !someChecked;
+			const state = computeSelectAllState(tasks, this.checkedPaths, NO_EXTERNAL_SELECTED);
+			selectAllBox.checked = state.checked;
+			selectAllBox.indeterminate = state.indeterminate;
+			uncheckBtn.disabled = !(state.checked || state.indeterminate);
 			resetBtn.disabled = tasks.length === 0;
 			countEl.setText(`已勾选 ${this.getCheckedTasks().length} / ${tasks.length} 个任务`);
 		};
@@ -213,7 +216,8 @@ export class ReportModal extends Modal {
 				} else {
 					new Notice(`已加入 ${added} 个任务`);
 				}
-			}
+			},
+			new Set(this.candidateTasks.keys())
 		).open();
 	}
 
