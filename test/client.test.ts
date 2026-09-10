@@ -1,6 +1,5 @@
 import { test, before, mock } from "node:test";
 import assert from "node:assert/strict";
-import { pathToFileURL } from "node:url";
 import { buildChatCompletionsUrl, buildModelsUrl } from "../src/core/aiUrl";
 
 // ===== URL 拼接（纯函数，原有用例保留） =====
@@ -41,9 +40,7 @@ interface CapturedRequest {
 	body?: string;
 }
 
-const transportPath = pathToFileURL(
-	"E:/code/my_projects/TaskNotesAiReporter/src/ai/transport.ts"
-).href;
+const transportPath = new URL("../src/ai/transport.ts", import.meta.url).href;
 
 type Client = typeof import("../src/ai/client");
 let client: Client;
