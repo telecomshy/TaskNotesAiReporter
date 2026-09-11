@@ -288,6 +288,14 @@
 	background: var(--background-modifier-hover);
 }
 
+/* 当前生效的模型标签 */
+.tah-model-tag-active {
+	border-color: var(--interactive-accent);
+	background: rgba(var(--interactive-accent-rgb), 0.15);
+	color: var(--interactive-accent);
+	font-weight: 600;
+}
+
 .tah-model-more {
 	font-size: 0.8rem;
 	color: var(--text-muted);
@@ -335,6 +343,12 @@
 	border-radius: 6px;
 	background: var(--background-primary);
 	flex-wrap: wrap;
+}
+
+/* 当前生效的自定义模型行 */
+.tah-custom-model-row-active {
+	border-left: 2px solid var(--interactive-accent);
+	background: rgba(var(--interactive-accent-rgb), 0.06);
 }
 
 .tah-custom-model-group {

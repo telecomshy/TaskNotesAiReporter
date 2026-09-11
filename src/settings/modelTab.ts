@@ -3,17 +3,20 @@
  * 本模块只导出 renderModelTab 入口，内部辅助函数均为本模块私有。
  */
 
-import { Notice } from "obsidian";
+import { Notice, Setting } from "obsidian";
 import type { ModelConfig, ModelProvider } from "../types";
 import { genId } from "./logic";
 import { listModels, testConnection } from "../ai/client";
+import { getSelectableProviders, isActiveModel } from "./modelSelection";
 import type { SettingsTabContext } from "./index";
 
 /** 渲染「模型配置」Tab */
 export function renderModelTab(container: HTMLElement, ctx: SettingsTabContext): void {
+	renderActiveModelSection(container, ctx);
+
 	container.createEl("h3", { text: "AI 提供商", cls: "tah-provider-title" });
 	container.createEl("p", {
-		text: "配置供应商的 API 密钥后，即可在「常规配置」中选择其模型。",
+		text: "配置供应商的 API 密钥后，即可在下方选择「当前模型」。",
 		cls: "setting-item-description",
 	});
 
@@ -31,6 +34,51 @@ export function renderModelTab(container: HTMLElement, ctx: SettingsTabContext):
 	const addBtn = addRow.createEl("button", { text: "+ 添加模型供应商" });
 	addBtn.addClass("tah-add-provider-btn");
 	addBtn.addEventListener("click", () => addCustomProvider(ctx));
+}
+
+/** 顶部「当前模型」区：选择生成报告使用的模型 */
+function renderActiveModelSection(container: HTMLElement, ctx: SettingsTabContext): void {
+	container.createEl("h3", { text: "当前模型" });
+
+	const selectable = getSelectableProviders(ctx.plugin.settings.providers);
+	if (selectable.length === 0) {
+		container.createEl("p", {
+			text: "还没有可用模型，请先配置供应商 API Key。",
+			cls: "setting-item-description",
+		});
+		return;
+	}
+
+	new Setting(container)
+		.setName("选择模型")
+		.setDesc("选择生成报告使用的模型。")
+		.addDropdown((dropdown) => {
+			// 按供应商分组
+			for (const provider of selectable) {
+				const optgroup = document.createElement("optgroup");
+				optgroup.label = provider.name;
+				for (const model of provider.models) {
+					const option = document.createElement("option");
+					option.value = `${provider.id}::${model}`;
+					option.text = model;
+					optgroup.appendChild(option);
+				}
+				dropdown.selectEl.appendChild(optgroup);
+			}
+
+			const currentValue = `${ctx.plugin.settings.activeProviderId}::${ctx.plugin.settings.activeModel}`;
+			dropdown.setValue(currentValue);
+
+			dropdown.onChange((value) => {
+				const sepIndex = value.indexOf("::");
+				if (sepIndex < 0) return;
+				ctx.plugin.settings.activeProviderId = value.slice(0, sepIndex);
+				ctx.plugin.settings.activeModel = value.slice(sepIndex + 2);
+				void ctx.plugin.saveSettings();
+				// 刷新以更新模型标签/行的「当前」高亮
+				ctx.refresh();
+			});
+		});
 }
 
 /** 内置供应商卡片：仅需 api key，模型动态拉取 */
@@ -152,6 +200,21 @@ async function applyModels(
 	}
 }
 
+/** 渲染单个模型标签；若为当前模型则高亮。 */
+function appendModelTag(
+	container: HTMLElement,
+	providerId: string,
+	model: string,
+	ctx: SettingsTabContext
+): void {
+	const tag = container.createSpan({ cls: "tah-model-tag", text: model });
+	const settings = ctx.plugin.settings;
+	if (isActiveModel(settings.activeProviderId, settings.activeModel, providerId, model)) {
+		tag.addClass("tah-model-tag-active");
+	}
+	tag.addEventListener("click", () => selectModel(providerId, model, ctx));
+}
+
 /** 渲染模型标签：只显示主要几个（前2个），其余折叠为「还有 N 个」 */
 function renderModelTags(
 	container: HTMLElement,
@@ -167,8 +230,7 @@ function renderModelTags(
 	const rest = models.slice(MAIN_COUNT);
 
 	for (const model of shown) {
-		const tag = container.createSpan({ cls: "tah-model-tag", text: model });
-		tag.addEventListener("click", () => selectModel(providerId, model, ctx));
+		appendModelTag(container, providerId, model, ctx);
 	}
 
 	if (rest.length > 0) {
@@ -195,8 +257,7 @@ function renderAllModelTags(
 	container.empty();
 	const shown = expanded ? models : models.slice(0, 2);
 	for (const model of shown) {
-		const tag = container.createSpan({ cls: "tah-model-tag", text: model });
-		tag.addEventListener("click", () => selectModel(providerId, model, ctx));
+		appendModelTag(container, providerId, model, ctx);
 	}
 	if (!expanded && models.length > 2) {
 		const rest = models.length - 2;
@@ -441,6 +502,13 @@ function renderCustomModelRow(
 	ctx: SettingsTabContext
 ): void {
 	const row = listEl.createDiv({ cls: "tah-custom-model-row" });
+	const active = ctx.plugin.settings;
+	if (
+		mc.modelId !== "" &&
+		isActiveModel(active.activeProviderId, active.activeModel, provider.id, mc.modelId)
+	) {
+		row.addClass("tah-custom-model-row-active");
+	}
 
 	// 模型 ID
 	const idGroup = row.createDiv({ cls: "tah-custom-model-group" });

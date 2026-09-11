@@ -16,10 +16,6 @@ const DATE_FIELD_OPTIONS: Array<{ value: DateField; label: string }> = [
 
 /** 渲染「常规配置」Tab */
 export function renderGeneralTab(container: HTMLElement, ctx: SettingsTabContext): void {
-	container.createEl("h3", { text: "模型" });
-
-	renderModelDropdown(container, ctx);
-
 	container.createEl("h3", { text: "报告生成" });
 
 	new Setting(container)
@@ -85,48 +81,4 @@ export function renderGeneralTab(container: HTMLElement, ctx: SettingsTabContext
 					await ctx.plugin.saveSettings();
 				})
 		);
-}
-
-/** 选择模型下拉：按供应商分组显示所有已配置的模型 */
-function renderModelDropdown(container: HTMLElement, ctx: SettingsTabContext): void {
-	const configuredProviders = ctx.plugin.settings.providers.filter(
-		(p) => p.models.length > 0 && p.apiKey.trim() !== ""
-	);
-
-	if (configuredProviders.length === 0) {
-		container.createEl("p", {
-			text: "暂无可选模型，请先在「模型配置」中配置供应商 API Key。",
-			cls: "setting-item-description",
-		});
-		return;
-	}
-
-	new Setting(container)
-		.setName("选择模型")
-		.setDesc("选择生成报告使用的模型。")
-		.addDropdown((dropdown) => {
-			// 按供应商分组
-			for (const provider of configuredProviders) {
-				const optgroup = document.createElement("optgroup");
-				optgroup.label = provider.name;
-				for (const model of provider.models) {
-					const option = document.createElement("option");
-					option.value = `${provider.id}::${model}`;
-					option.text = model;
-					optgroup.appendChild(option);
-				}
-				dropdown.selectEl.appendChild(optgroup);
-			}
-
-			const currentValue = `${ctx.plugin.settings.activeProviderId}::${ctx.plugin.settings.activeModel}`;
-			dropdown.setValue(currentValue);
-
-			dropdown.onChange((value) => {
-				const sepIndex = value.indexOf("::");
-				if (sepIndex < 0) return;
-				ctx.plugin.settings.activeProviderId = value.slice(0, sepIndex);
-				ctx.plugin.settings.activeModel = value.slice(sepIndex + 2);
-				void ctx.plugin.saveSettings();
-			});
-		});
 }
