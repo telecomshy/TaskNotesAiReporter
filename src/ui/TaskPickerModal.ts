@@ -132,7 +132,7 @@ export class TaskPickerModal extends Modal {
 			{ label: "本月", mode: { kind: "range", range: getMonthRange(new Date()) } },
 			{ label: "本季度", mode: { kind: "range", range: getQuarterRange(new Date()) } },
 			{ label: "本年", mode: { kind: "range", range: getYearRange(new Date()) } },
-			{ label: "清空", mode: { kind: "empty" } },
+			{ label: "清除范围", mode: { kind: "empty" } },
 		];
 		for (const btn of quickButtons) {
 			const el = quickRow.createEl("button", { text: btn.label });
