@@ -933,10 +933,8 @@
 	margin-bottom: 0.5rem;
 }
 
-/* 标题页：已解析条件的提示行（关键字 / 标签 / 上下文） */
+/* 标题页：已解析条件的提示行（关键字 / 标签 / 上下文）；字体/颜色复用 .tah-range-label */
 .tah-parse-label {
-	font-size: 0.85rem;
-	color: var(--text-muted);
 	margin: 0.25rem 0 0.5rem;
 	white-space: nowrap;
 	overflow: hidden;
