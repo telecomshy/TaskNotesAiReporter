@@ -67,7 +67,6 @@ export class TaskPickerModal extends Modal {
 
 		this.renderTabs(contentEl);
 		this.filterEl = contentEl.createDiv({ cls: "tah-picker-filter" });
-		contentEl.createEl("h3", { text: "任务", cls: "tah-picker-list-title" });
 		this.listEl = contentEl.createDiv({ cls: "tah-task-list tah-picker-list" });
 		this.renderFooter(contentEl);
 
@@ -144,7 +143,8 @@ export class TaskPickerModal extends Modal {
 			});
 		}
 
-		this.labelEl = this.filterEl.createDiv({ cls: "tah-range-label" });
+		const rangeRow = this.filterEl.createDiv({ cls: "tah-picker-range-row" });
+		this.labelEl = rangeRow.createDiv({ cls: "tah-range-label" });
 
 		const calendarContainer = this.filterEl.createDiv({ cls: "tah-calendar-container" });
 		this.calendar = new CalendarWidget(
@@ -172,9 +172,10 @@ export class TaskPickerModal extends Modal {
 			this.refresh();
 		});
 
-		// 全选（仅作用于按标题页当前展示的任务）
+		// 操作行：左「全选」+ 计数，右（后续）「清空选择」
 		const actionRow = this.filterEl.createDiv({ cls: "tah-picker-actions" });
-		const allLabel = actionRow.createEl("label", { cls: "tah-select-all" });
+		const left = actionRow.createDiv({ cls: "tah-picker-actions-left" });
+		const allLabel = left.createEl("label", { cls: "tah-select-all" });
 		this.selectAllBox = allLabel.createEl("input", { type: "checkbox" });
 		allLabel.createSpan({ text: "全选" });
 		this.selectAllBox.addEventListener("change", () => {
@@ -184,9 +185,9 @@ export class TaskPickerModal extends Modal {
 			}
 			this.renderList();
 		});
+		this.labelEl = left.createDiv({ cls: "tah-range-label" });
 
-		this.labelEl = this.filterEl.createDiv({ cls: "tah-range-label" });
-		this.parseLabelEl = this.filterEl.createDiv({ cls: "tah-parse-label tah-range-label" });
+		this.parseLabelEl = this.filterEl.createDiv({ cls: "tah-parse-label" });
 	}
 
 	// ===== 底部 =====

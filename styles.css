@@ -538,7 +538,6 @@
 .tah-range-label {
 	font-size: 0.85rem;
 	color: var(--text-muted);
-	margin: 0.5rem 0 0.15rem;
 }
 
 /* 日历 */
@@ -934,28 +933,42 @@
 
 /* 标题页：已解析条件的提示行（关键字 / 标签 / 上下文） */
 .tah-parse-label {
+	font-size: 0.85rem;
+	color: var(--text-muted);
 	margin: 0.25rem 0 0.5rem;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
 
-/* 按标题页：全选/清空操作行 */
+/* 操作行：左「全选」+ 计数，右「清空选择」 */
 .tah-picker-actions {
 	display: flex;
 	align-items: center;
-	gap: 1rem;
+	justify-content: space-between;
+	gap: 0.6rem;
 	margin-bottom: 0.4rem;
+}
+
+.tah-picker-actions-left {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	min-width: 0;
+}
+
+/* 时间页：范围信息一行，右侧留「清空选择」 */
+.tah-picker-range-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.6rem;
+	margin: 0.5rem 0 0.15rem;
 }
 
 .tah-search-input {
 	width: 100%;
 	box-sizing: border-box;
-}
-
-.tah-picker-list-title {
-	margin: 0.5rem 0;
-	flex-shrink: 0;
 }
 
 .tah-picker-hint {
