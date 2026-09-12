@@ -100,6 +100,9 @@ export class TaskPickerModal extends Modal {
 			this.switchTab("title");
 			refreshTabs();
 		});
+
+		// 初次渲染时同步一次当前 Tab 的高亮（否则要点击后才生效）
+		refreshTabs();
 	}
 
 	private switchTab(tab: PickerTab): void {
