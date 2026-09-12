@@ -68,7 +68,7 @@ test("成功：返回 path，并保存生成的正文", async () => {
 	assert.equal(captured.saved?.content, "生成的报告正文");
 });
 
-test("未勾选任务 → no-tasks", async () => {
+test("无任务 → no-tasks", async () => {
 	const result = await generateReport(baseInput({ tasks: [] }), setup().deps);
 	assert.equal(failure(result).reason, "no-tasks");
 });

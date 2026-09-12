@@ -1,6 +1,7 @@
 /**
  * 生成报告主弹窗。
- * 只有一个任务列表区域：通过「选择任务」窗口追加任务，勾选的任务送模型生成报告。
+ * 只有一个任务列表区域：通过「选择任务」窗口追加任务，列表中的任务全部送模型生成报告。
+ * 每项右侧的小 × 直接从列表移除；工具栏的「清空」清空整个列表。
  */
 
 import { App, Modal, Notice, TFile } from "obsidian";
@@ -13,7 +14,7 @@ import { saveReport } from "../report/writer";
 import { generateReport, type GenerateReportFailureReason } from "../report/generate";
 import { TaskPickerModal } from "./TaskPickerModal";
 import { renderTaskMeta } from "./taskMeta";
-import { computeSelectAllState, getUncheckedTasks } from "./taskSelection";
+import { getAddableTasks } from "./taskSelection";
 import {
 	applyGenerateButtonState,
 	getGenerateButtonState,
@@ -22,7 +23,6 @@ import {
 export class ReportModal extends Modal {
 	private allTasks: TaskInfo[] = [];
 	private candidateTasks = new Map<string, TaskInfo>();
-	private checkedPaths = new Set<string>();
 	private reportType: ReportType = "custom";
 
 	private listWrapEl!: HTMLElement;
@@ -78,18 +78,9 @@ export class ReportModal extends Modal {
 
 	// ===== 任务列表 =====
 
-	/** 所有候选任务（按加入顺序） */
+	/** 所有候选任务（按加入顺序），即报告任务集合 */
 	private getCandidateTasks(): TaskInfo[] {
 		return Array.from(this.candidateTasks.values());
-	}
-
-	/** 勾选的任务（将送给模型） */
-	private getCheckedTasks(): TaskInfo[] {
-		const result: TaskInfo[] = [];
-		for (const task of this.candidateTasks.values()) {
-			if (this.checkedPaths.has(task.path)) result.push(task);
-		}
-		return result;
 	}
 
 	private renderRight(): void {
@@ -100,38 +91,14 @@ export class ReportModal extends Modal {
 
 		const tasks = this.getCandidateTasks();
 
-		// 工具栏：计数 + 全选 + 重置
+		// 工具栏：只保留「清空」
 		const toolbar = this.listWrapEl.createDiv({ cls: "tah-task-toolbar" });
-		const countEl = toolbar.createDiv({ cls: "tah-count" });
-		countEl.setText(`已勾选 ${this.getCheckedTasks().length} / ${tasks.length} 个任务`);
-
 		const batchActions = toolbar.createDiv({ cls: "tah-batch-actions" });
-		const selectAllLabel = batchActions.createEl("label", { cls: "tah-select-all" });
-		const selectAllBox = selectAllLabel.createEl("input", { type: "checkbox" });
-		selectAllLabel.createSpan({ text: "全选" });
-		const resetBtn = batchActions.createEl("button", { text: "重置" });
-		resetBtn.addClass("tah-batch-remove-btn");
-
-		const refreshSelectAll = () => {
-			const state = computeSelectAllState(tasks, this.checkedPaths);
-			selectAllBox.checked = state.checked;
-			selectAllBox.indeterminate = state.indeterminate;
-			resetBtn.disabled = tasks.length === 0;
-			countEl.setText(`已勾选 ${this.getCheckedTasks().length} / ${tasks.length} 个任务`);
-		};
-
-		selectAllBox.addEventListener("change", () => {
-			if (selectAllBox.checked) {
-				for (const task of tasks) this.checkedPaths.add(task.path);
-			} else {
-				for (const task of tasks) this.checkedPaths.delete(task.path);
-			}
-			this.renderRight();
-		});
-
-		resetBtn.addEventListener("click", () => {
+		const clearBtn = batchActions.createEl("button", { text: "清空" });
+		clearBtn.addClass("tah-batch-remove-btn");
+		clearBtn.disabled = tasks.length === 0;
+		clearBtn.addEventListener("click", () => {
 			this.candidateTasks.clear();
-			this.checkedPaths.clear();
 			this.renderRight();
 		});
 
@@ -148,25 +115,18 @@ export class ReportModal extends Modal {
 		for (const task of tasks) {
 			const item = listEl.createDiv({ cls: "tah-task-item" });
 
-			const checkbox = item.createEl("input", { type: "checkbox" });
-			checkbox.addClass("tah-task-checkbox");
-			checkbox.checked = this.checkedPaths.has(task.path);
-			checkbox.addEventListener("change", () => {
-				if (checkbox.checked) {
-					this.checkedPaths.add(task.path);
-				} else {
-					this.checkedPaths.delete(task.path);
-				}
-				refreshSelectAll();
-			});
-
 			const info = item.createDiv({ cls: "tah-task-info" });
 			const titleEl = info.createDiv({ cls: "tah-task-title" });
 			titleEl.setText(task.title);
 			renderTaskMeta(info, task);
-		}
 
-		refreshSelectAll();
+			const removeBtn = item.createEl("button", { text: "×", cls: "tah-task-remove" });
+			removeBtn.setAttr("aria-label", "从列表移除");
+			removeBtn.addEventListener("click", () => {
+				this.candidateTasks.delete(task.path);
+				this.renderRight();
+			});
+		}
 
 		// 选择任务按钮
 		const addRow = this.listWrapEl.createDiv({ cls: "tah-add-row" });
@@ -174,7 +134,7 @@ export class ReportModal extends Modal {
 		addBtn.addClass("tah-add-btn");
 		addBtn.addEventListener("click", () => this.openTaskPicker());
 		addRow.createDiv({
-			text: "新选任务将追加到列表（可点击「重置」清空）。",
+			text: "新选任务将追加到列表（可点击「清空」移除全部）。",
 			cls: "tah-hint",
 		});
 
@@ -182,21 +142,19 @@ export class ReportModal extends Modal {
 	}
 
 	private openTaskPicker(): void {
-		const displayTasks = getUncheckedTasks(this.allTasks, this.checkedPaths);
+		const addable = getAddableTasks(this.allTasks, new Set(this.candidateTasks.keys()));
 		new TaskPickerModal(
 			this.app,
-			displayTasks,
+			addable,
 			this.plugin.settings.dateFields,
 			this.plugin.settings.weekStartsOnMonday,
 			(tasks) => {
 				for (const task of tasks) {
 					this.candidateTasks.set(task.path, task);
-					this.checkedPaths.add(task.path);
 				}
 				this.renderRight();
 				new Notice(`已加入 ${tasks.length} 个任务`);
-			},
-			new Set(this.candidateTasks.keys())
+			}
 		).open();
 	}
 
@@ -205,7 +163,7 @@ export class ReportModal extends Modal {
 	private renderFooter(): void {
 		this.footerEl.empty();
 		const count = this.footerEl.createSpan({ cls: "tah-footer-count" });
-		count.setText(`共 ${this.getCheckedTasks().length} 个任务`);
+		count.setText(`共 ${this.getCandidateTasks().length} 个任务`);
 
 		// 右侧：模板下拉 + 生成按钮（紧邻）
 		const actions = this.footerEl.createDiv({ cls: "tah-footer-actions" });
@@ -231,7 +189,7 @@ export class ReportModal extends Modal {
 	private updateFooterCount(): void {
 		const countEl = this.contentEl.querySelector(".tah-footer-count");
 		if (countEl) {
-			countEl.setText(`共 ${this.getCheckedTasks().length} 个任务`);
+			countEl.setText(`共 ${this.getCandidateTasks().length} 个任务`);
 		}
 	}
 
@@ -247,7 +205,7 @@ export class ReportModal extends Modal {
 			const s = this.plugin.settings;
 			const result = await generateReport(
 				{
-					tasks: this.getCheckedTasks(),
+					tasks: this.getCandidateTasks(),
 					type: this.reportType,
 					templateId: this.selectedTemplateId,
 					templates: s.templates,
@@ -291,7 +249,7 @@ export class ReportModal extends Modal {
 function failureMessage(failure: { reason: GenerateReportFailureReason; message?: string }): string {
 	switch (failure.reason) {
 		case "no-tasks":
-			return "请先勾选要生成报告的任务";
+			return "请先添加要生成报告的任务";
 		case "no-model":
 			return "请先在插件设置中选择模型并配置 API Key";
 		case "missing-credentials":

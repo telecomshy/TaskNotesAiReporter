@@ -1,8 +1,7 @@
 /**
  * 选择任务窗口（一次性任务选择器）。
  * 分 Tab：按时间 / 按标题。两个 Tab 都是「筛选 → 可勾选 → 加入列表」。
- * 只呈现尚未「已勾选」的任务；已勾选由调用方（主窗口）先行排除。
- * 默认全选只覆盖尚未「已加入」的（首次加入的）任务，不动用户先前取消勾选的任务。
+ * 只呈现尚未「已加入」的任务；排除由调用方（主窗口）先行完成。
  */
 
 import { App, Modal } from "obsidian";
@@ -38,9 +37,6 @@ export class TaskPickerModal extends Modal {
 	// 勾选状态（仅当前 Tab 有效）
 	private checkedPaths = new Set<string>();
 
-	// 主窗口已加入列表的任务；仅用于计算默认勾选（首次加入的才默认勾上）
-	private readonly candidatePaths: Set<string>;
-
 	private filterEl!: HTMLElement;
 	private listEl!: HTMLElement;
 	private labelEl!: HTMLElement;
@@ -57,11 +53,9 @@ export class TaskPickerModal extends Modal {
 		private allTasks: TaskInfo[],
 		private dateFields: DateField[],
 		private weekStartsOnMonday: boolean,
-		private onConfirm: (tasks: TaskInfo[]) => void,
-		candidatePaths: Set<string>
+		private onConfirm: (tasks: TaskInfo[]) => void
 	) {
 		super(app);
-		this.candidatePaths = candidatePaths;
 	}
 
 	onOpen(): void {
@@ -241,13 +235,13 @@ export class TaskPickerModal extends Modal {
 					this.dateFields
 				);
 			}
-			// 默认全选：只勾尚未已加入的（首次加入的）任务
-			this.checkedPaths = initialSelection(this.timeTasks, this.candidatePaths, true);
+			// 默认全选
+			this.checkedPaths = initialSelection(this.timeTasks, true);
 		} else {
 			const query = parseTitleQuery(this.keyword);
 			this.titleTasks = filterTasksByTitleQuery(this.allTasks, query);
 			// 按标题页：默认都不勾选，由用户通过「全选」或单个勾选自行选择
-			this.checkedPaths = initialSelection(this.titleTasks, this.candidatePaths, false);
+			this.checkedPaths = initialSelection(this.titleTasks, false);
 			this.updateParseLabel(query);
 		}
 

@@ -609,14 +609,9 @@
 .tah-task-toolbar {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
+	justify-content: flex-end;
 	gap: 0.5rem;
 	margin-bottom: 0.5rem;
-}
-
-.tah-count {
-	font-size: 0.85rem;
-	color: var(--text-muted);
 }
 
 .tah-batch-actions {
@@ -679,6 +674,24 @@
 .tah-task-info {
 	min-width: 0;
 	flex: 1;
+}
+
+/* 任务项右侧的删除按钮：始终显示，点击即从列表移除 */
+.tah-task-remove {
+	margin: 0;
+	flex-shrink: 0;
+	padding: 0 0.4rem;
+	font-size: 1rem;
+	line-height: 1;
+	cursor: pointer;
+	background: transparent;
+	border: none;
+	box-shadow: none;
+	color: var(--text-muted);
+}
+
+.tah-task-remove:hover {
+	color: var(--text-normal);
 }
 
 .tah-task-title {
