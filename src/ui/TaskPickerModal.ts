@@ -1,13 +1,13 @@
 /**
  * 选择任务窗口（一次性任务选择器）。
- * 分 Tab：按时间 / 按标题。两个 Tab 都是「筛选 → 默认全选 → 可勾选 → 加入选中」。
- * 主窗口已加入的任务会高亮并禁用勾选，避免重复选择；去重仍由主窗口兜底。
+ * 分 Tab：按时间 / 按标题。两个 Tab 都是「筛选 → 可勾选 → 加入列表」。
+ * 只呈现尚未「已加入」的任务；排除已加入由调用方（主窗口）先行完成。
  */
 
 import { App, Modal } from "obsidian";
 import { CalendarWidget } from "./Calendar";
 import { renderTaskMeta } from "./taskMeta";
-import { getSelectablePaths, computeSelectAllState, initialSelection } from "./taskSelection";
+import { computeSelectAllState, initialSelection } from "./taskSelection";
 import {
 	filterTasksByDateRange,
 	filterTasksByTitleQuery,
@@ -37,9 +37,6 @@ export class TaskPickerModal extends Modal {
 	// 勾选状态（仅当前 Tab 有效）
 	private checkedPaths = new Set<string>();
 
-	// 主窗口已加入列表的任务（仅用于高亮标记与禁用，不参与本地勾选）
-	private readonly alreadySelected: Set<string>;
-
 	private filterEl!: HTMLElement;
 	private listEl!: HTMLElement;
 	private labelEl!: HTMLElement;
@@ -48,20 +45,17 @@ export class TaskPickerModal extends Modal {
 	// 标题页：解析提示行（展示输入被解析成哪些关键字/标签/上下文）
 	private parseLabelEl!: HTMLElement;
 
-	// 按标题页的全选 / 清空复选框
+	// 按标题页的全选复选框
 	private selectAllBox!: HTMLInputElement;
-	private clearBox!: HTMLInputElement;
 
 	constructor(
 		app: App,
 		private allTasks: TaskInfo[],
 		private dateFields: DateField[],
 		private weekStartsOnMonday: boolean,
-		private onConfirm: (tasks: TaskInfo[]) => void,
-		alreadySelected: Set<string>
+		private onConfirm: (tasks: TaskInfo[]) => void
 	) {
 		super(app);
-		this.alreadySelected = alreadySelected;
 	}
 
 	onOpen(): void {
@@ -175,29 +169,16 @@ export class TaskPickerModal extends Modal {
 			this.refresh();
 		});
 
-		// 全选 / 清空（仅作用于按标题页当前展示的任务）
+		// 全选（仅作用于按标题页当前展示的任务）
 		const actionRow = this.filterEl.createDiv({ cls: "tah-picker-actions" });
 		const allLabel = actionRow.createEl("label", { cls: "tah-select-all" });
 		this.selectAllBox = allLabel.createEl("input", { type: "checkbox" });
 		allLabel.createSpan({ text: "全选" });
 		this.selectAllBox.addEventListener("change", () => {
-			// 只切换未加入主列表的任务；已加入的始终显示为勾选、不参与
-			const paths = getSelectablePaths(this.titleTasks, this.alreadySelected);
-			if (this.selectAllBox.checked) {
-				for (const path of paths) this.checkedPaths.add(path);
-			} else {
-				for (const path of paths) this.checkedPaths.delete(path);
+			for (const task of this.titleTasks) {
+				if (this.selectAllBox.checked) this.checkedPaths.add(task.path);
+				else this.checkedPaths.delete(task.path);
 			}
-			this.renderList();
-		});
-
-		const clearLabel = actionRow.createEl("label", { cls: "tah-select-clear" });
-		this.clearBox = clearLabel.createEl("input", { type: "checkbox" });
-		clearLabel.createSpan({ text: "清空" });
-		this.clearBox.addEventListener("change", () => {
-			for (const task of this.titleTasks) this.checkedPaths.delete(task.path);
-			// 一次性动作，勾选后自动复位
-			this.clearBox.checked = false;
 			this.renderList();
 		});
 
@@ -254,13 +235,13 @@ export class TaskPickerModal extends Modal {
 					this.dateFields
 				);
 			}
-			// 默认全选（已加入主列表的除外）
-			this.checkedPaths = initialSelection(this.timeTasks, this.alreadySelected, true);
+			// 默认全选
+			this.checkedPaths = initialSelection(this.timeTasks, true);
 		} else {
 			const query = parseTitleQuery(this.keyword);
 			this.titleTasks = filterTasksByTitleQuery(this.allTasks, query);
 			// 按标题页：默认都不勾选，由用户通过「全选」或单个勾选自行选择
-			this.checkedPaths = initialSelection(this.titleTasks, this.alreadySelected, false);
+			this.checkedPaths = initialSelection(this.titleTasks, false);
 			this.updateParseLabel(query);
 		}
 
@@ -287,22 +268,16 @@ export class TaskPickerModal extends Modal {
 			const emptyText =
 				this.currentTab === "time" && this.timeMode.kind === "empty"
 					? "请先选择时间范围。"
-					: "没有匹配的任务。";
+					: "没有可添加的任务。";
 			this.listEl.createDiv({ text: emptyText, cls: "tah-empty" });
 		}
 
 		for (const task of tasks) {
 			const item = this.listEl.createDiv({ cls: "tah-task-item" });
-			const isSelected = this.alreadySelected.has(task.path);
 
 			const checkbox = item.createEl("input", { type: "checkbox" });
 			checkbox.addClass("tah-task-checkbox");
-			// 已加入主列表的任务：显示为已勾选且禁用（不可在本窗口重复操作）
-			checkbox.checked = isSelected || this.checkedPaths.has(task.path);
-			if (isSelected) {
-				checkbox.disabled = true;
-				item.addClass("tah-task-item-selected");
-			}
+			checkbox.checked = this.checkedPaths.has(task.path);
 			checkbox.addEventListener("change", () => {
 				if (checkbox.checked) {
 					this.checkedPaths.add(task.path);
@@ -327,13 +302,9 @@ export class TaskPickerModal extends Modal {
 		this.confirmBtn.setText(`加入选中（${count}）`);
 		this.confirmBtn.disabled = count === 0;
 
-		// 按标题页：同步「全选」复选框状态（已加入主列表的任务视为已勾选）
+		// 按标题页：同步「全选」复选框状态
 		if (this.currentTab === "title" && this.selectAllBox) {
-			const state = computeSelectAllState(
-				this.titleTasks,
-				this.checkedPaths,
-				this.alreadySelected
-			);
+			const state = computeSelectAllState(this.titleTasks, this.checkedPaths);
 			this.selectAllBox.checked = state.checked;
 			this.selectAllBox.indeterminate = state.indeterminate;
 		}

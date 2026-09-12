@@ -13,14 +13,11 @@ import { saveReport } from "../report/writer";
 import { generateReport, type GenerateReportFailureReason } from "../report/generate";
 import { TaskPickerModal } from "./TaskPickerModal";
 import { renderTaskMeta } from "./taskMeta";
-import { computeSelectAllState } from "./taskSelection";
+import { computeSelectAllState, getAddableTasks } from "./taskSelection";
 import {
 	applyGenerateButtonState,
 	getGenerateButtonState,
 } from "./generateButton";
-
-/** 主窗口没有「已加入」的外部概念，复用共享三态逻辑时传空集。 */
-const NO_EXTERNAL_SELECTED: Set<string> = new Set();
 
 export class ReportModal extends Modal {
 	private allTasks: TaskInfo[] = [];
@@ -103,7 +100,7 @@ export class ReportModal extends Modal {
 
 		const tasks = this.getCandidateTasks();
 
-		// 工具栏：计数 + 全选 + 取消勾选 + 重置
+		// 工具栏：计数 + 全选 + 重置
 		const toolbar = this.listWrapEl.createDiv({ cls: "tah-task-toolbar" });
 		const countEl = toolbar.createDiv({ cls: "tah-count" });
 		countEl.setText(`已勾选 ${this.getCheckedTasks().length} / ${tasks.length} 个任务`);
@@ -112,16 +109,13 @@ export class ReportModal extends Modal {
 		const selectAllLabel = batchActions.createEl("label", { cls: "tah-select-all" });
 		const selectAllBox = selectAllLabel.createEl("input", { type: "checkbox" });
 		selectAllLabel.createSpan({ text: "全选" });
-		const uncheckBtn = batchActions.createEl("button", { text: "取消勾选" });
-		uncheckBtn.addClass("tah-batch-remove-btn");
 		const resetBtn = batchActions.createEl("button", { text: "重置" });
 		resetBtn.addClass("tah-batch-remove-btn");
 
 		const refreshSelectAll = () => {
-			const state = computeSelectAllState(tasks, this.checkedPaths, NO_EXTERNAL_SELECTED);
+			const state = computeSelectAllState(tasks, this.checkedPaths);
 			selectAllBox.checked = state.checked;
 			selectAllBox.indeterminate = state.indeterminate;
-			uncheckBtn.disabled = !(state.checked || state.indeterminate);
 			resetBtn.disabled = tasks.length === 0;
 			countEl.setText(`已勾选 ${this.getCheckedTasks().length} / ${tasks.length} 个任务`);
 		};
@@ -132,11 +126,6 @@ export class ReportModal extends Modal {
 			} else {
 				for (const task of tasks) this.checkedPaths.delete(task.path);
 			}
-			this.renderRight();
-		});
-
-		uncheckBtn.addEventListener("click", () => {
-			this.checkedPaths.clear();
 			this.renderRight();
 		});
 
@@ -193,31 +182,20 @@ export class ReportModal extends Modal {
 	}
 
 	private openTaskPicker(): void {
+		const addable = getAddableTasks(this.allTasks, new Set(this.candidateTasks.keys()));
 		new TaskPickerModal(
 			this.app,
-			this.allTasks,
+			addable,
 			this.plugin.settings.dateFields,
 			this.plugin.settings.weekStartsOnMonday,
 			(tasks) => {
-				let added = 0;
-				let skipped = 0;
 				for (const task of tasks) {
-					if (this.candidateTasks.has(task.path)) {
-						skipped++;
-					} else {
-						this.candidateTasks.set(task.path, task);
-						this.checkedPaths.add(task.path);
-						added++;
-					}
+					this.candidateTasks.set(task.path, task);
+					this.checkedPaths.add(task.path);
 				}
 				this.renderRight();
-				if (skipped > 0) {
-					new Notice(`已加入 ${added} 个任务，跳过 ${skipped} 个已在列表中的任务`);
-				} else {
-					new Notice(`已加入 ${added} 个任务`);
-				}
-			},
-			new Set(this.candidateTasks.keys())
+				new Notice(`已加入 ${tasks.length} 个任务`);
+			}
 		).open();
 	}
 

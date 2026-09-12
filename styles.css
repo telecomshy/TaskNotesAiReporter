@@ -671,18 +671,6 @@
 	flex-shrink: 0;
 }
 
-/* 已加入主列表的任务：正向高亮（左强调色边框 + 极淡背景），文字不变色 */
-.tah-task-item-selected {
-	border-left: 2px solid var(--interactive-accent);
-	background: rgba(var(--interactive-accent-rgb), 0.06);
-}
-
-/* 抵消原生 :disabled 的变灰，让已加入任务的复选框保持正常亮度 */
-.tah-task-item-selected .tah-task-checkbox:disabled {
-	opacity: 1;
-	cursor: default;
-}
-
 .tah-task-checkbox {
 	margin: 0;
 	flex-shrink: 0;
@@ -951,19 +939,6 @@
 	align-items: center;
 	gap: 1rem;
 	margin-bottom: 0.4rem;
-}
-
-.tah-select-clear {
-	display: flex;
-	align-items: center;
-	gap: 0.3rem;
-	font-size: 0.85rem;
-	cursor: pointer;
-	color: var(--text-muted);
-}
-
-.tah-select-clear input[type="checkbox"] {
-	margin: 0;
 }
 
 .tah-search-input {
