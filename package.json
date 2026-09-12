@@ -1,7 +1,7 @@
 {
 	"name": "tasknotes-aireporter",
 	"version": "0.1.0",
-	"description": "为 TaskNotes 生成 AI 周报/月报/年报的独立辅助插件",
+	"description": "用自定义模板与任意 OpenAI 兼容模型，为 TaskNotes 任务生成报告的独立辅助插件",
 	"main": "main.js",
 	"scripts": {
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",

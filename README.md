@@ -11,7 +11,7 @@ AIGC:
 
 # TaskNotes AI Reporter
 
-为 [TaskNotes](https://github.com/callumalpass/tasknotes) 生成 AI 周报 / 月报 / 年报的独立辅助插件。
+为 [TaskNotes](https://github.com/callumalpass/tasknotes) 生成 AI 报告的独立辅助插件：用**自定义模板**与任意 OpenAI 兼容模型，生成周报 / 月报 / 年报，或任意形式的报告。
 
 - 自定义任意 **OpenAI 兼容** 大模型（DeepSeek、通义千问、豆包、Kimi、OpenAI 等）
 - 按日期自动筛选 TaskNotes 任务，支持在界面中**手动添加 / 删除**任务
