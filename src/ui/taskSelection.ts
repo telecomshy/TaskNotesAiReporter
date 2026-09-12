@@ -1,18 +1,18 @@
 /**
  * 「选择任务」窗口的候选与勾选状态计算（纯函数，可单元测试）。
  *
- * 「选择任务」窗口只呈现尚未「已加入」的任务，因此本模块不感知「已加入」以外的状态：
- * 候选集合的排除由调用方先行完成（见 getAddableTasks）。
+ * 「选择任务」窗口只呈现尚未「已勾选」的任务，因此本模块以「已勾选」为排除依据：
+ * 展示集合的排除由调用方先行完成（见 getUncheckedTasks）；「已加入」仅用于计算默认勾选。
  */
 
 import type { TaskInfo } from "../types";
 
 /**
- * 返回尚未「已加入」的任务：即全部任务里不在已加入集合中的任务。
- * 用于在主窗口打开「选择任务」窗口前，把已加入的任务排除掉。
+ * 返回尚未「已勾选」的任务：即全部任务里不在已勾选集合中的任务。
+ * 用于在主窗口打开「选择任务」窗口前，把当前已勾选的任务排除掉。
  */
-export function getAddableTasks(allTasks: TaskInfo[], candidatePaths: Set<string>): TaskInfo[] {
-	return allTasks.filter((task) => !candidatePaths.has(task.path));
+export function getUncheckedTasks(allTasks: TaskInfo[], checkedPaths: Set<string>): TaskInfo[] {
+	return allTasks.filter((task) => !checkedPaths.has(task.path));
 }
 
 export interface SelectAllState {
@@ -31,9 +31,17 @@ export function computeSelectAllState(displayed: TaskInfo[], selected: Set<strin
 
 /**
  * 切 Tab / 改筛选后的初始勾选集。
- * - defaultSelectAll=true（时间页）：选中所有展示任务；
+ * - defaultSelectAll=true（时间页）：只勾选展示任务中尚未「已加入」的（首次加入的）任务；
+ *   已加入但未勾选的任务默认不勾，尊重用户先前的显式取消。
  * - false（标题页）：空集（默认不选）。
  */
-export function initialSelection(displayed: TaskInfo[], defaultSelectAll: boolean): Set<string> {
-	return defaultSelectAll ? new Set(displayed.map((task) => task.path)) : new Set();
+export function initialSelection(
+	displayed: TaskInfo[],
+	candidatePaths: Set<string>,
+	defaultSelectAll: boolean
+): Set<string> {
+	if (!defaultSelectAll) return new Set();
+	return new Set(
+		displayed.filter((task) => !candidatePaths.has(task.path)).map((task) => task.path)
+	);
 }

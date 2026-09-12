@@ -13,7 +13,7 @@ import { saveReport } from "../report/writer";
 import { generateReport, type GenerateReportFailureReason } from "../report/generate";
 import { TaskPickerModal } from "./TaskPickerModal";
 import { renderTaskMeta } from "./taskMeta";
-import { computeSelectAllState, getAddableTasks } from "./taskSelection";
+import { computeSelectAllState, getUncheckedTasks } from "./taskSelection";
 import {
 	applyGenerateButtonState,
 	getGenerateButtonState,
@@ -96,7 +96,7 @@ export class ReportModal extends Modal {
 		this.listWrapEl.empty();
 
 		const header = this.listWrapEl.createDiv({ cls: "tah-main-header" });
-		header.createEl("h3", { text: "已选任务" });
+		header.createEl("h3", { text: "已加入任务" });
 
 		const tasks = this.getCandidateTasks();
 
@@ -182,10 +182,10 @@ export class ReportModal extends Modal {
 	}
 
 	private openTaskPicker(): void {
-		const addable = getAddableTasks(this.allTasks, new Set(this.candidateTasks.keys()));
+		const displayTasks = getUncheckedTasks(this.allTasks, this.checkedPaths);
 		new TaskPickerModal(
 			this.app,
-			addable,
+			displayTasks,
 			this.plugin.settings.dateFields,
 			this.plugin.settings.weekStartsOnMonday,
 			(tasks) => {
@@ -195,7 +195,8 @@ export class ReportModal extends Modal {
 				}
 				this.renderRight();
 				new Notice(`已加入 ${tasks.length} 个任务`);
-			}
+			},
+			new Set(this.candidateTasks.keys())
 		).open();
 	}
 

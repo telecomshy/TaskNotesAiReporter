@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { getAddableTasks, computeSelectAllState, initialSelection } from "../src/ui/taskSelection";
+import { getUncheckedTasks, computeSelectAllState, initialSelection } from "../src/ui/taskSelection";
 import type { TaskInfo } from "../src/types";
 
 function makeTask(path: string): TaskInfo {
@@ -11,20 +11,20 @@ const a = makeTask("a");
 const b = makeTask("b");
 const c = makeTask("c");
 
-test("getAddableTasks 排除已加入的任务", () => {
-	assert.deepEqual(getAddableTasks([a, b, c], new Set(["b"])), [a, c]);
+test("getUncheckedTasks 排除已勾选任务", () => {
+	assert.deepEqual(getUncheckedTasks([a, b, c], new Set(["b"])), [a, c]);
 });
 
-test("getAddableTasks 无已加入任务时返回全部", () => {
-	assert.deepEqual(getAddableTasks([a, b], new Set()), [a, b]);
+test("getUncheckedTasks 无已勾选时返回全部", () => {
+	assert.deepEqual(getUncheckedTasks([a, b], new Set()), [a, b]);
 });
 
-test("getAddableTasks 空输入返回空", () => {
-	assert.deepEqual(getAddableTasks([], new Set(["a"])), []);
+test("getUncheckedTasks 空输入返回空", () => {
+	assert.deepEqual(getUncheckedTasks([], new Set(["a"])), []);
 });
 
-test("getAddableTasks 全部已加入时返回空", () => {
-	assert.deepEqual(getAddableTasks([a, b], new Set(["a", "b"])), []);
+test("getUncheckedTasks 全部已勾选时返回空", () => {
+	assert.deepEqual(getUncheckedTasks([a, b], new Set(["a", "b"])), []);
 });
 
 test("computeSelectAllState 空显示为未选中", () => {
@@ -55,14 +55,18 @@ test("computeSelectAllState 部分勾选为半选", () => {
 	});
 });
 
-test("initialSelection 默认全选：返回全部可见任务", () => {
-	assert.deepEqual([...initialSelection([a, b, c], true)].sort(), ["a", "b", "c"]);
+test("initialSelection 默认全选：只选尚未已加入的展示任务", () => {
+	assert.deepEqual([...initialSelection([a, b, c], new Set(["b"]), true)].sort(), ["a", "c"]);
+});
+
+test("initialSelection 默认全选：全是已加入时返回空", () => {
+	assert.deepEqual([...initialSelection([a, b], new Set(["a", "b"]), true)], []);
 });
 
 test("initialSelection 默认不选：返回空集", () => {
-	assert.deepEqual([...initialSelection([a, b], false)], []);
+	assert.deepEqual([...initialSelection([a, b], new Set(), false)], []);
 });
 
 test("initialSelection 空显示返回空集", () => {
-	assert.deepEqual([...initialSelection([], true)], []);
+	assert.deepEqual([...initialSelection([], new Set(), true)], []);
 });
