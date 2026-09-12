@@ -7,11 +7,8 @@ import {
 	hydrateTask,
 } from "../src/tasks/repository";
 import { fakeTaskRepository } from "./fakes/taskRepository";
+import { task } from "./fakes/task";
 import type { TaskInfo } from "../src/types";
-
-function task(over: Partial<TaskInfo> & { path: string }): TaskInfo {
-	return { title: over.path, status: "open", priority: "normal", archived: false, ...over };
-}
 
 const baseTask: TaskInfo = {
 	title: "写周报",

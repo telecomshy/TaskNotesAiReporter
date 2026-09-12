@@ -6,6 +6,7 @@
 import {
 	DEFAULT_SETTINGS,
 	PRESET_PROVIDERS,
+	type ActiveModelConfig,
 	type ModelProvider,
 	type TaskNotesAIHelperSettings,
 } from "../types";
@@ -162,22 +163,10 @@ export function normalizeSettings(raw: unknown): TaskNotesAIHelperSettings {
 /** 根据设置解析当前生效的 AI 配置（baseUrl/apiKey/model），并携带该模型的自定义参数 */
 export function resolveActiveModelConfig(
 	settings: TaskNotesAIHelperSettings
-): {
-	baseUrl: string;
-	apiKey: string;
-	model: string;
-	maxTokens?: number;
-	contextLength?: number;
-} | null {
+): ActiveModelConfig | null {
 	const provider = settings.providers.find((p) => p.id === settings.activeProviderId);
 	if (!provider) return null;
-	const cfg: {
-		baseUrl: string;
-		apiKey: string;
-		model: string;
-		maxTokens?: number;
-		contextLength?: number;
-	} = {
+	const cfg: ActiveModelConfig = {
 		baseUrl: provider.baseUrl,
 		apiKey: provider.apiKey,
 		model: settings.activeModel,

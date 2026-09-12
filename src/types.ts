@@ -86,6 +86,15 @@ export interface ModelConfig {
 	maxTokens?: number; // 输出上限
 }
 
+/** 当前生效的模型配置（由设置解析而来）：供应商接口 + 选中模型 + 该模型参数。 */
+export interface ActiveModelConfig {
+	baseUrl: string;
+	apiKey: string;
+	model: string;
+	maxTokens?: number;
+	contextLength?: number;
+}
+
 /** 预设供应商（内置，仅需 api key，baseUrl 固定，模型动态拉取） */
 export const PRESET_PROVIDERS: Omit<ModelProvider, "apiKey" | "authType">[] = [
 	{

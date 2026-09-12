@@ -3,7 +3,7 @@
  * 全部为纯函数，无 Obsidian 依赖，可单元测试。
  */
 
-import type { DateRange } from "../types";
+import type { DateRange, TaskInfo } from "../types";
 
 /** 将 Date 格式化为本地时区的 YYYY-MM-DD */
 export function toDateString(date: Date): string {
@@ -71,4 +71,25 @@ export function getISOWeekYear(date: Date): number {
 /** 判断两个 DateRange 是否相等 */
 export function rangesEqual(a: DateRange, b: DateRange): boolean {
 	return a.start === b.start && a.end === b.end;
+}
+
+/**
+ * 计算报告时间范围：优先取任务的最早完成 / 到期 / 计划日期到最晚，否则用 now 所在周。
+ */
+export function getReportRange(
+	tasks: TaskInfo[],
+	weekStartsOnMonday: boolean,
+	now: Date
+): DateRange {
+	const dates: string[] = [];
+	for (const task of tasks) {
+		if (task.completedDate) dates.push(task.completedDate);
+		if (task.due) dates.push(task.due);
+		if (task.scheduled) dates.push(task.scheduled);
+	}
+	if (dates.length > 0) {
+		dates.sort();
+		return { start: dates[0], end: dates[dates.length - 1] };
+	}
+	return getWeekRange(now, weekStartsOnMonday);
 }

@@ -8,7 +8,9 @@ import {
 	getYearRange,
 	getQuarterRange,
 	getISOWeekNumber,
+	getReportRange,
 } from "../src/core/dates";
+import { task } from "./fakes/task";
 
 test("toDateString 格式化正确", () => {
 	assert.equal(toDateString(new Date(2026, 0, 5)), "2026-01-05");
@@ -74,4 +76,24 @@ test("getISOWeekNumber 正确", () => {
 	assert.equal(getISOWeekNumber(new Date(2026, 0, 1)), 1);
 	// 2026-09-03 属于第 36 周
 	assert.equal(getISOWeekNumber(new Date(2026, 8, 3)), 36);
+});
+
+test("getReportRange 取任务最早到最晚日期", () => {
+	const tasks = [
+		task({ path: "a", completedDate: "2026-09-05" }),
+		task({ path: "b", due: "2026-09-01" }),
+	];
+	assert.deepEqual(getReportRange(tasks, true, new Date(2026, 8, 3)), {
+		start: "2026-09-01",
+		end: "2026-09-05",
+	});
+});
+
+test("getReportRange 无日期任务回退到 now 所在周", () => {
+	const tasks = [task({ path: "a" })];
+	// now = 2026-09-03（周四），周一为起始 → 2026-08-31 ~ 2026-09-06
+	assert.deepEqual(getReportRange(tasks, true, new Date(2026, 8, 3)), {
+		start: "2026-08-31",
+		end: "2026-09-06",
+	});
 });

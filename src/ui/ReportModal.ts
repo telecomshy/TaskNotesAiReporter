@@ -6,12 +6,11 @@
 import { App, Modal, Notice, TFile } from "obsidian";
 import type TaskNotesAIHelperPlugin from "../../main";
 import { resolveActiveModelConfig } from "../settings/logic";
-import type { DateRange, ReportType, TaskInfo } from "../types";
-import { hydrateTask, type TaskRepository } from "../tasks/repository";
-import { buildReportPrompt } from "../core/prompt";
-import { getWeekRange } from "../core/dates";
-import { chatCompletion, AIClientError } from "../ai/client";
+import type { ReportType, TaskInfo } from "../types";
+import type { TaskRepository } from "../tasks/repository";
+import { chatCompletion } from "../ai/client";
 import { saveReport } from "../report/writer";
+import { generateReport, type GenerateReportFailureReason } from "../report/generate";
 import { TaskPickerModal } from "./TaskPickerModal";
 import { renderTaskMeta } from "./taskMeta";
 import { computeSelectAllState } from "./taskSelection";
@@ -260,76 +259,46 @@ export class ReportModal extends Modal {
 	private async generate(): Promise<void> {
 		if (this.generating) return;
 
-		const tasks = this.getCheckedTasks();
-		if (tasks.length === 0) {
-			new Notice("请先勾选要生成报告的任务");
-			return;
-		}
-		const active = resolveActiveModelConfig(this.plugin.settings);
-		if (!active || !active.model) {
-			new Notice("请先在插件设置中选择模型并配置 API Key");
-			return;
-		}
-		if (!active.baseUrl || !active.apiKey) {
-			new Notice("请先在插件设置中填写所选供应商的 Base URL 和 API Key");
-			return;
-		}
-
 		this.generating = true;
 		if (this.generateBtn) {
 			applyGenerateButtonState(this.generateBtn, getGenerateButtonState(true));
 		}
 
 		try {
-			// 使用当前时间范围生成报告（若任务来自手动添加，则用今日范围兜底）
-			const range: DateRange = this.resolveReportRange();
-			const template = this.plugin.settings.templates.find(
-				(t) => t.id === this.selectedTemplateId
-			);
-
-			// 补充任务详情：TaskNotes 公开 API 的 list() 不读取正文，details 为空。
-			// 这里读取任务笔记正文回填到 details，避免报告缺失任务详细内容。
-			const tasksWithDetails = await Promise.all(
-				tasks.map((task) => hydrateTask(this.repository, task))
-			);
-
-			const prompt = buildReportPrompt(tasksWithDetails, {
-				range,
-				type: this.reportType,
-				language: this.plugin.settings.language,
-				templateContent: template?.content,
-			});
-
-			const content = await chatCompletion(
+			const s = this.plugin.settings;
+			const result = await generateReport(
 				{
-					baseUrl: active.baseUrl,
-					apiKey: active.apiKey,
-					model: active.model,
-					temperature: this.plugin.settings.temperature,
-					maxTokens: active.maxTokens ?? this.plugin.settings.maxTokens,
-					timeoutSeconds: this.plugin.settings.timeoutSeconds,
+					tasks: this.getCheckedTasks(),
+					type: this.reportType,
+					templateId: this.selectedTemplateId,
+					templates: s.templates,
+					language: s.language,
+					weekStartsOnMonday: s.weekStartsOnMonday,
+					reportFolder: s.reportFolder,
+					activeModel: resolveActiveModelConfig(s),
+					temperature: s.temperature,
+					maxTokens: s.maxTokens,
+					timeoutSeconds: s.timeoutSeconds,
 				},
-				[{ role: "user", content: prompt }]
+				{
+					repository: this.repository,
+					chat: (prompt, config) => chatCompletion(config, [{ role: "user", content: prompt }]),
+					save: (folder, type, range, content, templateName) =>
+						saveReport(this.app, folder, type, range, content, templateName),
+					now: () => new Date(),
+				}
 			);
 
-			// 直接保存并打开，无需预览窗口
-			const path = await saveReport(
-				this.app,
-				this.plugin.settings.reportFolder,
-				this.reportType,
-				range,
-				content,
-				template?.name
-			);
-			new Notice(`报告已保存：${path}`);
-			const file = this.app.vault.getAbstractFileByPath(path);
-			if (file instanceof TFile) {
-				await this.app.workspace.getLeaf(false).openFile(file);
+			if (result.ok) {
+				new Notice(`报告已保存：${result.path}`);
+				const file = this.app.vault.getAbstractFileByPath(result.path);
+				if (file instanceof TFile) {
+					await this.app.workspace.getLeaf(false).openFile(file);
+				}
+				this.close();
+			} else {
+				new Notice(failureMessage(result));
 			}
-			this.close();
-		} catch (error) {
-			const msg = error instanceof AIClientError ? error.message : String(error);
-			new Notice(`生成失败：${msg}`);
 		} finally {
 			this.generating = false;
 			if (this.generateBtn) {
@@ -337,20 +306,18 @@ export class ReportModal extends Modal {
 			}
 		}
 	}
+}
 
-	/** 计算报告时间范围：优先取勾选任务的最早完成/到期到最晚，否则用本周 */
-	private resolveReportRange(): DateRange {
-		const tasks = this.getCheckedTasks();
-		const dates: string[] = [];
-		for (const task of tasks) {
-			if (task.completedDate) dates.push(task.completedDate);
-			if (task.due) dates.push(task.due);
-			if (task.scheduled) dates.push(task.scheduled);
-		}
-		if (dates.length > 0) {
-			dates.sort();
-			return { start: dates[0], end: dates[dates.length - 1] };
-		}
-		return getWeekRange(new Date(), this.plugin.settings.weekStartsOnMonday);
+/** 把生成失败的原因种类映射为用户提示。 */
+function failureMessage(failure: { reason: GenerateReportFailureReason; message?: string }): string {
+	switch (failure.reason) {
+		case "no-tasks":
+			return "请先勾选要生成报告的任务";
+		case "no-model":
+			return "请先在插件设置中选择模型并配置 API Key";
+		case "missing-credentials":
+			return "请先在插件设置中填写所选供应商的 Base URL 和 API Key";
+		default:
+			return `生成失败：${failure.message ?? ""}`;
 	}
 }
