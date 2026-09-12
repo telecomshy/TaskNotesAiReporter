@@ -1,5 +1,5 @@
 /**
- * 任务筛选：按日期范围自动筛选 + 识别"未记录日期"的任务。
+ * 任务筛选：按日期范围自动筛选，以及「按标题」查询（关键字 / 标签 / 上下文）。
  * 纯函数，无 Obsidian 依赖，可单元测试。
  */
 
@@ -41,27 +41,6 @@ export function filterTasksByDateRange(
 		}
 	}
 	return result;
-}
-
-/**
- * 识别"未记录日期"的任务：所有选定日期字段均缺失。
- * 这些任务需要用户手动补录进报告。
- */
-export function filterTasksWithoutDate(
-	tasks: TaskInfo[],
-	dateFields: DateField[]
-): TaskInfo[] {
-	return tasks.filter((task) => {
-		if (task.archived) return false;
-		return dateFields.every((field) => !task[field]);
-	});
-}
-
-/**
- * 判断某任务是否"未记录任何日期"（供 UI 标注使用）。
- */
-export function hasNoDate(task: TaskInfo, dateFields: DateField[]): boolean {
-	return dateFields.every((field) => !task[field]);
 }
 
 /**

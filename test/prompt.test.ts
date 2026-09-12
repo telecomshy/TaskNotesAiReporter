@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildReportPrompt, formatTaskLine, groupTasksByProject } from "../src/core/prompt";
+import { buildReportPrompt, formatTaskLine } from "../src/core/prompt";
 import type { TaskInfo } from "../src/types";
 
 const task: TaskInfo = {
@@ -57,13 +57,6 @@ test("formatTaskLine 包含标题与项目", () => {
 	assert.ok(line.includes("写周报"));
 	assert.ok(line.includes("项目A"));
 	assert.ok(line.includes("done"));
-});
-
-test("groupTasksByProject 归类正确", () => {
-	const ungrouped: TaskInfo = { ...task, projects: undefined, path: "b" };
-	const map = groupTasksByProject([task, ungrouped]);
-	assert.equal(map.get("项目A")?.length, 1);
-	assert.equal(map.get("（未归属项目）")?.length, 1);
 });
 
 test("formatTaskLine 完整保留超长详情（不限 200 字）", () => {

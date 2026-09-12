@@ -3,8 +3,6 @@ import assert from "node:assert/strict";
 import {
 	normalizeDateValue,
 	filterTasksByDateRange,
-	filterTasksWithoutDate,
-	hasNoDate,
 	parseTitleQuery,
 	filterTasksByTitleQuery,
 	isTitleQueryEmpty,
@@ -65,23 +63,6 @@ test("filterTasksByDateRange 多字段命中去重", () => {
 	];
 	const result = filterTasksByDateRange(tasks, range, dateFields);
 	assert.equal(result.length, 1);
-});
-
-test("filterTasksWithoutDate 识别无日期任务", () => {
-	const tasks = [
-		makeTask({ path: "a", title: "A" }), // 无任何日期
-		makeTask({ path: "b", title: "B", completedDate: "2026-09-01" }),
-	];
-	const result = filterTasksWithoutDate(tasks, dateFields);
-	assert.deepEqual(result.map((t) => t.path), ["a"]);
-});
-
-test("hasNoDate 判断正确", () => {
-	assert.equal(hasNoDate(makeTask({ path: "a", title: "A" }), dateFields), true);
-	assert.equal(
-		hasNoDate(makeTask({ path: "b", title: "B", due: "2026-09-01" }), dateFields),
-		false
-	);
 });
 
 test("parseTitleQuery 拆分关键字/标签/上下文", () => {

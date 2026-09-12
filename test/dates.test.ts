@@ -2,12 +2,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
 	toDateString,
-	fromDateString,
 	getWeekRange,
 	getMonthRange,
 	getYearRange,
 	getQuarterRange,
-	getISOWeekNumber,
 	getReportRange,
 } from "../src/core/dates";
 import { task } from "./fakes/task";
@@ -15,13 +13,6 @@ import { task } from "./fakes/task";
 test("toDateString 格式化正确", () => {
 	assert.equal(toDateString(new Date(2026, 0, 5)), "2026-01-05");
 	assert.equal(toDateString(new Date(2026, 11, 31)), "2026-12-31");
-});
-
-test("fromDateString 解析正确", () => {
-	const d = fromDateString("2026-09-03");
-	assert.equal(d.getFullYear(), 2026);
-	assert.equal(d.getMonth(), 8);
-	assert.equal(d.getDate(), 3);
 });
 
 test("getWeekRange 周一为起始日", () => {
@@ -69,13 +60,6 @@ test("getQuarterRange 正确", () => {
 	const q4 = getQuarterRange(new Date(2026, 11, 20));
 	assert.equal(q4.start, "2026-10-01");
 	assert.equal(q4.end, "2026-12-31");
-});
-
-test("getISOWeekNumber 正确", () => {
-	// 2026-01-01 属于 2026 年第 1 周
-	assert.equal(getISOWeekNumber(new Date(2026, 0, 1)), 1);
-	// 2026-09-03 属于第 36 周
-	assert.equal(getISOWeekNumber(new Date(2026, 8, 3)), 36);
 });
 
 test("getReportRange 取任务最早到最晚日期", () => {

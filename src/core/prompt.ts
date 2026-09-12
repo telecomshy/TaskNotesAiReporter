@@ -50,23 +50,6 @@ export function formatTaskLine(task: TaskInfo): string {
 	return parts.join("，");
 }
 
-/** 按项目分组任务（供模板按项目归类等场景使用） */
-export function groupTasksByProject(tasks: TaskInfo[]): Map<string, TaskInfo[]> {
-	const map = new Map<string, TaskInfo[]>();
-	for (const task of tasks) {
-		if (task.projects && task.projects.length > 0) {
-			for (const project of task.projects) {
-				if (!map.has(project)) map.set(project, []);
-				map.get(project)!.push(task);
-			}
-		} else {
-			if (!map.has("（未归属项目）")) map.set("（未归属项目）", []);
-			map.get("（未归属项目）")!.push(task);
-		}
-	}
-	return map;
-}
-
 export interface BuildPromptOptions {
 	range: DateRange;
 	type: ReportType;
