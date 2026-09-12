@@ -7,7 +7,7 @@ import { App, Modal, Notice, TFile } from "obsidian";
 import type TaskNotesAIHelperPlugin from "../../main";
 import { resolveActiveModelConfig } from "../settings/logic";
 import type { DateRange, ReportType, TaskInfo } from "../types";
-import { loadAllTasks, hydrateTaskDetails } from "../tasks/source";
+import { hydrateTask, type TaskRepository } from "../tasks/repository";
 import { buildReportPrompt } from "../core/prompt";
 import { getWeekRange } from "../core/dates";
 import { chatCompletion, AIClientError } from "../ai/client";
@@ -38,7 +38,8 @@ export class ReportModal extends Modal {
 
 	constructor(
 		app: App,
-		private plugin: TaskNotesAIHelperPlugin
+		private plugin: TaskNotesAIHelperPlugin,
+		private repository: TaskRepository
 	) {
 		super(app);
 		// 打开弹窗时恢复上次选择的模板
@@ -62,7 +63,7 @@ export class ReportModal extends Modal {
 		// 加载任务
 		this.listWrapEl.empty();
 		this.listWrapEl.createDiv({ text: "正在加载任务…", cls: "tah-loading" });
-		const tasks = await loadAllTasks(this.app);
+		const tasks = await this.repository.list();
 		if (tasks === null) {
 			this.listWrapEl.empty();
 			this.listWrapEl.createEl("p", {
@@ -289,7 +290,7 @@ export class ReportModal extends Modal {
 			// 补充任务详情：TaskNotes 公开 API 的 list() 不读取正文，details 为空。
 			// 这里读取任务笔记正文回填到 details，避免报告缺失任务详细内容。
 			const tasksWithDetails = await Promise.all(
-				tasks.map((task) => hydrateTaskDetails(this.app, task))
+				tasks.map((task) => hydrateTask(this.repository, task))
 			);
 
 			const prompt = buildReportPrompt(tasksWithDetails, {

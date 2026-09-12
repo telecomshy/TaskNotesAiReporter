@@ -6,6 +6,7 @@
 import { Plugin } from "obsidian";
 import { TaskNotesAIHelperSettingTab } from "./src/settings";
 import { ReportModal } from "./src/ui/ReportModal";
+import { obsidianTaskRepository } from "./src/tasks/obsidian";
 import { normalizeSettings, type TaskNotesAIHelperSettings } from "./src/settings/logic";
 
 export default class TaskNotesAIHelperPlugin extends Plugin {
@@ -42,6 +43,6 @@ export default class TaskNotesAIHelperPlugin extends Plugin {
 	}
 
 	openReportModal(): void {
-		new ReportModal(this.app, this).open();
+		new ReportModal(this.app, this, obsidianTaskRepository(this.app)).open();
 	}
 }
