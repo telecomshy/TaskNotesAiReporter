@@ -7,7 +7,7 @@ import { Notice, Setting } from "obsidian";
 import type { ModelConfig, ModelProvider } from "../types";
 import { genId } from "./logic";
 import { listModels, testConnection } from "../ai/client";
-import { getSelectableProviders, isActiveModel } from "./modelSelection";
+import { modelsOf, isConfigured, isSelectable, isActiveModel } from "./provider";
 import type { SettingsTabContext } from "./index";
 
 /** 渲染「模型配置」Tab */
@@ -40,7 +40,7 @@ export function renderModelTab(container: HTMLElement, ctx: SettingsTabContext):
 function renderActiveModelSection(container: HTMLElement, ctx: SettingsTabContext): void {
 	container.createEl("h3", { text: "当前模型" });
 
-	const selectable = getSelectableProviders(ctx.plugin.settings.providers);
+	const selectable = ctx.plugin.settings.providers.filter(isSelectable);
 	if (selectable.length === 0) {
 		container.createEl("p", {
 			text: "还没有可用模型，请先配置供应商 API Key。",
@@ -57,7 +57,7 @@ function renderActiveModelSection(container: HTMLElement, ctx: SettingsTabContex
 			for (const provider of selectable) {
 				const optgroup = document.createElement("optgroup");
 				optgroup.label = provider.name;
-				for (const model of provider.models) {
+				for (const model of modelsOf(provider)) {
 					const option = document.createElement("option");
 					option.value = `${provider.id}::${model}`;
 					option.text = model;
@@ -87,7 +87,7 @@ function renderPresetProviderCard(
 	provider: ModelProvider,
 	ctx: SettingsTabContext
 ): void {
-	const configured = provider.apiKey.trim() !== "";
+	const configured = isConfigured(provider);
 
 	const card = container.createDiv({ cls: "tah-provider-card" });
 	card.toggleClass("tah-provider-configured", configured);
@@ -144,7 +144,7 @@ function renderPresetProviderCard(
 		const oldKey = provider.apiKey;
 		provider.apiKey = keyInput.value.trim();
 		await ctx.plugin.saveSettings();
-		refreshPresetCardState(card, provider);
+		refreshCardState(card, provider);
 
 		if (provider.apiKey && provider.apiKey !== oldKey) {
 			await fetchModels(card, provider, ctx, showModels);
@@ -303,20 +303,18 @@ async function fetchModels(
 	}
 }
 
-/** 更新卡片上的模型数量标签（未配置的预设供应商不显示） */
+/** 更新卡片上的模型数量标签（模型数由 provider module 统一读取） */
 function updateModelCount(card: HTMLElement, provider: ModelProvider): void {
 	const countEl = card.querySelector(".tah-provider-count");
 	if (!countEl) return;
-	// 内置供应商未配置（无 API Key）时不显示模型个数
-	const show =
-		provider.type === "preset"
-			? provider.apiKey.trim() !== "" && provider.models.length > 0
-			: provider.models.length > 0;
-	countEl.textContent = show ? `${provider.models.length}模型` : "";
+	const count = modelsOf(provider).length;
+	const show = count > 0 && (provider.type === "custom" || isConfigured(provider));
+	countEl.textContent = show ? `${count}模型` : "";
 }
 
-function refreshPresetCardState(card: HTMLElement, provider: ModelProvider): void {
-	const configured = provider.apiKey.trim() !== "";
+/** 同步卡片「已配置 / 未配置」状态。 */
+function refreshCardState(card: HTMLElement, provider: ModelProvider): void {
+	const configured = isConfigured(provider);
 	card.toggleClass("tah-provider-configured", configured);
 	const status = card.querySelector(".tah-provider-status");
 	if (status) status.textContent = configured ? "已配置" : "未配置";
@@ -359,7 +357,7 @@ function renderCustomProviderCard(
 	provider: ModelProvider,
 	ctx: SettingsTabContext
 ): void {
-	const configured = isCustomConfigured(provider);
+	const configured = isConfigured(provider);
 
 	const card = container.createDiv({ cls: "tah-provider-card tah-provider-custom" });
 	card.toggleClass("tah-provider-configured", configured);
@@ -410,7 +408,7 @@ function renderCustomProviderCard(
 	urlInput.addEventListener("change", () => {
 		provider.baseUrl = urlInput.value.trim();
 		void ctx.plugin.saveSettings();
-		refreshCustomCardState(card, provider);
+		refreshCardState(card, provider);
 	});
 
 	// 认证方式（按钮单选）+ API 密钥（Bearer 时显示）
@@ -431,7 +429,7 @@ function renderCustomProviderCard(
 	keyInput.addEventListener("change", () => {
 		provider.apiKey = keyInput.value.trim();
 		void ctx.plugin.saveSettings();
-		refreshCustomCardState(card, provider);
+		refreshCardState(card, provider);
 	});
 
 	const updateAuth = () => {
@@ -450,7 +448,7 @@ function renderCustomProviderCard(
 		keyInput.value = "";
 		void ctx.plugin.saveSettings();
 		updateAuth();
-		refreshCustomCardState(card, provider);
+		refreshCardState(card, provider);
 	});
 	updateAuth();
 
@@ -460,8 +458,6 @@ function renderCustomProviderCard(
 
 	const renderModelRows = () => {
 		modelsList.empty();
-		// 派生 provider.models 为模型 ID 列表（供常规配置下拉使用）
-		provider.models = (provider.customModels ?? []).map((m) => m.modelId);
 		updateModelCount(card, provider);
 		for (const mc of provider.customModels ?? []) {
 			renderCustomModelRow(modelsList, provider, mc, card, ctx);
@@ -480,7 +476,7 @@ function renderCustomProviderCard(
 		});
 		void ctx.plugin.saveSettings();
 		renderModelRows();
-		refreshCustomCardState(card, provider);
+		refreshCardState(card, provider);
 	});
 
 	renderModelRows();
@@ -584,40 +580,23 @@ function renderCustomModelRow(
 		provider.customModels = (provider.customModels ?? []).filter((m) => m.id !== mc.id);
 		void ctx.plugin.saveSettings();
 		listEl.empty();
-		provider.models = (provider.customModels ?? []).map((m) => m.modelId);
 		updateModelCount(card, provider);
 		for (const m2 of provider.customModels ?? []) {
 			renderCustomModelRow(listEl, provider, m2, card, ctx);
 		}
-		refreshCustomCardState(card, provider);
+		refreshCardState(card, provider);
 	});
 }
 
-/** 模型行参数变更或删除后同步派生 models 并更新状态 */
+/** 模型行参数变更或删除后保存并更新状态 */
 function syncCustomModels(
 	provider: ModelProvider,
 	card: HTMLElement,
 	ctx: SettingsTabContext
 ): void {
-	provider.models = (provider.customModels ?? []).map((m) => m.modelId);
 	void ctx.plugin.saveSettings();
 	updateModelCount(card, provider);
-	refreshCustomCardState(card, provider);
-}
-
-function refreshCustomCardState(card: HTMLElement, provider: ModelProvider): void {
-	const configured = isCustomConfigured(provider);
-	card.toggleClass("tah-provider-configured", configured);
-	const status = card.querySelector(".tah-provider-status");
-	if (status) status.textContent = configured ? "已配置" : "未配置";
-}
-
-/** 自定义供应商是否视为已配置：填了 API 地址且有至少一个模型 ID */
-function isCustomConfigured(provider: ModelProvider): boolean {
-	return (
-		provider.baseUrl.trim() !== "" &&
-		(provider.customModels ?? []).some((m) => m.modelId.trim() !== "")
-	);
+	refreshCardState(card, provider);
 }
 
 function parseIntSafe(value: string): number | undefined {
