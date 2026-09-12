@@ -623,13 +623,15 @@
 	margin: 0;
 }
 
-.tah-batch-remove-btn {
+.tah-batch-remove-btn,
+.tah-picker-clear {
 	padding: 0.2rem 0.6rem;
 	font-size: 0.8rem;
 	cursor: pointer;
 }
 
-.tah-batch-remove-btn:disabled {
+.tah-batch-remove-btn:disabled,
+.tah-picker-clear:disabled {
 	opacity: 0.5;
 	cursor: not-allowed;
 }

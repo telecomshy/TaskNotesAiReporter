@@ -42,6 +42,8 @@ export class TaskPickerModal extends Modal {
 	private labelEl!: HTMLElement;
 	private searchInput!: HTMLInputElement;
 	private confirmBtn!: HTMLButtonElement;
+	// 「清空选择」按钮（标题页与时间页共用，随 Tab 重建）
+	private clearBtn!: HTMLButtonElement;
 	// 标题页：解析提示行（展示输入被解析成哪些关键字/标签/上下文）
 	private parseLabelEl!: HTMLElement;
 
@@ -145,6 +147,8 @@ export class TaskPickerModal extends Modal {
 
 		const rangeRow = this.filterEl.createDiv({ cls: "tah-picker-range-row" });
 		this.labelEl = rangeRow.createDiv({ cls: "tah-range-label" });
+		this.clearBtn = rangeRow.createEl("button", { text: "清空选择", cls: "tah-picker-clear" });
+		this.clearBtn.addEventListener("click", () => this.clearSelection());
 
 		const calendarContainer = this.filterEl.createDiv({ cls: "tah-calendar-container" });
 		this.calendar = new CalendarWidget(
@@ -187,6 +191,9 @@ export class TaskPickerModal extends Modal {
 		});
 		this.labelEl = left.createDiv({ cls: "tah-range-label" });
 
+		this.clearBtn = actionRow.createEl("button", { text: "清空选择", cls: "tah-picker-clear" });
+		this.clearBtn.addEventListener("click", () => this.clearSelection());
+
 		this.parseLabelEl = this.filterEl.createDiv({ cls: "tah-parse-label" });
 	}
 
@@ -208,6 +215,12 @@ export class TaskPickerModal extends Modal {
 	private getDisplayedTasks(): TaskInfo[] {
 		if (this.currentTab === "time") return this.timeTasks;
 		return this.titleTasks;
+	}
+
+	/** 清空当前展示任务的勾选（随后刷新列表与按钮状态）。 */
+	private clearSelection(): void {
+		for (const task of this.getDisplayedTasks()) this.checkedPaths.delete(task.path);
+		this.renderList();
 	}
 
 	private updateLabel(): void {
@@ -305,6 +318,7 @@ export class TaskPickerModal extends Modal {
 		const count = this.checkedPaths.size;
 		this.confirmBtn.setText(`加入列表（${count}）`);
 		this.confirmBtn.disabled = count === 0;
+		if (this.clearBtn) this.clearBtn.disabled = count === 0;
 
 		// 按标题页：同步「全选」复选框状态
 		if (this.currentTab === "title" && this.selectAllBox) {
