@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { getSelectablePaths, computeSelectAllState } from "../src/ui/taskSelection";
+import { getSelectablePaths, computeSelectAllState, initialSelection } from "../src/ui/taskSelection";
 import type { TaskInfo } from "../src/types";
 
 function makeTask(path: string): TaskInfo {
@@ -74,4 +74,16 @@ test("computeSelectAllState 本地勾选与已加入混合仅覆盖部分为半�
 		checked: false,
 		indeterminate: true,
 	});
+});
+
+test("initialSelection 默认全选：返回可勾选集（排除已加入）", () => {
+	assert.deepEqual([...initialSelection([a, b, c], new Set(["b"]), true)].sort(), ["a", "c"]);
+});
+
+test("initialSelection 默认不选：返回空集", () => {
+	assert.deepEqual([...initialSelection([a, b], new Set(), false)], []);
+});
+
+test("initialSelection 空显示返回空集", () => {
+	assert.deepEqual([...initialSelection([], new Set(), true)], []);
 });

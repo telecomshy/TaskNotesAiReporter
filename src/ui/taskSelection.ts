@@ -38,3 +38,16 @@ export function computeSelectAllState(
 		indeterminate: effectiveChecked > 0 && effectiveChecked < displayed.length,
 	};
 }
+
+/**
+ * 切 Tab / 改筛选后的初始勾选集。
+ * - defaultSelectAll=true（时间页）：选中所有可勾选任务（排除已加入）；
+ * - false（标题页）：空集（默认不选）。
+ */
+export function initialSelection(
+	displayed: TaskInfo[],
+	alreadySelected: Set<string>,
+	defaultSelectAll: boolean
+): Set<string> {
+	return defaultSelectAll ? new Set(getSelectablePaths(displayed, alreadySelected)) : new Set();
+}

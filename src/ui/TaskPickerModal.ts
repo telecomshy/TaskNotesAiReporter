@@ -7,7 +7,7 @@
 import { App, Modal } from "obsidian";
 import { CalendarWidget } from "./Calendar";
 import { renderTaskMeta } from "./taskMeta";
-import { getSelectablePaths, computeSelectAllState } from "./taskSelection";
+import { getSelectablePaths, computeSelectAllState, initialSelection } from "./taskSelection";
 import {
 	filterTasksByDateRange,
 	filterTasksByTitleQuery,
@@ -255,14 +255,13 @@ export class TaskPickerModal extends Modal {
 				);
 			}
 			// 默认全选（已加入主列表的除外）
-			for (const path of getSelectablePaths(this.timeTasks, this.alreadySelected)) {
-				this.checkedPaths.add(path);
-			}
+			this.checkedPaths = initialSelection(this.timeTasks, this.alreadySelected, true);
 		} else {
 			const query = parseTitleQuery(this.keyword);
 			this.titleTasks = filterTasksByTitleQuery(this.allTasks, query);
-			this.updateParseLabel(query);
 			// 按标题页：默认都不勾选，由用户通过「全选」或单个勾选自行选择
+			this.checkedPaths = initialSelection(this.titleTasks, this.alreadySelected, false);
+			this.updateParseLabel(query);
 		}
 
 		this.updateLabel();
