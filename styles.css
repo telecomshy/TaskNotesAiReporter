@@ -460,8 +460,18 @@
 	flex-direction: column;
 }
 
+.tah-main-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+	margin-bottom: 0.5rem;
+}
+
 .tah-main-header h3 {
-	margin: 0 0 0.5rem;
+	margin: 0;
+	font-size: 1rem;
+	font-weight: 600;
 }
 
 .tah-modal-main {
@@ -498,16 +508,11 @@
 	flex: 0 0 auto;
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
+	justify-content: flex-end;
 	gap: 1rem;
 	padding-top: 0.75rem;
 	margin-top: 0.75rem;
 	border-top: 1px solid var(--background-modifier-border);
-}
-
-.tah-footer-count {
-	font-size: 0.85rem;
-	color: var(--text-muted);
 }
 
 .tah-footer-actions {
@@ -606,20 +611,6 @@
 }
 
 /* 任务列表 */
-.tah-task-toolbar {
-	display: flex;
-	align-items: center;
-	justify-content: flex-end;
-	gap: 0.5rem;
-	margin-bottom: 0.5rem;
-}
-
-.tah-batch-actions {
-	display: flex;
-	align-items: center;
-	gap: 0.6rem;
-}
-
 .tah-select-all {
 	display: flex;
 	align-items: center;
@@ -738,6 +729,10 @@
 }
 
 .tah-add-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.6rem;
 	margin-top: 0.75rem;
 }
 
@@ -747,7 +742,6 @@
 }
 
 .tah-hint {
-	margin-top: 0.4rem;
 	font-size: 0.75rem;
 	color: var(--text-muted);
 }

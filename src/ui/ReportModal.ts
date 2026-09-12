@@ -53,7 +53,7 @@ export class ReportModal extends Modal {
 		this.listWrapEl = contentEl.createDiv({ cls: "tah-main" });
 		this.footerEl = contentEl.createDiv({ cls: "tah-modal-footer" });
 
-		this.renderRight();
+		this.renderTaskList();
 		this.renderFooter();
 
 		// 加载任务
@@ -69,7 +69,7 @@ export class ReportModal extends Modal {
 			return;
 		}
 		this.allTasks = tasks;
-		this.renderRight();
+		this.renderTaskList();
 	}
 
 	onClose(): void {
@@ -83,23 +83,19 @@ export class ReportModal extends Modal {
 		return Array.from(this.candidateTasks.values());
 	}
 
-	private renderRight(): void {
+	private renderTaskList(): void {
 		this.listWrapEl.empty();
-
-		const header = this.listWrapEl.createDiv({ cls: "tah-main-header" });
-		header.createEl("h3", { text: "已加入任务" });
 
 		const tasks = this.getCandidateTasks();
 
-		// 工具栏：只保留「清空」
-		const toolbar = this.listWrapEl.createDiv({ cls: "tah-task-toolbar" });
-		const batchActions = toolbar.createDiv({ cls: "tah-batch-actions" });
-		const clearBtn = batchActions.createEl("button", { text: "清空" });
-		clearBtn.addClass("tah-batch-remove-btn");
+		// 页头：标题（含计数）在左，「清空」在右
+		const header = this.listWrapEl.createDiv({ cls: "tah-main-header" });
+		header.createEl("h3", { text: `已加入任务（${tasks.length}）` });
+		const clearBtn = header.createEl("button", { text: "清空", cls: "tah-batch-remove-btn" });
 		clearBtn.disabled = tasks.length === 0;
 		clearBtn.addEventListener("click", () => {
 			this.candidateTasks.clear();
-			this.renderRight();
+			this.renderTaskList();
 		});
 
 		// 任务列表
@@ -124,7 +120,7 @@ export class ReportModal extends Modal {
 			removeBtn.setAttr("aria-label", "从列表移除");
 			removeBtn.addEventListener("click", () => {
 				this.candidateTasks.delete(task.path);
-				this.renderRight();
+				this.renderTaskList();
 			});
 		}
 
@@ -133,12 +129,12 @@ export class ReportModal extends Modal {
 		const addBtn = addRow.createEl("button", { text: "+ 选择任务" });
 		addBtn.addClass("tah-add-btn");
 		addBtn.addEventListener("click", () => this.openTaskPicker());
-		addRow.createDiv({
-			text: "新选任务将追加到列表（可点击「清空」移除全部）。",
-			cls: "tah-hint",
-		});
-
-		this.updateFooterCount();
+		if (tasks.length > 0) {
+			addRow.createDiv({
+				text: "新选任务将追加到列表。",
+				cls: "tah-hint",
+			});
+		}
 	}
 
 	private openTaskPicker(): void {
@@ -152,7 +148,7 @@ export class ReportModal extends Modal {
 				for (const task of tasks) {
 					this.candidateTasks.set(task.path, task);
 				}
-				this.renderRight();
+				this.renderTaskList();
 				new Notice(`已加入 ${tasks.length} 个任务`);
 			}
 		).open();
@@ -162,8 +158,6 @@ export class ReportModal extends Modal {
 
 	private renderFooter(): void {
 		this.footerEl.empty();
-		const count = this.footerEl.createSpan({ cls: "tah-footer-count" });
-		count.setText(`共 ${this.getCandidateTasks().length} 个任务`);
 
 		// 右侧：模板下拉 + 生成按钮（紧邻）
 		const actions = this.footerEl.createDiv({ cls: "tah-footer-actions" });
@@ -184,13 +178,6 @@ export class ReportModal extends Modal {
 		btn.addClass("tah-generate-btn");
 		btn.addEventListener("click", () => void this.generate());
 		this.generateBtn = btn;
-	}
-
-	private updateFooterCount(): void {
-		const countEl = this.contentEl.querySelector(".tah-footer-count");
-		if (countEl) {
-			countEl.setText(`共 ${this.getCandidateTasks().length} 个任务`);
-		}
 	}
 
 	private async generate(): Promise<void> {
