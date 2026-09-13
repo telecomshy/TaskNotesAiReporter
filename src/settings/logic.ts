@@ -11,8 +11,16 @@ import {
 	type ReportTemplate,
 	type TaskNotesAIHelperSettings,
 } from "../types";
+import { resolveSecretValue, type PendingSecret } from "./secrets";
 
 export type { TaskNotesAIHelperSettings } from "../types";
+
+/** 归一化结果：设置本身 + 待导入 SecretStorage 的旧版明文密钥。 */
+export interface NormalizedSettings {
+	settings: TaskNotesAIHelperSettings;
+	/** 旧版明文密钥；由边界（main.ts）导入 SecretStorage 后即不再保留。 */
+	pendingSecrets: PendingSecret[];
+}
 
 /** 旧版中文默认示例模板；仅当用户从未改动过它时，一次性迁移为当前英文默认版。 */
 const LEGACY_DEFAULT_TEMPLATE = {
@@ -37,9 +45,10 @@ export function genId(): string {
 /**
  * 从加载的原始数据生成最终设置：处理旧版单一模型配置的迁移。
  */
-export function normalizeSettings(raw: unknown): TaskNotesAIHelperSettings {
+export function normalizeSettings(raw: unknown): NormalizedSettings {
 	const data = (raw ?? {}) as Partial<TaskNotesAIHelperSettings> & LegacySettings;
 	const settings: TaskNotesAIHelperSettings = { ...DEFAULT_SETTINGS };
+	const pendingSecrets: PendingSecret[] = [];
 
 	// 常规字段
 	if (typeof data.temperature === "number") settings.temperature = data.temperature;
@@ -90,9 +99,15 @@ export function normalizeSettings(raw: unknown): TaskNotesAIHelperSettings {
 				const t = (p?.type as string | undefined) ?? "custom";
 				if (t !== "custom") return true; // 预设供应商始终保留
 				const baseUrl = (p?.baseUrl as string | undefined) ?? "";
-				const apiKey = (p?.apiKey as string | undefined) ?? "";
+				const secretId = (p?.apiKeySecretId as string | undefined) ?? "";
+				const legacyKey = (p as { apiKey?: string } | undefined)?.apiKey ?? "";
 				const models = Array.isArray(p?.models) ? (p.models as string[]) : [];
-				return baseUrl.trim() !== "" || apiKey.trim() !== "" || models.length > 0;
+				return (
+					baseUrl.trim() !== "" ||
+					secretId.trim() !== "" ||
+					legacyKey.trim() !== "" ||
+					models.length > 0
+				);
 			})
 			.map((p) => {
 				const type = ((p.type as "preset" | "custom" | undefined) ?? "custom") as
@@ -101,7 +116,17 @@ export function normalizeSettings(raw: unknown): TaskNotesAIHelperSettings {
 				const authType = ((p.authType as "none" | "bearer" | undefined) ?? "bearer") as
 					| "none"
 					| "bearer";
-				const provider = { ...p, type, authType } as ModelProvider;
+				const provider = {
+					...p,
+					...readApiKeySecretId(p as unknown as Record<string, unknown>),
+					type,
+					authType,
+				} as ModelProvider & { apiKey?: string };
+				const legacy = (p as { apiKey?: unknown }).apiKey;
+				delete provider.apiKey; // 不再持久化明文密钥
+				if (typeof legacy === "string" && legacy.trim() !== "" && typeof provider.id === "string") {
+					pendingSecrets.push({ providerId: provider.id, plaintext: legacy });
+				}
 				// 迁移：旧版自定义供应商用 models 字符串数组（供应商级 contextLength/maxTokens 也已废弃），
 				// 转为 customModels 每模型配置，保持常规配置下拉与卡片模型行可用。
 				if (type === "custom" && !Array.isArray(provider.customModels)) {
@@ -118,7 +143,7 @@ export function normalizeSettings(raw: unknown): TaskNotesAIHelperSettings {
 	} else {
 		settings.providers = PRESET_PROVIDERS.map((p) => ({
 			...p,
-			apiKey: "",
+			apiKeySecretId: "",
 			authType: "bearer" as const,
 		}));
 		// 旧版单一模型配置迁移：匹配预设供应商，否则创建新的自定义供应商
@@ -134,7 +159,7 @@ export function normalizeSettings(raw: unknown): TaskNotesAIHelperSettings {
 			});
 
 			if (matched) {
-				matched.apiKey = data.apiKey ?? "";
+				if (data.apiKey) pendingSecrets.push({ providerId: matched.id, plaintext: data.apiKey });
 				if (data.model) {
 					matched.models = [data.model];
 				}
@@ -148,10 +173,11 @@ export function normalizeSettings(raw: unknown): TaskNotesAIHelperSettings {
 					name: "自定义",
 					type: "custom",
 					baseUrl: data.baseUrl ?? "",
-					apiKey: data.apiKey ?? "",
+					apiKeySecretId: "",
 					models: data.model ? [data.model] : [],
 					authType: "bearer",
 				};
+				if (data.apiKey) pendingSecrets.push({ providerId: customId, plaintext: data.apiKey });
 				settings.providers.push(legacyProvider);
 				settings.activeProviderId = customId;
 				settings.activeModel = data.model ?? "";
@@ -172,7 +198,12 @@ export function normalizeSettings(raw: unknown): TaskNotesAIHelperSettings {
 		settings.activeProviderId = settings.providers[0]?.id ?? "";
 	}
 
-	return settings;
+	return { settings, pendingSecrets };
+}
+
+/** 从原始供应商读取密钥名（新结构）；旧版明文由 normalizeSettings 收集进 pendingSecrets。 */
+function readApiKeySecretId(raw: Record<string, unknown>): Pick<ModelProvider, "apiKeySecretId"> {
+	return { apiKeySecretId: typeof raw.apiKeySecretId === "string" ? raw.apiKeySecretId : "" };
 }
 
 /** 把未被用户改动的旧中文示例模板迁移为当前英文默认版；改过的模板原样保留。 */
@@ -188,15 +219,19 @@ function migrateExampleTemplate(templates: ReportTemplate[]): ReportTemplate[] {
 	);
 }
 
-/** 根据设置解析当前生效的 AI 配置（baseUrl/apiKey/model），并携带该模型的自定义参数 */
+/**
+ * 根据设置解析当前生效的 AI 配置（baseUrl/apiKey/model），并携带该模型的自定义参数。
+ * 密钥值通过注入的 `getSecret(密钥名)` 从 SecretStorage 解析；未选密钥时不查询，缺失则解析为空串。
+ */
 export function resolveActiveModelConfig(
-	settings: TaskNotesAIHelperSettings
+	settings: TaskNotesAIHelperSettings,
+	getSecret: (id: string) => string | null
 ): ActiveModelConfig | null {
 	const provider = settings.providers.find((p) => p.id === settings.activeProviderId);
 	if (!provider) return null;
 	const cfg: ActiveModelConfig = {
 		baseUrl: provider.baseUrl,
-		apiKey: provider.apiKey,
+		apiKey: resolveSecretValue(provider.apiKeySecretId, getSecret),
 		model: settings.activeModel,
 	};
 	// 自定义供应商：匹配当前选中模型的行配置，提取其独立参数

@@ -8,7 +8,7 @@ function provider(over: Partial<ModelProvider> & { id: string }): ModelProvider 
 		name: over.id,
 		type: "preset",
 		baseUrl: "https://example.com",
-		apiKey: "",
+		apiKeySecretId: "",
 		models: [],
 		authType: "bearer",
 		...over,
@@ -33,9 +33,9 @@ test("modelsOf 自定义由 customModels 派生并去空白", () => {
 	assert.deepEqual(modelsOf(p), ["m1", "m2"]);
 });
 
-test("isConfigured 预设：填了 Key 即已配置", () => {
-	assert.equal(isConfigured(provider({ id: "p", type: "preset", apiKey: "sk" })), true);
-	assert.equal(isConfigured(provider({ id: "p", type: "preset", apiKey: "   " })), false);
+test("isConfigured 预设：选了密钥即已配置", () => {
+	assert.equal(isConfigured(provider({ id: "p", type: "preset", apiKeySecretId: "sk" })), true);
+	assert.equal(isConfigured(provider({ id: "p", type: "preset", apiKeySecretId: "   " })), false);
 });
 
 test("isConfigured 自定义：需地址且有模型", () => {
@@ -50,10 +50,10 @@ test("isConfigured 自定义：需地址且有模型", () => {
 	assert.equal(isConfigured(provider({ id: "c", type: "custom", baseUrl: "https://x", customModels: [] })), false);
 });
 
-test("isSelectable 预设：有模型且有 Key", () => {
-	assert.equal(isSelectable(provider({ id: "p", type: "preset", apiKey: "sk", models: ["m"] })), true);
-	assert.equal(isSelectable(provider({ id: "p", type: "preset", apiKey: "", models: ["m"] })), false);
-	assert.equal(isSelectable(provider({ id: "p", type: "preset", apiKey: "sk", models: [] })), false);
+test("isSelectable 预设：有模型且有密钥", () => {
+	assert.equal(isSelectable(provider({ id: "p", type: "preset", apiKeySecretId: "sk", models: ["m"] })), true);
+	assert.equal(isSelectable(provider({ id: "p", type: "preset", apiKeySecretId: "", models: ["m"] })), false);
+	assert.equal(isSelectable(provider({ id: "p", type: "preset", apiKeySecretId: "sk", models: [] })), false);
 });
 
 test("isSelectable 自定义无认证：有模型即可选（不要求 Key）", () => {
@@ -61,7 +61,7 @@ test("isSelectable 自定义无认证：有模型即可选（不要求 Key）", 
 		id: "c",
 		type: "custom",
 		authType: "none",
-		apiKey: "",
+		apiKeySecretId: "",
 		customModels: [{ id: "1", modelId: "m" }],
 	});
 	assert.equal(isSelectable(p), true);
@@ -78,13 +78,13 @@ test("isSelectable 无地址：不可选（即便有模型）", () => {
 	assert.equal(isSelectable(p), false);
 });
 
-test("isSelectable 自定义有认证：需 Key", () => {
+test("isSelectable 自定义有认证：需密钥", () => {
 	assert.equal(
-		isSelectable(provider({ id: "c", type: "custom", authType: "bearer", apiKey: "", customModels: [{ id: "1", modelId: "m" }] })),
+		isSelectable(provider({ id: "c", type: "custom", authType: "bearer", apiKeySecretId: "", customModels: [{ id: "1", modelId: "m" }] })),
 		false
 	);
 	assert.equal(
-		isSelectable(provider({ id: "c", type: "custom", authType: "bearer", apiKey: "k", customModels: [{ id: "1", modelId: "m" }] })),
+		isSelectable(provider({ id: "c", type: "custom", authType: "bearer", apiKeySecretId: "k", customModels: [{ id: "1", modelId: "m" }] })),
 		true
 	);
 });

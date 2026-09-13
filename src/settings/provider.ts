@@ -17,16 +17,16 @@ export function modelsOf(provider: ModelProvider): string[] {
 	return provider.models;
 }
 
-/** 卡片状态：供应商是否「已配置」。预设看 Key；自定义看地址且有模型。 */
+/** 卡片状态：供应商是否「已配置」。预设看是否选了密钥；自定义看地址且有模型。 */
 export function isConfigured(provider: ModelProvider): boolean {
 	return provider.type === "preset"
-		? provider.apiKey.trim() !== ""
+		? provider.apiKeySecretId.trim() !== ""
 		: provider.baseUrl.trim() !== "" && modelsOf(provider).length > 0;
 }
 
-/** 能否作为「当前模型」来源：有地址、有模型，且认证满足（无认证不要求 Key）。 */
+/** 能否作为「当前模型」来源：有地址、有模型，且认证满足（无认证不要求密钥）。 */
 export function isSelectable(provider: ModelProvider): boolean {
-	const credentialed = provider.authType === "none" || provider.apiKey.trim() !== "";
+	const credentialed = provider.authType === "none" || provider.apiKeySecretId.trim() !== "";
 	return provider.baseUrl.trim() !== "" && modelsOf(provider).length > 0 && credentialed;
 }
 

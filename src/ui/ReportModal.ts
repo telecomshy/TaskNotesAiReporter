@@ -214,7 +214,9 @@ export class ReportModal extends Modal {
 					language: s.language,
 					weekStartsOnMonday: s.weekStartsOnMonday,
 					reportFolder: s.reportFolder,
-					activeModel: resolveActiveModelConfig(s),
+					activeModel: resolveActiveModelConfig(s, (id) =>
+						this.app.secretStorage.getSecret(id)
+					),
 					temperature: s.temperature,
 					maxTokens: s.maxTokens,
 					timeoutSeconds: s.timeoutSeconds,

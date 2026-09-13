@@ -3,10 +3,11 @@
  * 本模块只导出 renderModelTab 入口，内部辅助函数均为本模块私有。
  */
 
-import { Notice, Setting } from "obsidian";
+import { Notice, SecretComponent, Setting } from "obsidian";
 import type { ModelConfig, ModelProvider } from "../types";
 import type { Translator } from "../i18n";
 import { genId } from "./logic";
+import { resolveSecretValue } from "./secrets";
 import { listModels, testConnection } from "../ai/client";
 import { describeAIError } from "../ai/errorMessage";
 import { modelsOf, isConfigured, isSelectable, isActiveModel } from "./provider";
@@ -116,13 +117,11 @@ function renderPresetProviderCard(
 	const body = card.createDiv({ cls: "tah-provider-body" });
 	body.style.display = "none";
 
-	// API Key + 获取模型列表按钮（同一行，填完 key 即可点击）
+	// API 密钥 + 获取模型列表按钮（同一行，选好密钥即可点击）
 	const keyRow = body.createDiv({ cls: "tah-provider-field" });
 	keyRow.createSpan({ cls: "tah-provider-field-label", text: t("model.apiKeyLabel") });
-	const keyInput = keyRow.createEl("input", { type: "password" });
-	keyInput.addClass("tah-provider-input");
-	keyInput.value = provider.apiKey;
-	keyInput.placeholder = "sk-...";
+	const keyHost = keyRow.createDiv({ cls: "tah-provider-input" });
+	const keySecret = new SecretComponent(ctx.app, keyHost).setValue(provider.apiKeySecretId);
 	const fetchBtn = keyRow.createEl("button", { text: t("model.fetchModels") });
 	fetchBtn.addClass("tah-fetch-models-btn");
 	fetchBtn.addEventListener("click", () => void fetchModels(card, provider, ctx));
@@ -150,22 +149,8 @@ function renderPresetProviderCard(
 		void fetchModelsSilent(provider, showModels, ctx);
 	}
 
-	// API Key 变更时：更新状态；新填了 key 则自动拉取，清空则清空模型
-	keyInput.addEventListener("change", async () => {
-		const oldKey = provider.apiKey;
-		provider.apiKey = keyInput.value.trim();
-		await ctx.plugin.saveSettings();
-		refreshCardState(card, provider, t);
-
-		if (provider.apiKey && provider.apiKey !== oldKey) {
-			await fetchModels(card, provider, ctx, showModels);
-		} else if (!provider.apiKey) {
-			provider.models = [];
-			await ctx.plugin.saveSettings();
-			showModels([]);
-			ctx.refresh();
-		}
-	});
+	// 密钥变更时：更新状态；新选了密钥则自动拉取，清空则清空模型
+	keySecret.onChange((value) => void onPresetSecretChange(card, provider, value, showModels, ctx));
 
 	// 头部点击折叠/展开
 	header.addEventListener("click", () => {
@@ -177,6 +162,34 @@ function renderPresetProviderCard(
 	updateModelCount(card, provider, t);
 }
 
+/** 把密钥名解析为密钥值；未选或存储中缺失时返回空串。 */
+function resolveSecret(ctx: SettingsTabContext, secretId: string): string {
+	return resolveSecretValue(secretId, (id) => ctx.app.secretStorage.getSecret(id));
+}
+
+/** 预设供应商的密钥变更：保存并更新状态；新选了密钥则自动拉取，清空则清空模型。 */
+async function onPresetSecretChange(
+	card: HTMLElement,
+	provider: ModelProvider,
+	value: string,
+	showModels: (models: string[]) => void,
+	ctx: SettingsTabContext
+): Promise<void> {
+	const oldId = provider.apiKeySecretId;
+	provider.apiKeySecretId = value;
+	await ctx.plugin.saveSettings();
+	refreshCardState(card, provider, ctx.plugin.t);
+
+	if (provider.apiKeySecretId && provider.apiKeySecretId !== oldId) {
+		await fetchModels(card, provider, ctx, showModels);
+	} else if (!provider.apiKeySecretId) {
+		provider.models = [];
+		await ctx.plugin.saveSettings();
+		showModels([]);
+		ctx.refresh();
+	}
+}
+
 /** 静默拉取模型列表（打开页面自动调用），失败不打扰用户 */
 async function fetchModelsSilent(
 	provider: ModelProvider,
@@ -184,7 +197,7 @@ async function fetchModelsSilent(
 	ctx: SettingsTabContext
 ): Promise<void> {
 	try {
-		const models = await listModels(provider.baseUrl, provider.apiKey);
+		const models = await listModels(provider.baseUrl, resolveSecret(ctx, provider.apiKeySecretId));
 		await applyModels(provider, models, showModels, false, ctx);
 	} catch {
 		// 静默失败：模型保持为空，不显示模型区域
@@ -299,13 +312,18 @@ async function fetchModels(
 	showModels?: (models: string[]) => void
 ): Promise<void> {
 	const t = ctx.plugin.t;
-	if (!provider.apiKey.trim()) {
+	if (provider.apiKeySecretId.trim() === "") {
 		new Notice(t("model.fetchNeedKey"));
+		return;
+	}
+	const apiKey = resolveSecret(ctx, provider.apiKeySecretId);
+	if (apiKey === "") {
+		new Notice(t("model.fetchSecretMissing"));
 		return;
 	}
 	new Notice(t("model.fetching", { name: provider.name }));
 	try {
-		const models = await listModels(provider.baseUrl, provider.apiKey);
+		const models = await listModels(provider.baseUrl, apiKey);
 		if (models.length > 0) {
 			provider.models = models;
 			await ctx.plugin.saveSettings();
@@ -347,7 +365,7 @@ function addCustomProvider(ctx: SettingsTabContext): void {
 		name: DEFAULT_CUSTOM_PROVIDER_NAME,
 		type: "custom",
 		baseUrl: "",
-		apiKey: "",
+		apiKeySecretId: "",
 		models: [],
 		authType: "bearer",
 		customModels: [],
@@ -446,12 +464,10 @@ function renderCustomProviderCard(
 
 	const keyRow = body.createDiv({ cls: "tah-provider-field tah-custom-key-field" });
 	keyRow.createSpan({ cls: "tah-provider-field-label", text: t("model.apiKeyLabel") });
-	const keyInput = keyRow.createEl("input", { type: "password" });
-	keyInput.addClass("tah-provider-input");
-	keyInput.value = provider.apiKey;
-	keyInput.placeholder = t("model.apiKeyPlaceholder");
-	keyInput.addEventListener("change", () => {
-		provider.apiKey = keyInput.value.trim();
+	const keyHost = keyRow.createDiv({ cls: "tah-provider-input" });
+	const keySecret = new SecretComponent(ctx.app, keyHost).setValue(provider.apiKeySecretId);
+	keySecret.onChange((value) => {
+		provider.apiKeySecretId = value;
 		void ctx.plugin.saveSettings();
 		refreshCardState(card, provider, t);
 	});
@@ -468,8 +484,8 @@ function renderCustomProviderCard(
 	});
 	noneBtn.addEventListener("click", () => {
 		provider.authType = "none";
-		provider.apiKey = "";
-		keyInput.value = "";
+		provider.apiKeySecretId = "";
+		keySecret.setValue("");
 		void ctx.plugin.saveSettings();
 		updateAuth();
 		refreshCardState(card, provider, t);
@@ -584,7 +600,7 @@ function renderCustomModelRow(
 		new Notice(t("model.testing"));
 		void testConnection({
 			baseUrl: provider.baseUrl.trim(),
-			apiKey: provider.authType === "bearer" ? provider.apiKey : "",
+			apiKey: provider.authType === "bearer" ? resolveSecret(ctx, provider.apiKeySecretId) : "",
 			model: modelId,
 			temperature: ctx.plugin.settings.temperature,
 			maxTokens: parseIntSafe(maxInput.value) ?? ctx.plugin.settings.maxTokens,

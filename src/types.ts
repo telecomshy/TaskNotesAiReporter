@@ -74,7 +74,7 @@ export interface ModelProvider {
 	name: string; // 显示名称
 	type: "preset" | "custom"; // 内置 or 自定义
 	baseUrl: string; // OpenAI 兼容 base URL（内置的固定；自定义的手动填）
-	apiKey: string; // API 密钥
+	apiKeySecretId: string; // SecretStorage 中的密钥名（不存密钥值本身）
 	models: string[]; // 可用模型 ID 列表（预设为动态拉取的真实存储；自定义请用 provider.modelsOf 读取，勿直接依赖）
 	authType: "none" | "bearer"; // 认证方式（自定义供应商使用）
 	customModels?: ModelConfig[]; // 仅自定义供应商：手动维护的模型配置（每模型含 contextLength/maxTokens）
@@ -98,7 +98,7 @@ export interface ActiveModelConfig {
 }
 
 /** 预设供应商（内置，仅需 api key，baseUrl 固定，模型动态拉取） */
-export const PRESET_PROVIDERS: Omit<ModelProvider, "apiKey" | "authType">[] = [
+export const PRESET_PROVIDERS: Omit<ModelProvider, "apiKeySecretId" | "authType">[] = [
 	{
 		id: "deepseek",
 		name: "深度求索（DeepSeek）",
@@ -157,7 +157,7 @@ export interface TaskNotesAIHelperSettings {
 }
 
 export const DEFAULT_SETTINGS: TaskNotesAIHelperSettings = {
-	providers: PRESET_PROVIDERS.map((p) => ({ ...p, apiKey: "", authType: "bearer" as const })),
+	providers: PRESET_PROVIDERS.map((p) => ({ ...p, apiKeySecretId: "", authType: "bearer" as const })),
 	activeProviderId: "deepseek",
 	activeModel: "",
 	temperature: 0.7,

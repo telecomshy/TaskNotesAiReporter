@@ -8,6 +8,7 @@ import { TaskNotesAIHelperSettingTab } from "./src/settings";
 import { ReportModal } from "./src/ui/ReportModal";
 import { obsidianTaskRepository } from "./src/tasks/obsidian";
 import { normalizeSettings, type TaskNotesAIHelperSettings } from "./src/settings/logic";
+import { importPendingSecrets } from "./src/settings/secrets";
 import {
 	BUNDLES,
 	createTranslator,
@@ -57,7 +58,14 @@ export default class TaskNotesAIHelperPlugin extends Plugin {
 
 	async loadSettings(): Promise<void> {
 		const data = await this.loadData();
-		this.settings = normalizeSettings(data);
+		const { settings: normalized, pendingSecrets } = normalizeSettings(data);
+		// 一次性迁移：把旧版明文密钥导入 SecretStorage，只保留密钥名
+		const { settings, changed } = importPendingSecrets(normalized, pendingSecrets, {
+			get: (id) => this.app.secretStorage.getSecret(id),
+			set: (id, value) => this.app.secretStorage.setSecret(id, value),
+		});
+		this.settings = settings;
+		if (changed) await this.saveSettings();
 	}
 
 	async saveSettings(): Promise<void> {
