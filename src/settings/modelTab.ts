@@ -166,6 +166,7 @@ interface SecretControl {
 /**
  * 挂载密钥选择控件：用固定点掩码取代 Obsidian 原生的「点 + ×」值显示（CSS 隐藏），
  * 保留原生「更改/Link」按钮以复用其选择与新建密钥弹窗。变更时先同步掩码再回调。
+ * 另给一个「管理密钥」入口（重命名/删除归 Obsidian 密钥存储）与「密钥不可用」内联提示。
  */
 function attachSecretControl(
 	ctx: SettingsTabContext,
@@ -174,16 +175,45 @@ function attachSecretControl(
 	onChange: (value: string) => void
 ): SecretControl {
 	host.addClass("tah-secret-host");
+	const t = ctx.plugin.t;
 	const mask = host.createSpan({ cls: "tah-secret-mask", text: SECRET_MASK });
-	const setMask = (secretId: string) => mask.toggleClass("is-empty", secretId.trim() === "");
-	setMask(provider.apiKeySecretId);
-
 	const component = new SecretComponent(ctx.app, host).setValue(provider.apiKeySecretId);
+
+	const manageBtn = host.createEl("button", { text: t("model.manageSecret") });
+	manageBtn.addClass("tah-secret-manage-btn");
+	manageBtn.addEventListener("click", () => openSecretStorage(ctx));
+
+	const hint = host.createSpan({ cls: "tah-secret-hint tah-hidden", text: t("model.secretUnavailable") });
+
+	const refresh = (secretId: string) => {
+		const selected = secretId.trim() !== "";
+		mask.toggleClass("is-empty", !selected);
+		hint.toggleClass("tah-hidden", !(selected && resolveSecret(ctx, secretId) === ""));
+	};
+	refresh(provider.apiKeySecretId);
+
 	component.onChange((value) => {
-		setMask(value);
+		refresh(value);
 		onChange(value);
 	});
-	return { component, setMask };
+	return { component, setMask: refresh };
+}
+
+/** 打开 Obsidian 的「密钥存储」设置页（内部 API 不在公开类型里，带降级提示）。 */
+function openSecretStorage(ctx: SettingsTabContext): void {
+	const setting = (ctx.app as unknown as {
+		setting?: { open?: () => void; openTabById?: (id: string) => void };
+	}).setting;
+	try {
+		if (setting?.open && setting?.openTabById) {
+			setting.open();
+			setting.openTabById("keychain");
+			return;
+		}
+	} catch {
+		// 内部 API 不可用，走降级提示
+	}
+	new Notice(ctx.plugin.t("model.manageSecretHint"));
 }
 
 /** 绑定卡片头部点击折叠/展开：切换 tah-hidden 并同步箭头。 */

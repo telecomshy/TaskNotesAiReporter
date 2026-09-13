@@ -78,9 +78,10 @@ test("resolveSecretValue 存储中缺失时回退空串", () => {
 	assert.equal(resolveSecretValue("gone", () => null), "");
 });
 
-test("secretIdForProvider 生成 SecretStorage 合法 id（小写字母数字与连字符）", () => {
+test("secretIdForProvider 生成 SecretStorage 合法 id（短前缀 + 小写字母数字与连字符）", () => {
 	const id = secretIdForProvider("custom_ABC.1");
 	assert.match(id, /^[a-z0-9-]+$/);
+	assert.ok(id.startsWith("tnar-"));
 	assert.ok(id.includes("custom-abc-1"));
 });
 

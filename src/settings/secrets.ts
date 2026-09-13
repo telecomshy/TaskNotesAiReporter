@@ -5,8 +5,8 @@
 
 import type { ModelProvider, TaskNotesAIHelperSettings } from "../types";
 
-/** SecretStorage 的密钥 id 前缀，避免与其它插件冲突。 */
-const SECRET_ID_PREFIX = "tasknotes-aireporter";
+/** SecretStorage 的密钥 id 前缀：短前缀避免与其它插件冲突，同时让密钥名更短。 */
+const SECRET_ID_PREFIX = "tnar";
 
 /**
  * 由供应商 id 派生 SecretStorage 合法 id（小写字母数字与连字符）。

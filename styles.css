@@ -221,6 +221,7 @@
 .tah-secret-host {
 	display: flex;
 	align-items: center;
+	flex-wrap: wrap;
 	gap: 0.5rem;
 }
 
@@ -242,6 +243,29 @@
 
 .tah-secret-mask.is-empty {
 	display: none;
+}
+
+/* 「管理密钥」入口：低调链接样式（重命名/删除归 Obsidian 密钥存储） */
+.tah-secret-manage-btn {
+	flex-shrink: 0;
+	padding: 0.1rem 0.4rem;
+	background: transparent;
+	border: none;
+	color: var(--text-muted);
+	text-decoration: underline;
+	cursor: pointer;
+	font-size: 0.8rem;
+}
+
+.tah-secret-manage-btn:hover {
+	color: var(--text-normal);
+}
+
+/* 所选密钥在 SecretStorage 中缺失时的内联提示（换行显示） */
+.tah-secret-hint {
+	flex-basis: 100%;
+	font-size: 0.8rem;
+	color: var(--text-error);
 }
 
 .tah-provider-action {

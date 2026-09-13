@@ -58,8 +58,12 @@ _Avoid_: 提示词、格式
 提供模型接口的 OpenAI 兼容服务（如 DeepSeek、通义千问、Kimi），分内置预设与自定义两类。
 
 **密钥（Secret）**:
-供应商认证所用的凭据值，保存在 Obsidian 的 SecretStorage 中；插件设置只保存它的名字（密钥名），生成报告或拉取模型时才按名取值。
+供应商认证所用的凭据值，保存在 Obsidian 的 SecretStorage 中；插件设置只保存它的「密钥名」，生成报告或拉取模型时才按名取值。
 _Avoid_: API Key、令牌、凭据
+
+**密钥名（Secret id）**:
+密钥在 Obsidian SecretStorage 中的标识。插件设置只保存它；重命名与删除归 Obsidian 的「密钥存储」管理，插件不擅自改名（该名可能被其它插件共享引用）。
+_Avoid_: 密钥 ID、key 名、密钥名称
 
 **模型（Model）**:
 具体用于生成报告的大语言模型，隶属于某个供应商，可携带上下文长度与最大输出限制。
