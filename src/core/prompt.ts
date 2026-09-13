@@ -67,20 +67,23 @@ export function buildReportPrompt(tasks: TaskInfo[], options: BuildPromptOptions
 	const tasksText = tasks.map(formatTaskLine).join("\n");
 	const rangeText = `${range.start} 至 ${range.end}`;
 
+	let body: string;
 	if (templateContent && templateContent.trim()) {
-		return templateContent
+		body = templateContent
 			.replace(/\{\{tasks\}\}/g, tasksText)
 			.replace(/\{\{range\}\}/g, rangeText)
 			.replace(/\{\{type\}\}/g, REPORT_TYPE_LABEL[type]);
+	} else {
+		// 极简模式：不加多余修饰，仅提供任务数据让模型自由生成
+		body = [
+			`请根据以下任务数据，生成一份${REPORT_TYPE_LABEL[type]}（时间范围：${rangeText}）。`,
+			`请客观基于给定数据，使用 Markdown 格式，条理清晰即可。`,
+			``,
+			`任务数据如下：`,
+			tasksText,
+		].join("\n");
 	}
 
-	// 极简模式：不加多余修饰，仅提供任务数据让模型自由生成
-	return [
-		`请根据以下任务数据，生成一份${REPORT_TYPE_LABEL[type]}（时间范围：${rangeText}）。`,
-		`输出语言：${language}。`,
-		`请客观基于给定数据，使用 Markdown 格式，条理清晰即可。`,
-		``,
-		`任务数据如下：`,
-		tasksText,
-	].join("\n");
+	// 两种模式统一在末尾声明输出语言（模板模式下同样生效）
+	return `${body}\n\n输出语言：${language}。`;
 }

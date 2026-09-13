@@ -43,7 +43,9 @@ export function normalizeSettings(raw: unknown): TaskNotesAIHelperSettings {
 	if (typeof data.weekStartsOnMonday === "boolean") {
 		settings.weekStartsOnMonday = data.weekStartsOnMonday;
 	}
-	if (typeof data.language === "string") settings.language = data.language;
+	if (typeof data.language === "string") {
+		settings.language = data.language.trim() || "中文";
+	}
 	if (data.uiLanguage === "auto" || data.uiLanguage === "zh" || data.uiLanguage === "en") {
 		settings.uiLanguage = data.uiLanguage;
 	}

@@ -52,6 +52,26 @@ test("buildReportPrompt 模板内容原样保留（不含占位符的部分）",
 	assert.ok(!prompt.includes("{{tasks}}"));
 });
 
+test("buildReportPrompt 极简模式：输出语言声明位于末尾", () => {
+	const prompt = buildReportPrompt([task], {
+		range: { start: "2026-08-31", end: "2026-09-06" },
+		type: "week",
+		language: "English",
+	});
+	assert.ok(prompt.trimEnd().endsWith("输出语言：English。"));
+});
+
+test("buildReportPrompt 模板模式：同样声明输出语言且位于末尾", () => {
+	const prompt = buildReportPrompt([task], {
+		range: { start: "2026-09-01", end: "2026-09-30" },
+		type: "month",
+		language: "English",
+		templateContent: "请生成月报。\n\n{{tasks}}",
+	});
+	assert.ok(prompt.includes("输出语言：English。"), "模板模式也应声明输出语言");
+	assert.ok(prompt.trimEnd().endsWith("输出语言：English。"));
+});
+
 test("formatTaskLine 包含标题与项目", () => {
 	const line = formatTaskLine(task);
 	assert.ok(line.includes("写周报"));
