@@ -2,12 +2,16 @@
 
 ### Issue tracker
 
-Issues and specs live as GitHub issues (via `gh` CLI). See `docs/agents/issue-tracker.md`.
+Specs and issues live as GitHub issues (via `gh`). Read `docs/agents/issue-tracker.md` before you create, read, list, comment on, label, or close an issue — or when a change needs its originating spec.
 
 ### Triage labels
 
-Five canonical triage roles with default labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+Read `docs/agents/triage-labels.md` when triaging an issue or applying or removing a label; it maps the five triage roles to this repo's label strings.
 
 ### Domain docs
 
-Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+Read `docs/agents/domain.md` before exploring the codebase or naming domain concepts, and when an ADR touches the area you are changing. The domain model is the root `CONTEXT.md` plus `docs/adr/`.
+
+### Research notes
+
+When a task asks you to research a topic, save the findings under `docs/research/` (one Markdown file per topic).
