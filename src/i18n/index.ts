@@ -6,16 +6,16 @@
 import { en, type Strings } from "./en";
 import { zh } from "./zh";
 
-export type Language = "en" | "zh";
-export type LanguageSetting = "auto" | "zh" | "en";
+export type UiLanguage = "en" | "zh";
+export type UiLanguageSetting = "auto" | "zh" | "en";
 export type Vars = Record<string, string | number>;
 export type Translator = (key: string, vars?: Vars) => string;
 
 /** 所有受支持语言的字符串表。 */
-export const BUNDLES: Record<Language, Strings> = { en, zh };
+export const BUNDLES: Record<UiLanguage, Strings> = { en, zh };
 
 /** 把 Obsidian 的语言码与用户的手动设置解析为受支持的界面语言。 */
-export function resolveLanguage(obsidianLang: string, override: LanguageSetting): Language {
+export function resolveLanguage(obsidianLang: string, override: UiLanguageSetting): UiLanguage {
 	if (override === "zh" || override === "en") return override;
 	const code = (obsidianLang ?? "").toLowerCase();
 	return code === "zh" || code.startsWith("zh-") ? "zh" : "en";
@@ -40,7 +40,7 @@ function resolve(source: unknown, key: string, plural: boolean): string | undefi
 }
 
 /** 日历所需的数组型文案（月份、星期），按语言取。 */
-export function calendarLabels(language: Language): Strings["calendar"] {
+export function calendarLabels(language: UiLanguage): Strings["calendar"] {
 	return BUNDLES[language].calendar;
 }
 

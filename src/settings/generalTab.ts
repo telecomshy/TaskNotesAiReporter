@@ -5,7 +5,7 @@
 
 import { Setting } from "obsidian";
 import type { DateField } from "../types";
-import type { LanguageSetting } from "../i18n";
+import type { UiLanguageSetting } from "../i18n";
 import type { SettingsTabContext } from "./index";
 
 const DATE_FIELD_KEYS: Array<{ value: DateField; key: string }> = [
@@ -95,7 +95,7 @@ export function renderGeneralTab(container: HTMLElement, ctx: SettingsTabContext
 				.addOption("en", t("settings.uiLanguageEn"))
 				.setValue(ctx.plugin.settings.uiLanguage)
 				.onChange(async (value) => {
-					ctx.plugin.settings.uiLanguage = toLanguageSetting(value);
+					ctx.plugin.settings.uiLanguage = toUiLanguageSetting(value);
 					await ctx.plugin.saveSettings();
 					ctx.plugin.applyLanguage();
 					ctx.refresh();
@@ -103,6 +103,6 @@ export function renderGeneralTab(container: HTMLElement, ctx: SettingsTabContext
 		);
 }
 
-function toLanguageSetting(value: string): LanguageSetting {
+function toUiLanguageSetting(value: string): UiLanguageSetting {
 	return value === "zh" || value === "en" ? value : "auto";
 }

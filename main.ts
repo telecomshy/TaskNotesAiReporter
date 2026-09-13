@@ -12,7 +12,7 @@ import {
 	BUNDLES,
 	createTranslator,
 	resolveLanguage,
-	type Language,
+	type UiLanguage,
 	type Translator,
 } from "./src/i18n";
 
@@ -21,7 +21,7 @@ export default class TaskNotesAIHelperPlugin extends Plugin {
 	/** 当前界面语言的翻译器；由 `applyLanguage` 依据设置与 Obsidian 语言解析。 */
 	t: Translator = createTranslator(BUNDLES.en);
 	/** 当前解析出的界面语言。 */
-	lang: Language = "en";
+	lang: UiLanguage = "en";
 
 	/** Obsidian 显示语言：仅在 onload 读取一次，供 `applyLanguage` 复用。 */
 	private obsidianLang = "en";

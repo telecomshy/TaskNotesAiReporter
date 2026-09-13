@@ -17,7 +17,7 @@ import {
 } from "../core/filter";
 import { getMonthRange, getQuarterRange, getWeekRange, getYearRange } from "../core/dates";
 import type { DateField, DateRange, TaskInfo } from "../types";
-import type { Language, Translator } from "../i18n";
+import type { UiLanguage, Translator } from "../i18n";
 
 type PickMode = { kind: "empty" } | { kind: "range"; range: DateRange };
 type PickerTab = "time" | "title";
@@ -57,7 +57,7 @@ export class TaskPickerModal extends Modal {
 		private dateFields: DateField[],
 		private weekStartsOnMonday: boolean,
 		private t: Translator,
-		private lang: Language,
+		private lang: UiLanguage,
 		private onConfirm: (tasks: TaskInfo[]) => void
 	) {
 		super(app);

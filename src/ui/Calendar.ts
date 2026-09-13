@@ -5,7 +5,7 @@
 
 import type { DateRange } from "../types";
 import { toDateString } from "../core/dates";
-import { calendarLabels, type Language, type Translator } from "../i18n";
+import { calendarLabels, type UiLanguage, type Translator } from "../i18n";
 
 export class CalendarWidget {
 	private viewYear: number;
@@ -16,14 +16,14 @@ export class CalendarWidget {
 	private readonly onChange: (range: DateRange | null) => void;
 	private readonly weekStartsOnMonday: boolean;
 	private readonly t: Translator;
-	private readonly language: Language;
+	private readonly language: UiLanguage;
 	private readonly containerEl: HTMLElement;
 
 	constructor(
 		containerEl: HTMLElement,
 		weekStartsOnMonday: boolean,
 		t: Translator,
-		language: Language,
+		language: UiLanguage,
 		onChange: (range: DateRange | null) => void
 	) {
 		this.containerEl = containerEl;
