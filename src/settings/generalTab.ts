@@ -5,22 +5,24 @@
 
 import { Setting } from "obsidian";
 import type { DateField } from "../types";
+import type { LanguageSetting } from "../i18n";
 import type { SettingsTabContext } from "./index";
 
-const DATE_FIELD_OPTIONS: Array<{ value: DateField; label: string }> = [
-	{ value: "completedDate", label: "完成时间（completedDate）" },
-	{ value: "due", label: "到期时间（due）" },
-	{ value: "scheduled", label: "计划时间（scheduled）" },
-	{ value: "dateCreated", label: "创建时间（dateCreated）" },
+const DATE_FIELD_KEYS: Array<{ value: DateField; key: string }> = [
+	{ value: "completedDate", key: "settings.dateFieldCompletedDate" },
+	{ value: "due", key: "settings.dateFieldDue" },
+	{ value: "scheduled", key: "settings.dateFieldScheduled" },
+	{ value: "dateCreated", key: "settings.dateFieldCreated" },
 ];
 
 /** 渲染「常规配置」Tab */
 export function renderGeneralTab(container: HTMLElement, ctx: SettingsTabContext): void {
-	container.createEl("h3", { text: "报告生成" });
+	const t = ctx.plugin.t;
+	container.createEl("h3", { text: t("settings.generalHeading") });
 
 	new Setting(container)
-		.setName("报告输出目录")
-		.setDesc("生成的报告笔记保存位置，如 TaskNotes/Reports")
+		.setName(t("settings.reportFolderName"))
+		.setDesc(t("settings.reportFolderDesc"))
 		.addText((text) =>
 			text
 				.setPlaceholder("TaskNotes/Reports")
@@ -31,15 +33,15 @@ export function renderGeneralTab(container: HTMLElement, ctx: SettingsTabContext
 				})
 		);
 
-	container.createEl("h4", { text: "任务自动筛选的日期口径（可多选）" });
+	container.createEl("h4", { text: t("settings.dateFieldsHeading") });
 	container.createEl("p", {
-		text: "选择哪些日期字段参与自动筛选：任务在所选日期范围内命中任一字段即自动纳入。",
+		text: t("settings.dateFieldsDesc"),
 		cls: "setting-item-description",
 	});
 
-	for (const option of DATE_FIELD_OPTIONS) {
+	for (const option of DATE_FIELD_KEYS) {
 		new Setting(container)
-			.setName(option.label)
+			.setName(t(option.key))
 			.addToggle((toggle) =>
 				toggle
 					.setValue(ctx.plugin.settings.dateFields.includes(option.value))
@@ -58,8 +60,8 @@ export function renderGeneralTab(container: HTMLElement, ctx: SettingsTabContext
 	}
 
 	new Setting(container)
-		.setName("周一作为一周起始日")
-		.setDesc("开启后，周报的一周从周一开始；关闭则从周日开始。")
+		.setName(t("settings.weekStartsMondayName"))
+		.setDesc(t("settings.weekStartsMondayDesc"))
 		.addToggle((toggle) =>
 			toggle
 				.setValue(ctx.plugin.settings.weekStartsOnMonday)
@@ -70,15 +72,37 @@ export function renderGeneralTab(container: HTMLElement, ctx: SettingsTabContext
 		);
 
 	new Setting(container)
-		.setName("报告语言")
-		.setDesc("生成报告使用的语言，默认中文。")
+		.setName(t("settings.reportLanguageName"))
+		.setDesc(t("settings.reportLanguageDesc"))
 		.addText((text) =>
 			text
-				.setPlaceholder("中文")
+				.setPlaceholder(t("settings.reportLanguagePlaceholder"))
 				.setValue(ctx.plugin.settings.language)
 				.onChange(async (value) => {
 					ctx.plugin.settings.language = value.trim() || "中文";
 					await ctx.plugin.saveSettings();
 				})
 		);
+
+	// 界面语言：默认「自动」跟随 Obsidian；切换后立即重建翻译器并刷新设置页
+	new Setting(container)
+		.setName(t("settings.uiLanguageName"))
+		.setDesc(t("settings.uiLanguageDesc"))
+		.addDropdown((dropdown) =>
+			dropdown
+				.addOption("auto", t("settings.uiLanguageAuto"))
+				.addOption("zh", t("settings.uiLanguageZh"))
+				.addOption("en", t("settings.uiLanguageEn"))
+				.setValue(ctx.plugin.settings.uiLanguage)
+				.onChange(async (value) => {
+					ctx.plugin.settings.uiLanguage = toLanguageSetting(value);
+					await ctx.plugin.saveSettings();
+					ctx.plugin.applyLanguage();
+					ctx.refresh();
+				})
+		);
+}
+
+function toLanguageSetting(value: string): LanguageSetting {
+	return value === "zh" || value === "en" ? value : "auto";
 }

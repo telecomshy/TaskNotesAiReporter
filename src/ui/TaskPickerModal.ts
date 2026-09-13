@@ -17,6 +17,7 @@ import {
 } from "../core/filter";
 import { getMonthRange, getQuarterRange, getWeekRange, getYearRange } from "../core/dates";
 import type { DateField, DateRange, TaskInfo } from "../types";
+import type { Language, Translator } from "../i18n";
 
 type PickMode = { kind: "empty" } | { kind: "range"; range: DateRange };
 type PickerTab = "time" | "title";
@@ -55,6 +56,8 @@ export class TaskPickerModal extends Modal {
 		private allTasks: TaskInfo[],
 		private dateFields: DateField[],
 		private weekStartsOnMonday: boolean,
+		private t: Translator,
+		private lang: Language,
 		private onConfirm: (tasks: TaskInfo[]) => void
 	) {
 		super(app);
@@ -65,7 +68,7 @@ export class TaskPickerModal extends Modal {
 		contentEl.empty();
 		contentEl.addClass("tah-modal");
 		this.modalEl.addClass("tah-modal-root-picker");
-		this.setTitle("选择任务");
+		this.setTitle(this.t("taskPicker.title"));
 
 		this.renderTabs(contentEl);
 		this.filterEl = contentEl.createDiv({ cls: "tah-picker-filter" });
@@ -83,8 +86,8 @@ export class TaskPickerModal extends Modal {
 
 	private renderTabs(container: HTMLElement): void {
 		const tabBar = container.createDiv({ cls: "tah-tab-bar tah-picker-tabs" });
-		const timeBtn = tabBar.createEl("button", { text: "按时间" });
-		const titleBtn = tabBar.createEl("button", { text: "按标题" });
+		const timeBtn = tabBar.createEl("button", { text: this.t("taskPicker.tabTime") });
+		const titleBtn = tabBar.createEl("button", { text: this.t("taskPicker.tabTitle") });
 		timeBtn.addClass("tah-tab-btn");
 		titleBtn.addClass("tah-tab-btn");
 
@@ -128,11 +131,11 @@ export class TaskPickerModal extends Modal {
 	private renderTimeFilter(): void {
 		const quickRow = this.filterEl.createDiv({ cls: "tah-quick-row" });
 		const quickButtons: Array<{ label: string; mode: PickMode }> = [
-			{ label: "本周", mode: { kind: "range", range: getWeekRange(new Date(), this.weekStartsOnMonday) } },
-			{ label: "本月", mode: { kind: "range", range: getMonthRange(new Date()) } },
-			{ label: "本季度", mode: { kind: "range", range: getQuarterRange(new Date()) } },
-			{ label: "本年", mode: { kind: "range", range: getYearRange(new Date()) } },
-			{ label: "清除范围", mode: { kind: "empty" } },
+			{ label: this.t("taskPicker.quickThisWeek"), mode: { kind: "range", range: getWeekRange(new Date(), this.weekStartsOnMonday) } },
+			{ label: this.t("taskPicker.quickThisMonth"), mode: { kind: "range", range: getMonthRange(new Date()) } },
+			{ label: this.t("taskPicker.quickThisQuarter"), mode: { kind: "range", range: getQuarterRange(new Date()) } },
+			{ label: this.t("taskPicker.quickThisYear"), mode: { kind: "range", range: getYearRange(new Date()) } },
+			{ label: this.t("taskPicker.clearRange"), mode: { kind: "empty" } },
 		];
 		for (const btn of quickButtons) {
 			const el = quickRow.createEl("button", { text: btn.label });
@@ -153,6 +156,8 @@ export class TaskPickerModal extends Modal {
 		this.calendar = new CalendarWidget(
 			calendarContainer,
 			this.weekStartsOnMonday,
+			this.t,
+			this.lang,
 			(range) => {
 				if (range) {
 					this.timeMode = { kind: "range", range };
@@ -166,7 +171,7 @@ export class TaskPickerModal extends Modal {
 
 	private renderTitleFilter(): void {
 		const searchRow = this.filterEl.createDiv({ cls: "tah-search-row" });
-		this.searchInput = searchRow.createEl("input", { type: "text", placeholder: "关键字 #标签 @上下文（空格分隔）…" });
+		this.searchInput = searchRow.createEl("input", { type: "text", placeholder: this.t("taskPicker.searchPlaceholder") });
 		this.searchInput.addClass("tah-search-input");
 		this.searchInput.value = this.keyword;
 		this.searchInput.addEventListener("input", () => {
@@ -180,7 +185,7 @@ export class TaskPickerModal extends Modal {
 		const left = actionRow.createDiv({ cls: "tah-picker-actions-left" });
 		const allLabel = left.createEl("label", { cls: "tah-select-all" });
 		this.selectAllBox = allLabel.createEl("input", { type: "checkbox" });
-		allLabel.createSpan({ text: "全选" });
+		allLabel.createSpan({ text: this.t("taskPicker.selectAll") });
 		this.selectAllBox.addEventListener("change", () => {
 			for (const task of this.titleTasks) {
 				if (this.selectAllBox.checked) this.checkedPaths.add(task.path);
@@ -199,11 +204,11 @@ export class TaskPickerModal extends Modal {
 
 	private renderFooter(container: HTMLElement): void {
 		const footer = container.createDiv({ cls: "tah-picker-footer" });
-		const cancelBtn = footer.createEl("button", { text: "取消" });
+		const cancelBtn = footer.createEl("button", { text: this.t("taskPicker.cancel") });
 		cancelBtn.addClass("tah-remove-btn");
 		cancelBtn.addEventListener("click", () => this.close());
 
-		this.confirmBtn = footer.createEl("button", { text: "确定" });
+		this.confirmBtn = footer.createEl("button", { text: this.t("taskPicker.confirm") });
 		this.confirmBtn.addClass("tah-generate-btn");
 		this.confirmBtn.addEventListener("click", () => this.confirm());
 	}
@@ -223,7 +228,7 @@ export class TaskPickerModal extends Modal {
 
 	/** 创建「清空选择」按钮并绑定点击。 */
 	private createClearButton(parent: HTMLElement): void {
-		this.clearBtn = parent.createEl("button", { text: "清空选择", cls: "tah-picker-clear" });
+		this.clearBtn = parent.createEl("button", { text: this.t("taskPicker.clearSelection"), cls: "tah-picker-clear" });
 		this.clearBtn.addEventListener("click", () => this.clearSelection());
 	}
 
@@ -231,16 +236,24 @@ export class TaskPickerModal extends Modal {
 		if (!this.labelEl) return;
 		if (this.currentTab === "time") {
 			if (this.timeMode.kind === "empty") {
-				this.labelEl.textContent = "未选择日期（请选择时间范围或使用快捷按钮）";
+				this.labelEl.textContent = this.t("taskPicker.noDate");
 			} else {
-				this.labelEl.textContent = `当前筛选：${this.timeMode.range.start} ~ ${this.timeMode.range.end}`;
+				this.labelEl.textContent = this.t("taskPicker.currentFilter", {
+					start: this.timeMode.range.start,
+					end: this.timeMode.range.end,
+				});
 			}
 		} else {
 			const query = parseTitleQuery(this.keyword);
 			if (isTitleQueryEmpty(query)) {
-				this.labelEl.textContent = `全部任务（共 ${this.titleTasks.length} 个）`;
+				this.labelEl.textContent = this.t("taskPicker.allTasks", {
+					count: this.titleTasks.length,
+				});
 			} else {
-				this.labelEl.textContent = `搜索「${this.keyword.trim()}」（匹配 ${this.titleTasks.length} 个）`;
+				this.labelEl.textContent = this.t("taskPicker.searchResult", {
+					query: this.keyword.trim(),
+					count: this.titleTasks.length,
+				});
 			}
 		}
 	}
@@ -274,10 +287,18 @@ export class TaskPickerModal extends Modal {
 	private updateParseLabel(query: TitleQuery): void {
 		if (!this.parseLabelEl) return;
 		const parts: string[] = [];
-		if (query.keywords.length > 0) parts.push(`关键字：${query.keywords.join(" ")}`);
-		if (query.tags.length > 0) parts.push(`标签：${query.tags.map((t) => `#${t}`).join(" ")}`);
+		if (query.keywords.length > 0)
+			parts.push(this.t("taskPicker.parseKeywords", { value: query.keywords.join(" ") }));
+		if (query.tags.length > 0)
+			parts.push(
+				this.t("taskPicker.parseTags", { value: query.tags.map((tag) => `#${tag}`).join(" ") })
+			);
 		if (query.contexts.length > 0)
-			parts.push(`上下文：${query.contexts.map((c) => `@${c}`).join(" ")}`);
+			parts.push(
+				this.t("taskPicker.parseContexts", {
+					value: query.contexts.map((c) => `@${c}`).join(" "),
+				})
+			);
 		this.parseLabelEl.setText(parts.length > 0 ? parts.join("  ·  ") : "");
 		// 仅在有解析条件时显示，避免空行占位
 		this.parseLabelEl.style.display = parts.length > 0 ? "" : "none";
@@ -290,8 +311,8 @@ export class TaskPickerModal extends Modal {
 		if (tasks.length === 0) {
 			const emptyText =
 				this.currentTab === "time" && this.timeMode.kind === "empty"
-					? "请先选择时间范围。"
-					: "没有可添加的任务。";
+					? this.t("taskPicker.emptyPickRange")
+					: this.t("taskPicker.emptyNoTasks");
 			this.listEl.createDiv({ text: emptyText, cls: "tah-empty" });
 		}
 
@@ -313,7 +334,7 @@ export class TaskPickerModal extends Modal {
 			const info = item.createDiv({ cls: "tah-task-info" });
 			const titleEl = info.createDiv({ cls: "tah-task-title" });
 			titleEl.setText(task.title);
-			renderTaskMeta(info, task);
+			renderTaskMeta(info, task, this.t);
 		}
 
 		this.updateConfirmState();
@@ -322,7 +343,7 @@ export class TaskPickerModal extends Modal {
 	private updateConfirmState(): void {
 		if (!this.confirmBtn) return;
 		const count = this.checkedPaths.size;
-		this.confirmBtn.setText(`加入列表（${count}）`);
+		this.confirmBtn.setText(this.t("taskPicker.join", { count }));
 		this.confirmBtn.disabled = count === 0;
 		if (this.clearBtn) this.clearBtn.disabled = count === 0;
 

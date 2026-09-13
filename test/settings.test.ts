@@ -198,3 +198,18 @@ test("resolveActiveModelConfig 对自定义供应商提取该模型的独立参�
 	assert.equal(none.maxTokens, undefined);
 	assert.equal(none.contextLength, undefined);
 });
+
+test("normalizeSettings 默认界面语言为 auto", () => {
+	assert.equal(normalizeSettings({}).uiLanguage, "auto");
+});
+
+test("normalizeSettings 非法界面语言回退 auto", () => {
+	assert.equal(normalizeSettings({ uiLanguage: "fr" }).uiLanguage, "auto");
+	assert.equal(normalizeSettings({ uiLanguage: 123 }).uiLanguage, "auto");
+});
+
+test("normalizeSettings 保留合法界面语言", () => {
+	assert.equal(normalizeSettings({ uiLanguage: "en" }).uiLanguage, "en");
+	assert.equal(normalizeSettings({ uiLanguage: "zh" }).uiLanguage, "zh");
+	assert.equal(normalizeSettings({ uiLanguage: "auto" }).uiLanguage, "auto");
+});

@@ -5,6 +5,8 @@
  * 已迁移到 src/settings/logic.ts。
  */
 
+import type { LanguageSetting } from "./i18n";
+
 /** TaskNotes 任务（精简字段，与本插件相关） */
 export interface TaskInfo {
 	id?: string;
@@ -146,6 +148,8 @@ export interface TaskNotesAIHelperSettings {
 	weekStartsOnMonday: boolean;
 	// 报告语言（用于 prompt 指令）
 	language: string;
+	// 界面语言（auto 时跟随 Obsidian 显示语言）
+	uiLanguage: LanguageSetting;
 	// 报告模板列表
 	templates: ReportTemplate[];
 	// 上次选择的模板 ID（空字符串表示不选模板，极简模式）
@@ -163,6 +167,7 @@ export const DEFAULT_SETTINGS: TaskNotesAIHelperSettings = {
 	dateFields: ["completedDate", "scheduled", "due"],
 	weekStartsOnMonday: true,
 	language: "中文",
+	uiLanguage: "auto",
 	templates: [
 		{
 			id: "tpl_weekly_example",

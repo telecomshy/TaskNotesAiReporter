@@ -8,6 +8,10 @@
 
 import { requestUrlTransport } from "./transport";
 import { buildChatCompletionsUrl, buildModelsUrl } from "../core/aiUrl";
+import { AIClientError } from "./errors";
+
+export { AIClientError };
+export type { AIClientErrorCode, AIClientErrorDetails } from "./errors";
 
 export interface ChatMessage {
 	role: "system" | "user" | "assistant";
@@ -21,13 +25,6 @@ export interface AIClientConfig {
 	temperature: number;
 	maxTokens: number;
 	timeoutSeconds: number;
-}
-
-export class AIClientError extends Error {
-	constructor(message: string) {
-		super(message);
-		this.name = "AIClientError";
-	}
 }
 
 /** HTTP 响应的最小形态（兼容 obsidian requestUrl 响应） */
@@ -81,7 +78,8 @@ export async function listModels(
 			timeoutSeconds * 1000
 		);
 	} catch (error) {
-		throw new AIClientError(`获取模型列表失败：${error instanceof Error ? error.message : String(error)}`);
+		if (error instanceof AIClientError) throw error;
+		throw new AIClientError("models.network", { detail: messageOf(error) });
 	}
 
 	if (response.status < 200 || response.status >= 300) {
@@ -95,7 +93,7 @@ export async function listModels(
 		} catch {
 			detail = response.text?.slice(0, 200) ?? "";
 		}
-		throw new AIClientError(`获取模型列表返回错误（HTTP ${response.status}）：${detail}`);
+		throw new AIClientError("models.http", { status: response.status, detail });
 	}
 
 	try {
@@ -106,7 +104,7 @@ export async function listModels(
 			.filter((id): id is string => typeof id === "string" && id.length > 0);
 		return ids;
 	} catch {
-		throw new AIClientError("解析模型列表响应失败");
+		throw new AIClientError("models.parse");
 	}
 }
 
@@ -150,7 +148,8 @@ export async function chatCompletion(
 			config.timeoutSeconds * 1000
 		);
 	} catch (error) {
-		throw new AIClientError(`网络请求失败：${error instanceof Error ? error.message : String(error)}`);
+		if (error instanceof AIClientError) throw error;
+		throw new AIClientError("chat.network", { detail: messageOf(error) });
 	}
 
 	if (response.status < 200 || response.status >= 300) {
@@ -164,7 +163,7 @@ export async function chatCompletion(
 		} catch {
 			detail = response.text?.slice(0, 300) ?? "";
 		}
-		throw new AIClientError(`模型接口返回错误（HTTP ${response.status}）：${detail}`);
+		throw new AIClientError("chat.http", { status: response.status, detail });
 	}
 
 	try {
@@ -173,12 +172,12 @@ export async function chatCompletion(
 		};
 		const content = data.choices?.[0]?.message?.content;
 		if (!content) {
-			throw new AIClientError("模型返回内容为空");
+			throw new AIClientError("chat.empty");
 		}
 		return content;
 	} catch (error) {
 		if (error instanceof AIClientError) throw error;
-		throw new AIClientError("解析模型响应失败");
+		throw new AIClientError("chat.parse");
 	}
 }
 
@@ -197,11 +196,15 @@ function clampMaxTokens(maxTokens: number): number {
 	return Math.min(maxTokens, MAX_SAFE);
 }
 
+function messageOf(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
+
 /** 给 Promise 加超时：超时则抛出 AIClientError。 */
 async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	const timeout = new Promise<never>((_, reject) => {
-		timer = setTimeout(() => reject(new AIClientError(`请求超时（${ms}ms）`)), ms);
+		timer = setTimeout(() => reject(new AIClientError("timeout", { ms })), ms);
 	});
 	try {
 		return await Promise.race([promise, timeout]);

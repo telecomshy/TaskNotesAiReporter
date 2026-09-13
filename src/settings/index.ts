@@ -39,9 +39,13 @@ export class TaskNotesAIHelperSettingTab extends PluginSettingTab {
 
 		// Tab 栏
 		const tabBar = containerEl.createDiv({ cls: "tah-tab-bar" });
-		const modelTabBtn = tabBar.createEl("button", { text: "模型配置" });
-		const templateTabBtn = tabBar.createEl("button", { text: "模板配置" });
-		const generalTabBtn = tabBar.createEl("button", { text: "常规配置" });
+		const modelTabBtn = tabBar.createEl("button", { text: this.plugin.t("settings.tabModel") });
+		const templateTabBtn = tabBar.createEl("button", {
+			text: this.plugin.t("settings.tabTemplate"),
+		});
+		const generalTabBtn = tabBar.createEl("button", {
+			text: this.plugin.t("settings.tabGeneral"),
+		});
 		modelTabBtn.addClass("tah-tab-btn");
 		templateTabBtn.addClass("tah-tab-btn");
 		generalTabBtn.addClass("tah-tab-btn");
@@ -49,6 +53,11 @@ export class TaskNotesAIHelperSettingTab extends PluginSettingTab {
 		const content = containerEl.createDiv({ cls: "tah-tab-content" });
 
 		const refresh = () => {
+			// 语言可能已切换：同步 Tab 文案
+			modelTabBtn.setText(this.plugin.t("settings.tabModel"));
+			templateTabBtn.setText(this.plugin.t("settings.tabTemplate"));
+			generalTabBtn.setText(this.plugin.t("settings.tabGeneral"));
+
 			modelTabBtn.toggleClass("tah-tab-active", this.currentTab === "model");
 			generalTabBtn.toggleClass("tah-tab-active", this.currentTab === "general");
 			templateTabBtn.toggleClass("tah-tab-active", this.currentTab === "template");

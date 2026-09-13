@@ -13,15 +13,16 @@ export interface GenerateButtonState {
 	disabled: boolean;
 }
 
-const IDLE_LABEL = "生成报告";
-
 /** 生成中按钮的额外 class（用于 CSS 显示旋转图标） */
 export const GENERATE_BTN_LOADING_CLASS = "tah-generate-btn-loading";
 
-export function getGenerateButtonState(generating: boolean): GenerateButtonState {
+export function getGenerateButtonState(
+	generating: boolean,
+	idleLabel: string
+): GenerateButtonState {
 	return generating
 		? { label: "", spinner: true, disabled: true }
-		: { label: IDLE_LABEL, spinner: false, disabled: false };
+		: { label: idleLabel, spinner: false, disabled: false };
 }
 
 /** 把状态规格应用到按钮元素。 */

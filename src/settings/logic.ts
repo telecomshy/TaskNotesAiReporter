@@ -44,6 +44,9 @@ export function normalizeSettings(raw: unknown): TaskNotesAIHelperSettings {
 		settings.weekStartsOnMonday = data.weekStartsOnMonday;
 	}
 	if (typeof data.language === "string") settings.language = data.language;
+	if (data.uiLanguage === "auto" || data.uiLanguage === "zh" || data.uiLanguage === "en") {
+		settings.uiLanguage = data.uiLanguage;
+	}
 	if (Array.isArray(data.templates)) {
 		settings.templates = data.templates
 			.filter((t) => t && typeof t.name === "string" && typeof t.content === "string")

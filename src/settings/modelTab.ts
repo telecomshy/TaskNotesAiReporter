@@ -5,18 +5,24 @@
 
 import { Notice, Setting } from "obsidian";
 import type { ModelConfig, ModelProvider } from "../types";
+import type { Translator } from "../i18n";
 import { genId } from "./logic";
 import { listModels, testConnection } from "../ai/client";
+import { describeAIError } from "../ai/errorMessage";
 import { modelsOf, isConfigured, isSelectable, isActiveModel } from "./provider";
 import type { SettingsTabContext } from "./index";
+
+/** 新自定义供应商的默认名称：作为持久化数据，保持语言无关，不随界面语言变化。 */
+const DEFAULT_CUSTOM_PROVIDER_NAME = "自定义供应商";
 
 /** 渲染「模型配置」Tab */
 export function renderModelTab(container: HTMLElement, ctx: SettingsTabContext): void {
 	renderActiveModelSection(container, ctx);
 
-	container.createEl("h3", { text: "AI 提供商", cls: "tah-provider-title" });
+	const t = ctx.plugin.t;
+	container.createEl("h3", { text: t("model.providersHeading"), cls: "tah-provider-title" });
 	container.createEl("p", {
-		text: "配置供应商的 API 密钥后，即可在下方选择「当前模型」。",
+		text: t("model.providersIntro"),
 		cls: "setting-item-description",
 	});
 
@@ -31,27 +37,28 @@ export function renderModelTab(container: HTMLElement, ctx: SettingsTabContext):
 
 	// 底部「添加模型供应商」按钮
 	const addRow = container.createDiv({ cls: "tah-add-provider-row" });
-	const addBtn = addRow.createEl("button", { text: "+ 添加模型供应商" });
+	const addBtn = addRow.createEl("button", { text: t("model.addProvider") });
 	addBtn.addClass("tah-add-provider-btn");
 	addBtn.addEventListener("click", () => addCustomProvider(ctx));
 }
 
 /** 顶部「当前模型」区：选择生成报告使用的模型 */
 function renderActiveModelSection(container: HTMLElement, ctx: SettingsTabContext): void {
-	container.createEl("h3", { text: "当前模型" });
+	const t = ctx.plugin.t;
+	container.createEl("h3", { text: t("model.activeHeading") });
 
 	const selectable = ctx.plugin.settings.providers.filter(isSelectable);
 	if (selectable.length === 0) {
 		container.createEl("p", {
-			text: "还没有可用模型，请先配置供应商 API Key。",
+			text: t("model.noModels"),
 			cls: "setting-item-description",
 		});
 		return;
 	}
 
 	new Setting(container)
-		.setName("选择模型")
-		.setDesc("选择生成报告使用的模型。")
+		.setName(t("model.selectModelName"))
+		.setDesc(t("model.selectModelDesc"))
 		.addDropdown((dropdown) => {
 			// 按供应商分组
 			for (const provider of selectable) {
@@ -87,6 +94,7 @@ function renderPresetProviderCard(
 	provider: ModelProvider,
 	ctx: SettingsTabContext
 ): void {
+	const t = ctx.plugin.t;
 	const configured = isConfigured(provider);
 
 	const card = container.createDiv({ cls: "tah-provider-card" });
@@ -98,8 +106,11 @@ function renderPresetProviderCard(
 	header.createSpan({ cls: "tah-provider-dot" });
 	header.createSpan({ cls: "tah-provider-name", text: provider.name });
 	const count = header.createSpan({ cls: "tah-provider-count" });
-	header.createSpan({ cls: "tah-provider-status", text: configured ? "已配置" : "未配置" });
-	if (configured) updateModelCount(card, provider);
+	header.createSpan({
+		cls: "tah-provider-status",
+		text: configured ? t("model.configured") : t("model.notConfigured"),
+	});
+	if (configured) updateModelCount(card, provider, t);
 
 	// 展开区
 	const body = card.createDiv({ cls: "tah-provider-body" });
@@ -107,17 +118,17 @@ function renderPresetProviderCard(
 
 	// API Key + 获取模型列表按钮（同一行，填完 key 即可点击）
 	const keyRow = body.createDiv({ cls: "tah-provider-field" });
-	keyRow.createSpan({ cls: "tah-provider-field-label", text: "API Key" });
+	keyRow.createSpan({ cls: "tah-provider-field-label", text: t("model.apiKeyLabel") });
 	const keyInput = keyRow.createEl("input", { type: "password" });
 	keyInput.addClass("tah-provider-input");
 	keyInput.value = provider.apiKey;
 	keyInput.placeholder = "sk-...";
-	const fetchBtn = keyRow.createEl("button", { text: "获取模型列表" });
+	const fetchBtn = keyRow.createEl("button", { text: t("model.fetchModels") });
 	fetchBtn.addClass("tah-fetch-models-btn");
 	fetchBtn.addEventListener("click", () => void fetchModels(card, provider, ctx));
 
 	// 可用模型容器（默认隐藏，拉取到模型后显示）
-	const modelsLabel = body.createDiv({ cls: "tah-provider-models-label", text: "可用模型" });
+	const modelsLabel = body.createDiv({ cls: "tah-provider-models-label", text: t("model.availableModels") });
 	modelsLabel.style.display = "none";
 	const modelsRow = body.createDiv({ cls: "tah-provider-models" });
 
@@ -126,11 +137,11 @@ function renderPresetProviderCard(
 			modelsLabel.style.display = "";
 			modelsRow.empty();
 			renderModelTags(modelsRow, models, provider.id, card, ctx);
-			updateModelCount(card, provider);
+			updateModelCount(card, provider, t);
 		} else {
 			modelsLabel.style.display = "none";
 			modelsRow.empty();
-			updateModelCount(card, provider);
+			updateModelCount(card, provider, t);
 		}
 	};
 
@@ -144,7 +155,7 @@ function renderPresetProviderCard(
 		const oldKey = provider.apiKey;
 		provider.apiKey = keyInput.value.trim();
 		await ctx.plugin.saveSettings();
-		refreshCardState(card, provider);
+		refreshCardState(card, provider, t);
 
 		if (provider.apiKey && provider.apiKey !== oldKey) {
 			await fetchModels(card, provider, ctx, showModels);
@@ -163,7 +174,7 @@ function renderPresetProviderCard(
 		arrow.setText(expanded ? "▸" : "▾");
 	});
 
-	updateModelCount(card, provider);
+	updateModelCount(card, provider, t);
 }
 
 /** 静默拉取模型列表（打开页面自动调用），失败不打扰用户 */
@@ -189,13 +200,14 @@ async function applyModels(
 	notify: boolean,
 	ctx: SettingsTabContext
 ): Promise<void> {
+	const t = ctx.plugin.t;
 	provider.models = models;
 	await ctx.plugin.saveSettings();
 	if (models.length > 0) {
-		if (notify) new Notice(`已获取 ${models.length} 个模型`);
+		if (notify) new Notice(t("model.fetched", { count: models.length }));
 		showModels(models);
 	} else {
-		if (notify) new Notice("未获取到模型列表");
+		if (notify) new Notice(t("model.fetchEmpty"));
 		showModels([]);
 	}
 }
@@ -223,6 +235,7 @@ function renderModelTags(
 	card: HTMLElement,
 	ctx: SettingsTabContext
 ): void {
+	const t = ctx.plugin.t;
 	container.empty();
 	const MAIN_COUNT = 2;
 
@@ -236,12 +249,12 @@ function renderModelTags(
 	if (rest.length > 0) {
 		const toggle = container.createSpan({
 			cls: "tah-model-more",
-			text: `还有 ${rest.length} 个 ▾`,
+			text: t("model.moreModels", { count: rest.length }),
 		});
 		let expanded = false;
 		toggle.addEventListener("click", () => {
 			expanded = !expanded;
-			toggle.setText(expanded ? "收起 ▾" : `还有 ${rest.length} 个 ▾`);
+			toggle.setText(expanded ? t("model.collapse") : t("model.moreModels", { count: rest.length }));
 			renderAllModelTags(container, models, providerId, expanded, ctx);
 		});
 	}
@@ -254,6 +267,7 @@ function renderAllModelTags(
 	expanded: boolean,
 	ctx: SettingsTabContext
 ): void {
+	const t = ctx.plugin.t;
 	container.empty();
 	const shown = expanded ? models : models.slice(0, 2);
 	for (const model of shown) {
@@ -261,13 +275,16 @@ function renderAllModelTags(
 	}
 	if (!expanded && models.length > 2) {
 		const rest = models.length - 2;
-		const toggle = container.createSpan({ cls: "tah-model-more", text: `还有 ${rest} 个 ▾` });
+		const toggle = container.createSpan({
+			cls: "tah-model-more",
+			text: t("model.moreModels", { count: rest }),
+		});
 		toggle.addEventListener("click", () => {
 			renderAllModelTags(container, models, providerId, true, ctx);
 		});
 	}
 	if (expanded && models.length > 2) {
-		const toggle = container.createSpan({ cls: "tah-model-more", text: "收起 ▾" });
+		const toggle = container.createSpan({ cls: "tah-model-more", text: t("model.collapse") });
 		toggle.addEventListener("click", () => {
 			renderAllModelTags(container, models, providerId, false, ctx);
 		});
@@ -281,50 +298,53 @@ async function fetchModels(
 	ctx: SettingsTabContext,
 	showModels?: (models: string[]) => void
 ): Promise<void> {
+	const t = ctx.plugin.t;
 	if (!provider.apiKey.trim()) {
-		new Notice("请先填写 API Key");
+		new Notice(t("model.fetchNeedKey"));
 		return;
 	}
-	new Notice(`正在获取 ${provider.name} 的模型列表…`);
+	new Notice(t("model.fetching", { name: provider.name }));
 	try {
 		const models = await listModels(provider.baseUrl, provider.apiKey);
 		if (models.length > 0) {
 			provider.models = models;
 			await ctx.plugin.saveSettings();
-			new Notice(`已获取 ${models.length} 个模型`);
-			updateModelCount(card, provider);
+			new Notice(t("model.fetched", { count: models.length }));
+			updateModelCount(card, provider, t);
 			if (showModels) showModels(models);
 		} else {
-			new Notice("未获取到模型列表");
+			new Notice(t("model.fetchEmpty"));
 			if (showModels) showModels([]);
 		}
 	} catch (error) {
-		new Notice(`获取失败：${error instanceof Error ? error.message : String(error)}`);
+		new Notice(t("model.fetchFailed", { error: describeAIError(error, t) }));
 	}
 }
 
 /** 更新卡片上的模型数量标签（模型数由 provider module 统一读取） */
-function updateModelCount(card: HTMLElement, provider: ModelProvider): void {
+function updateModelCount(card: HTMLElement, provider: ModelProvider, t: Translator): void {
 	const countEl = card.querySelector(".tah-provider-count");
 	if (!countEl) return;
 	const count = modelsOf(provider).length;
 	const show = count > 0 && (provider.type === "custom" || isConfigured(provider));
-	countEl.textContent = show ? `${count}模型` : "";
+	countEl.textContent = show ? t("model.modelCount", { count }) : "";
 }
 
 /** 同步卡片「已配置 / 未配置」状态。 */
-function refreshCardState(card: HTMLElement, provider: ModelProvider): void {
+function refreshCardState(card: HTMLElement, provider: ModelProvider, t: Translator): void {
 	const configured = isConfigured(provider);
 	card.toggleClass("tah-provider-configured", configured);
 	const status = card.querySelector(".tah-provider-status");
-	if (status) status.textContent = configured ? "已配置" : "未配置";
+	if (status) {
+		status.textContent = configured ? t("model.configured") : t("model.notConfigured");
+	}
 }
 
 /** 添加自定义供应商：直接新增一张卡片，在卡片内维护配置与模型 */
 function addCustomProvider(ctx: SettingsTabContext): void {
 	const newProvider: ModelProvider = {
 		id: `custom_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
-		name: "自定义供应商",
+		name: DEFAULT_CUSTOM_PROVIDER_NAME,
 		type: "custom",
 		baseUrl: "",
 		apiKey: "",
@@ -357,6 +377,7 @@ function renderCustomProviderCard(
 	provider: ModelProvider,
 	ctx: SettingsTabContext
 ): void {
+	const t = ctx.plugin.t;
 	const configured = isConfigured(provider);
 
 	const card = container.createDiv({ cls: "tah-provider-card tah-provider-custom" });
@@ -368,7 +389,10 @@ function renderCustomProviderCard(
 	header.createSpan({ cls: "tah-provider-dot" });
 	header.createSpan({ cls: "tah-provider-name", text: provider.name });
 	header.createSpan({ cls: "tah-provider-count" });
-	header.createSpan({ cls: "tah-provider-status", text: configured ? "已配置" : "未配置" });
+	header.createSpan({
+		cls: "tah-provider-status",
+		text: configured ? t("model.configured") : t("model.notConfigured"),
+	});
 
 	// 删除按钮（仅自定义供应商显示）
 	const delBtn = header.createEl("button", { text: "✕" });
@@ -386,13 +410,13 @@ function renderCustomProviderCard(
 
 	// 服务商名称
 	const nameRow = body.createDiv({ cls: "tah-provider-field" });
-	nameRow.createSpan({ cls: "tah-provider-field-label", text: "服务商名称" });
+	nameRow.createSpan({ cls: "tah-provider-field-label", text: t("model.providerName") });
 	const nameInput = nameRow.createEl("input", { type: "text" });
 	nameInput.addClass("tah-provider-input");
 	nameInput.value = provider.name;
-	nameInput.placeholder = "例如：DeepSeek、Ollama 本地";
+	nameInput.placeholder = t("model.providerNamePlaceholder");
 	nameInput.addEventListener("change", () => {
-		provider.name = nameInput.value.trim() || "自定义供应商";
+		provider.name = nameInput.value.trim() || DEFAULT_CUSTOM_PROVIDER_NAME;
 		void ctx.plugin.saveSettings();
 		const nameEl = card.querySelector(".tah-provider-name");
 		if (nameEl) nameEl.textContent = provider.name;
@@ -400,7 +424,7 @@ function renderCustomProviderCard(
 
 	// API 地址
 	const urlRow = body.createDiv({ cls: "tah-provider-field" });
-	urlRow.createSpan({ cls: "tah-provider-field-label", text: "API 地址" });
+	urlRow.createSpan({ cls: "tah-provider-field-label", text: t("model.apiUrl") });
 	const urlInput = urlRow.createEl("input", { type: "text" });
 	urlInput.addClass("tah-provider-input");
 	urlInput.value = provider.baseUrl;
@@ -408,28 +432,28 @@ function renderCustomProviderCard(
 	urlInput.addEventListener("change", () => {
 		provider.baseUrl = urlInput.value.trim();
 		void ctx.plugin.saveSettings();
-		refreshCardState(card, provider);
+		refreshCardState(card, provider, t);
 	});
 
 	// 认证方式（按钮单选）+ API 密钥（Bearer 时显示）
 	const authRow = body.createDiv({ cls: "tah-provider-field" });
-	authRow.createSpan({ cls: "tah-provider-field-label", text: "认证方式" });
+	authRow.createSpan({ cls: "tah-provider-field-label", text: t("model.authType") });
 	const authGroup = authRow.createDiv({ cls: "tah-auth-group" });
-	const bearerBtn = authGroup.createEl("button", { text: "Bearer Token" });
-	const noneBtn = authGroup.createEl("button", { text: "无认证" });
+	const bearerBtn = authGroup.createEl("button", { text: t("model.authBearer") });
+	const noneBtn = authGroup.createEl("button", { text: t("model.authNone") });
 	bearerBtn.addClass("tah-auth-btn");
 	noneBtn.addClass("tah-auth-btn");
 
 	const keyRow = body.createDiv({ cls: "tah-provider-field tah-custom-key-field" });
-	keyRow.createSpan({ cls: "tah-provider-field-label", text: "API 密钥" });
+	keyRow.createSpan({ cls: "tah-provider-field-label", text: t("model.apiKeyLabel") });
 	const keyInput = keyRow.createEl("input", { type: "password" });
 	keyInput.addClass("tah-provider-input");
 	keyInput.value = provider.apiKey;
-	keyInput.placeholder = "输入 API 密钥";
+	keyInput.placeholder = t("model.apiKeyPlaceholder");
 	keyInput.addEventListener("change", () => {
 		provider.apiKey = keyInput.value.trim();
 		void ctx.plugin.saveSettings();
-		refreshCardState(card, provider);
+		refreshCardState(card, provider, t);
 	});
 
 	const updateAuth = () => {
@@ -448,17 +472,17 @@ function renderCustomProviderCard(
 		keyInput.value = "";
 		void ctx.plugin.saveSettings();
 		updateAuth();
-		refreshCardState(card, provider);
+		refreshCardState(card, provider, t);
 	});
 	updateAuth();
 
 	// ---- 模型列表区 ----
-	body.createDiv({ cls: "tah-provider-models-label", text: "可用模型" });
+	body.createDiv({ cls: "tah-provider-models-label", text: t("model.availableModels") });
 	const modelsList = body.createDiv({ cls: "tah-custom-models-list" });
 
 	const renderModelRows = () => {
 		modelsList.empty();
-		updateModelCount(card, provider);
+		updateModelCount(card, provider, t);
 		for (const mc of provider.customModels ?? []) {
 			renderCustomModelRow(modelsList, provider, mc, card, ctx);
 		}
@@ -466,7 +490,7 @@ function renderCustomProviderCard(
 
 	// 新增模型按钮
 	const addModelRow = body.createDiv({ cls: "tah-add-model-row" });
-	const addModelBtn = addModelRow.createEl("button", { text: "+ 新增模型" });
+	const addModelBtn = addModelRow.createEl("button", { text: t("model.newModel") });
 	addModelBtn.addClass("tah-add-model-btn");
 	addModelBtn.addEventListener("click", () => {
 		if (!provider.customModels) provider.customModels = [];
@@ -476,7 +500,7 @@ function renderCustomProviderCard(
 		});
 		void ctx.plugin.saveSettings();
 		renderModelRows();
-		refreshCardState(card, provider);
+		refreshCardState(card, provider, t);
 	});
 
 	renderModelRows();
@@ -497,6 +521,7 @@ function renderCustomModelRow(
 	card: HTMLElement,
 	ctx: SettingsTabContext
 ): void {
+	const t = ctx.plugin.t;
 	const row = listEl.createDiv({ cls: "tah-custom-model-row" });
 	const active = ctx.plugin.settings;
 	if (
@@ -508,7 +533,7 @@ function renderCustomModelRow(
 
 	// 模型 ID
 	const idGroup = row.createDiv({ cls: "tah-custom-model-group" });
-	idGroup.createDiv({ cls: "tah-custom-model-label", text: "模型 ID" });
+	idGroup.createDiv({ cls: "tah-custom-model-label", text: t("model.modelId") });
 	const idInput = idGroup.createEl("input", { type: "text" });
 	idInput.addClass("tah-provider-input");
 	idInput.value = mc.modelId;
@@ -520,7 +545,7 @@ function renderCustomModelRow(
 
 	// Context Length
 	const ctxGroup = row.createDiv({ cls: "tah-custom-model-group" });
-	ctxGroup.createDiv({ cls: "tah-custom-model-label", text: "Context Length" });
+	ctxGroup.createDiv({ cls: "tah-custom-model-label", text: t("model.contextLength") });
 	const ctxInput = ctxGroup.createEl("input", { type: "text" });
 	ctxInput.addClass("tah-provider-input");
 	ctxInput.value = mc.contextLength?.toString() ?? "";
@@ -532,7 +557,7 @@ function renderCustomModelRow(
 
 	// Max Tokens
 	const maxGroup = row.createDiv({ cls: "tah-custom-model-group" });
-	maxGroup.createDiv({ cls: "tah-custom-model-label", text: "Max Tokens" });
+	maxGroup.createDiv({ cls: "tah-custom-model-label", text: t("model.maxTokens") });
 	const maxInput = maxGroup.createEl("input", { type: "text" });
 	maxInput.addClass("tah-provider-input");
 	maxInput.value = mc.maxTokens?.toString() ?? "";
@@ -544,19 +569,19 @@ function renderCustomModelRow(
 
 	// 测试按钮（针对该模型）
 	const actions = row.createDiv({ cls: "tah-custom-model-actions" });
-	const testBtn = actions.createEl("button", { text: "测试" });
+	const testBtn = actions.createEl("button", { text: t("model.test") });
 	testBtn.addClass("tah-model-test-btn");
 	testBtn.addEventListener("click", () => {
 		const modelId = idInput.value.trim();
 		if (!provider.baseUrl.trim()) {
-			new Notice("请先填写 API 地址");
+			new Notice(t("model.testNeedUrl"));
 			return;
 		}
 		if (!modelId) {
-			new Notice("请填写模型 ID");
+			new Notice(t("model.testNeedModel"));
 			return;
 		}
-		new Notice("正在测试…");
+		new Notice(t("model.testing"));
 		void testConnection({
 			baseUrl: provider.baseUrl.trim(),
 			apiKey: provider.authType === "bearer" ? provider.apiKey : "",
@@ -566,10 +591,10 @@ function renderCustomModelRow(
 			timeoutSeconds: ctx.plugin.settings.timeoutSeconds,
 		})
 			.then(() => {
-				new Notice(`模型「${modelId}」测试通过`);
+				new Notice(t("model.testPassed", { model: modelId }));
 			})
 			.catch((error) => {
-				new Notice(`测试失败：${error instanceof Error ? error.message : String(error)}`);
+				new Notice(t("model.testFailed", { error: describeAIError(error, t) }));
 			});
 	});
 
@@ -580,11 +605,11 @@ function renderCustomModelRow(
 		provider.customModels = (provider.customModels ?? []).filter((m) => m.id !== mc.id);
 		void ctx.plugin.saveSettings();
 		listEl.empty();
-		updateModelCount(card, provider);
+		updateModelCount(card, provider, t);
 		for (const m2 of provider.customModels ?? []) {
 			renderCustomModelRow(listEl, provider, m2, card, ctx);
 		}
-		refreshCardState(card, provider);
+		refreshCardState(card, provider, t);
 	});
 }
 
@@ -595,8 +620,8 @@ function syncCustomModels(
 	ctx: SettingsTabContext
 ): void {
 	void ctx.plugin.saveSettings();
-	updateModelCount(card, provider);
-	refreshCardState(card, provider);
+	updateModelCount(card, provider, ctx.plugin.t);
+	refreshCardState(card, provider, ctx.plugin.t);
 }
 
 function parseIntSafe(value: string): number | undefined {

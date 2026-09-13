@@ -56,7 +56,7 @@ export type GenerateReportFailureReason =
 
 export type GenerateReportResult =
 	| { ok: true; path: string }
-	| { ok: false; reason: GenerateReportFailureReason; message?: string };
+	| { ok: false; reason: GenerateReportFailureReason; message?: string; error?: unknown };
 
 export async function generateReport(
 	input: GenerateReportInput,
@@ -97,14 +97,14 @@ export async function generateReport(
 			timeoutSeconds: input.timeoutSeconds,
 		});
 	} catch (error) {
-		return { ok: false, reason: "ai-error", message: messageOf(error) };
+		return { ok: false, reason: "ai-error", message: messageOf(error), error };
 	}
 
 	try {
 		const path = await deps.save(input.reportFolder, input.type, range, content, template?.name);
 		return { ok: true, path };
 	} catch (error) {
-		return { ok: false, reason: "save-error", message: messageOf(error) };
+		return { ok: false, reason: "save-error", message: messageOf(error), error };
 	}
 }
 

@@ -8,8 +8,10 @@ import { App, Modal, Notice, TFile } from "obsidian";
 import type TaskNotesAIHelperPlugin from "../../main";
 import { resolveActiveModelConfig } from "../settings/logic";
 import type { ReportType, TaskInfo } from "../types";
+import type { Translator } from "../i18n";
 import type { TaskRepository } from "../tasks/repository";
 import { chatCompletion } from "../ai/client";
+import { describeAIError } from "../ai/errorMessage";
 import { saveReport } from "../report/writer";
 import { generateReport, type GenerateReportFailureReason } from "../report/generate";
 import { TaskPickerModal } from "./TaskPickerModal";
@@ -47,7 +49,7 @@ export class ReportModal extends Modal {
 		contentEl.empty();
 		contentEl.addClass("tah-modal");
 		this.modalEl.addClass("tah-modal-root-narrow");
-		this.setTitle("生成任务报告");
+		this.setTitle(this.plugin.t("report.title"));
 
 		// 一次性创建容器结构（后续 render* 只填充，不再新建）
 		this.listWrapEl = contentEl.createDiv({ cls: "tah-main" });
@@ -58,12 +60,12 @@ export class ReportModal extends Modal {
 
 		// 加载任务
 		this.listWrapEl.empty();
-		this.listWrapEl.createDiv({ text: "正在加载任务…", cls: "tah-loading" });
+		this.listWrapEl.createDiv({ text: this.plugin.t("report.loading"), cls: "tah-loading" });
 		const tasks = await this.repository.list();
 		if (tasks === null) {
 			this.listWrapEl.empty();
 			this.listWrapEl.createEl("p", {
-				text: "未检测到 TaskNotes 插件，请先在 Obsidian 中启用 TaskNotes。",
+				text: this.plugin.t("report.tasknotesMissing"),
 				cls: "tah-error",
 			});
 			return;
@@ -90,8 +92,13 @@ export class ReportModal extends Modal {
 
 		// 页头：标题（含计数）在左，「清空」在右
 		const header = this.listWrapEl.createDiv({ cls: "tah-main-header" });
-		header.createEl("h3", { text: `已加入任务（${tasks.length}）` });
-		const clearBtn = header.createEl("button", { text: "清空", cls: "tah-batch-remove-btn" });
+		header.createEl("h3", {
+			text: this.plugin.t("report.joinedTasks", { count: tasks.length }),
+		});
+		const clearBtn = header.createEl("button", {
+			text: this.plugin.t("report.clear"),
+			cls: "tah-batch-remove-btn",
+		});
 		clearBtn.disabled = tasks.length === 0;
 		clearBtn.addEventListener("click", () => {
 			this.candidateTasks.clear();
@@ -103,7 +110,7 @@ export class ReportModal extends Modal {
 
 		if (tasks.length === 0) {
 			listEl.createDiv({
-				text: "暂无任务。点击下方「选择任务」筛选并添加任务。",
+				text: this.plugin.t("report.empty"),
 				cls: "tah-empty",
 			});
 		}
@@ -114,10 +121,10 @@ export class ReportModal extends Modal {
 			const info = item.createDiv({ cls: "tah-task-info" });
 			const titleEl = info.createDiv({ cls: "tah-task-title" });
 			titleEl.setText(task.title);
-			renderTaskMeta(info, task);
+			renderTaskMeta(info, task, this.plugin.t);
 
 			const removeBtn = item.createEl("button", { text: "×", cls: "tah-task-remove" });
-			removeBtn.setAttr("aria-label", "从列表移除");
+			removeBtn.setAttr("aria-label", this.plugin.t("report.removeAria"));
 			removeBtn.addEventListener("click", () => {
 				this.candidateTasks.delete(task.path);
 				this.renderTaskList();
@@ -126,12 +133,12 @@ export class ReportModal extends Modal {
 
 		// 选择任务按钮
 		const addRow = this.listWrapEl.createDiv({ cls: "tah-add-row" });
-		const addBtn = addRow.createEl("button", { text: "+ 选择任务" });
+		const addBtn = addRow.createEl("button", { text: this.plugin.t("report.addTasks") });
 		addBtn.addClass("tah-add-btn");
 		addBtn.addEventListener("click", () => this.openTaskPicker());
 		if (tasks.length > 0) {
 			addRow.createDiv({
-				text: "新选任务将追加到列表。",
+				text: this.plugin.t("report.appendHint"),
 				cls: "tah-hint",
 			});
 		}
@@ -144,12 +151,14 @@ export class ReportModal extends Modal {
 			addable,
 			this.plugin.settings.dateFields,
 			this.plugin.settings.weekStartsOnMonday,
+			this.plugin.t,
+			this.plugin.lang,
 			(tasks) => {
 				for (const task of tasks) {
 					this.candidateTasks.set(task.path, task);
 				}
 				this.renderTaskList();
-				new Notice(`已加入 ${tasks.length} 个任务`);
+				new Notice(this.plugin.t("notice.addedTasks", { count: tasks.length }));
 			}
 		).open();
 	}
@@ -162,7 +171,10 @@ export class ReportModal extends Modal {
 		// 右侧：模板下拉 + 生成按钮（紧邻）
 		const actions = this.footerEl.createDiv({ cls: "tah-footer-actions" });
 		const templateSelect = actions.createEl("select", { cls: "tah-template-select" });
-		templateSelect.createEl("option", { text: "无模板（默认）", value: "" });
+		templateSelect.createEl("option", {
+			text: this.plugin.t("report.noTemplate"),
+			value: "",
+		});
 		for (const template of this.plugin.settings.templates) {
 			templateSelect.createEl("option", { text: template.name, value: template.id });
 		}
@@ -174,7 +186,7 @@ export class ReportModal extends Modal {
 			void this.plugin.saveSettings();
 		});
 
-		const btn = actions.createEl("button", { text: "生成报告" });
+		const btn = actions.createEl("button", { text: this.plugin.t("report.generate") });
 		btn.addClass("tah-generate-btn");
 		btn.addEventListener("click", () => void this.generate());
 		this.generateBtn = btn;
@@ -185,7 +197,10 @@ export class ReportModal extends Modal {
 
 		this.generating = true;
 		if (this.generateBtn) {
-			applyGenerateButtonState(this.generateBtn, getGenerateButtonState(true));
+			applyGenerateButtonState(
+				this.generateBtn,
+				getGenerateButtonState(true, this.plugin.t("report.generate"))
+			);
 		}
 
 		try {
@@ -214,34 +229,42 @@ export class ReportModal extends Modal {
 			);
 
 			if (result.ok) {
-				new Notice(`报告已保存：${result.path}`);
+				new Notice(this.plugin.t("report.saved", { path: result.path }));
 				const file = this.app.vault.getAbstractFileByPath(result.path);
 				if (file instanceof TFile) {
 					await this.app.workspace.getLeaf(false).openFile(file);
 				}
 				this.close();
 			} else {
-				new Notice(failureMessage(result));
+				new Notice(failureMessage(result, this.plugin.t));
 			}
 		} finally {
 			this.generating = false;
 			if (this.generateBtn) {
-				applyGenerateButtonState(this.generateBtn, getGenerateButtonState(false));
+				applyGenerateButtonState(
+					this.generateBtn,
+					getGenerateButtonState(false, this.plugin.t("report.generate"))
+				);
 			}
 		}
 	}
 }
 
 /** 把生成失败的原因种类映射为用户提示。 */
-function failureMessage(failure: { reason: GenerateReportFailureReason; message?: string }): string {
+function failureMessage(
+	failure: { reason: GenerateReportFailureReason; message?: string; error?: unknown },
+	t: Translator
+): string {
 	switch (failure.reason) {
 		case "no-tasks":
-			return "请先添加要生成报告的任务";
+			return t("report.failureNoTasks");
 		case "no-model":
-			return "请先在插件设置中选择模型并配置 API Key";
+			return t("report.failureNoModel");
 		case "missing-credentials":
-			return "请先在插件设置中填写所选供应商的 Base URL 和 API Key";
+			return t("report.failureMissingCredentials");
 		default:
-			return `生成失败：${failure.message ?? ""}`;
+			return t("report.failureGeneric", {
+				message: describeAIError(failure.error ?? failure.message, t),
+			});
 	}
 }

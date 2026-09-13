@@ -5,6 +5,7 @@
  */
 
 import type { TaskInfo } from "../types";
+import type { Translator } from "../i18n";
 
 /** 标签 / 上下文每类最多展示的个数 */
 export const MAX_TAG_CONTEXT = 3;
@@ -38,14 +39,14 @@ export function summarizeTagContext(
 }
 
 /** 渲染任务条目的元信息行。 */
-export function renderTaskMeta(container: HTMLElement, task: TaskInfo): void {
+export function renderTaskMeta(container: HTMLElement, task: TaskInfo, t: Translator): void {
 	const meta = container.createDiv({ cls: "tah-task-meta" });
 
 	const metaText: string[] = [];
-	if (task.status) metaText.push(`状态:${task.status}`);
-	if (task.priority) metaText.push(`优先级:${task.priority}`);
-	if (task.completedDate) metaText.push(`完成:${task.completedDate}`);
-	if (task.due) metaText.push(`到期:${task.due}`);
+	if (task.status) metaText.push(`${t("taskMeta.status")}:${task.status}`);
+	if (task.priority) metaText.push(`${t("taskMeta.priority")}:${task.priority}`);
+	if (task.completedDate) metaText.push(`${t("taskMeta.completed")}:${task.completedDate}`);
+	if (task.due) metaText.push(`${t("taskMeta.due")}:${task.due}`);
 	if (metaText.length > 0) {
 		meta.createSpan({ cls: "tah-task-meta-text", text: metaText.join(" · ") });
 	}

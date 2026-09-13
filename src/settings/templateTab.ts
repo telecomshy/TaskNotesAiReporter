@@ -5,20 +5,25 @@
 
 import { Modal, Notice, type App } from "obsidian";
 import type { ReportTemplate } from "../types";
+import type { Translator } from "../i18n";
 import { genId } from "./logic";
 import type { SettingsTabContext } from "./index";
 
+/** 新建模板的默认名称：作为持久化数据，保持语言无关，不随界面语言变化。 */
+const NEW_TEMPLATE_NAME = "新模板";
+
 /** 渲染「模板配置」Tab */
 export function renderTemplateTab(container: HTMLElement, ctx: SettingsTabContext): void {
-	container.createEl("h3", { text: "报告模板" });
+	const t = ctx.plugin.t;
+	container.createEl("h3", { text: t("template.heading") });
 	container.createEl("p", {
-		text: "自定义报告模板，每个模板包含标题与内容。内容支持占位符 {{tasks}}（任务列表）与 {{range}}（时间范围）。不选择模板时，仅提供任务列表给模型自由生成。",
+		text: t("template.intro"),
 		cls: "setting-item-description",
 	});
 
 	// 添加模板按钮
 	const addRow = container.createDiv({ cls: "tah-template-add-row" });
-	const addBtn = addRow.createEl("button", { text: "+ 添加模板" });
+	const addBtn = addRow.createEl("button", { text: t("template.add") });
 	addBtn.addClass("tah-add-btn");
 	addBtn.addEventListener("click", () => addTemplate(ctx));
 
@@ -26,7 +31,7 @@ export function renderTemplateTab(container: HTMLElement, ctx: SettingsTabContex
 	const list = container.createDiv({ cls: "tah-template-list" });
 	const templates = ctx.plugin.settings.templates;
 	if (templates.length === 0) {
-		list.createDiv({ text: "暂无模板，点击「添加模板」创建。", cls: "tah-empty" });
+		list.createDiv({ text: t("template.empty"), cls: "tah-empty" });
 	}
 	for (const template of templates) {
 		renderTemplateItem(list, template, ctx);
@@ -38,15 +43,16 @@ function renderTemplateItem(
 	template: ReportTemplate,
 	ctx: SettingsTabContext
 ): void {
+	const t = ctx.plugin.t;
 	const item = container.createDiv({ cls: "tah-template-item" });
 
 	const header = item.createDiv({ cls: "tah-template-item-header" });
 	header.createSpan({ text: template.name, cls: "tah-template-item-name" });
 
 	const actions = header.createDiv({ cls: "tah-template-item-actions" });
-	const editBtn = actions.createEl("button", { text: "编辑" });
+	const editBtn = actions.createEl("button", { text: t("template.edit") });
 	editBtn.addClass("tah-remove-btn");
-	const delBtn = actions.createEl("button", { text: "删除" });
+	const delBtn = actions.createEl("button", { text: t("template.delete") });
 	delBtn.addClass("tah-remove-btn");
 
 	// 内容预览
@@ -60,7 +66,8 @@ function renderTemplateItem(
 function addTemplate(ctx: SettingsTabContext): void {
 	const modal = new TemplateEditModal(
 		ctx.app,
-		{ name: "新模板", content: "" },
+		ctx.plugin.t,
+		{ name: NEW_TEMPLATE_NAME, content: "" },
 		async (name, content) => {
 			const template: ReportTemplate = { id: genId(), name, content };
 			ctx.plugin.settings.templates.push(template);
@@ -80,6 +87,7 @@ function deleteTemplate(id: string, ctx: SettingsTabContext): void {
 function editTemplate(template: ReportTemplate, ctx: SettingsTabContext): void {
 	const modal = new TemplateEditModal(
 		ctx.app,
+		ctx.plugin.t,
 		template,
 		async (name, content) => {
 			template.name = name;
@@ -98,6 +106,7 @@ class TemplateEditModal extends Modal {
 
 	constructor(
 		app: App,
+		private t: Translator,
 		private template: { name: string; content: string },
 		private onSave: (name: string, content: string) => void
 	) {
@@ -109,31 +118,34 @@ class TemplateEditModal extends Modal {
 		contentEl.empty();
 		contentEl.addClass("tah-modal");
 		this.modalEl.addClass("tah-modal-root-narrow");
-		this.setTitle("编辑模板");
+		this.setTitle(this.t("template.modalTitle"));
 
-		contentEl.createEl("h4", { text: "模板标题" });
+		contentEl.createEl("h4", { text: this.t("template.modalNameHeading") });
 		this.nameInput = contentEl.createEl("input", { type: "text" });
 		this.nameInput.addClass("tah-template-name-input");
 		this.nameInput.value = this.template.name;
-		this.nameInput.placeholder = "如：周报、月报、年终总结";
+		this.nameInput.placeholder = this.t("template.modalNamePlaceholder");
 
-		contentEl.createEl("h4", { text: "模板内容", cls: "tah-template-content-title" });
+		contentEl.createEl("h4", {
+			text: this.t("template.modalContentHeading"),
+			cls: "tah-template-content-title",
+		});
 		contentEl.createDiv({
-			text: "支持占位符：{{tasks}}（任务列表）、{{range}}（时间范围）",
+			text: this.t("template.modalContentHint"),
 			cls: "tah-picker-hint",
 		});
 		this.contentInput = contentEl.createEl("textarea");
 		this.contentInput.addClass("tah-template-content-input");
 		this.contentInput.value = this.template.content;
 		this.contentInput.rows = 12;
-		this.contentInput.placeholder = "请根据以下任务数据生成报告…\n\n{{tasks}}";
+		this.contentInput.placeholder = this.t("template.modalContentPlaceholder");
 
 		const actions = contentEl.createDiv({ cls: "tah-preview-actions" });
-		const saveBtn = actions.createEl("button", { text: "保存" });
+		const saveBtn = actions.createEl("button", { text: this.t("template.save") });
 		saveBtn.addClass("tah-generate-btn");
 		saveBtn.addEventListener("click", () => this.save());
 
-		const cancelBtn = actions.createEl("button", { text: "取消" });
+		const cancelBtn = actions.createEl("button", { text: this.t("template.cancel") });
 		cancelBtn.addClass("tah-remove-btn");
 		cancelBtn.addEventListener("click", () => this.close());
 	}
@@ -145,7 +157,7 @@ class TemplateEditModal extends Modal {
 	private save(): void {
 		const name = this.nameInput.value.trim();
 		if (!name) {
-			new Notice("请填写模板标题");
+			new Notice(this.t("template.needName"));
 			return;
 		}
 		this.onSave(name, this.contentInput.value);

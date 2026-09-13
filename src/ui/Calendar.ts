@@ -5,13 +5,7 @@
 
 import type { DateRange } from "../types";
 import { toDateString } from "../core/dates";
-
-const WEEKDAY_LABELS_MON = ["一", "二", "三", "四", "五", "六", "日"];
-const WEEKDAY_LABELS_SUN = ["日", "一", "二", "三", "四", "五", "六"];
-const MONTH_LABELS = [
-	"一月", "二月", "三月", "四月", "五月", "六月",
-	"七月", "八月", "九月", "十月", "十一月", "十二月",
-];
+import { calendarLabels, type Language, type Translator } from "../i18n";
 
 export class CalendarWidget {
 	private viewYear: number;
@@ -21,15 +15,21 @@ export class CalendarWidget {
 	private selecting = false; // 是否已选定起点、正在等待终点
 	private readonly onChange: (range: DateRange | null) => void;
 	private readonly weekStartsOnMonday: boolean;
+	private readonly t: Translator;
+	private readonly language: Language;
 	private readonly containerEl: HTMLElement;
 
 	constructor(
 		containerEl: HTMLElement,
 		weekStartsOnMonday: boolean,
+		t: Translator,
+		language: Language,
 		onChange: (range: DateRange | null) => void
 	) {
 		this.containerEl = containerEl;
 		this.weekStartsOnMonday = weekStartsOnMonday;
+		this.t = t;
+		this.language = language;
 		this.onChange = onChange;
 		const now = new Date();
 		this.viewYear = now.getFullYear();
@@ -120,13 +120,18 @@ export class CalendarWidget {
 		el.empty();
 		el.addClass("tah-calendar");
 
+		const labels = calendarLabels(this.language);
+
 		// 头部：上月 / 标题 / 下月
 		const header = el.createDiv({ cls: "tah-calendar-header" });
 		const prevBtn = header.createEl("button", { text: "‹" });
 		prevBtn.addClass("tah-calendar-nav");
 		prevBtn.addEventListener("click", () => this.moveMonth(-1));
 		header.createSpan({
-			text: `${this.viewYear}年${MONTH_LABELS[this.viewMonth]}`,
+			text: this.t("calendar.title", {
+				month: labels.months[this.viewMonth],
+				year: this.viewYear,
+			}),
 			cls: "tah-calendar-title",
 		});
 		const nextBtn = header.createEl("button", { text: "›" });
@@ -134,7 +139,7 @@ export class CalendarWidget {
 		nextBtn.addEventListener("click", () => this.moveMonth(1));
 
 		// 星期标题
-		const weekdays = this.weekStartsOnMonday ? WEEKDAY_LABELS_MON : WEEKDAY_LABELS_SUN;
+		const weekdays = this.weekStartsOnMonday ? labels.weekdaysMonday : labels.weekdaysSunday;
 		const weekdayRow = el.createDiv({ cls: "tah-calendar-weekdays" });
 		for (const wd of weekdays) {
 			weekdayRow.createSpan({ text: wd, cls: "tah-calendar-weekday" });

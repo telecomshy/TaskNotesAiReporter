@@ -179,3 +179,30 @@ test("testConnection 发送 ping 并成功返回", async () => {
 	await client.testConnection(config);
 	assert.equal(JSON.parse(captured[0].body!).messages[0].content, "ping");
 });
+
+test("listModels 透传 AIClientError，不被网络错误重包", async () => {
+	await capture();
+	const original = new client.AIClientError("timeout", { ms: 1234 });
+	respond = () => {
+		throw original;
+	};
+	await assert.rejects(() => client.listModels("https://x.com", "sk"), (e: unknown) => {
+		assert.equal(e, original);
+		return true;
+	});
+});
+
+test("chatCompletion 透传 AIClientError，不被网络错误重包", async () => {
+	await capture();
+	const original = new client.AIClientError("timeout", { ms: 1234 });
+	respond = () => {
+		throw original;
+	};
+	await assert.rejects(
+		() => client.chatCompletion(config, [{ role: "user", content: "hi" }]),
+		(e: unknown) => {
+			assert.equal(e, original);
+			return true;
+		}
+	);
+});
