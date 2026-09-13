@@ -85,11 +85,9 @@ export async function listModels(
 	if (response.status < 200 || response.status >= 300) {
 		let detail = "";
 		try {
-			const body = response.json as Record<string, any> | null;
+			const body = response.json as { error?: { message?: string }; message?: string } | null;
 			detail =
-				(body?.error?.message as string) ||
-				(body?.message as string) ||
-				JSON.stringify(body).slice(0, 200);
+				body?.error?.message ?? body?.message ?? JSON.stringify(body).slice(0, 200);
 		} catch {
 			detail = response.text?.slice(0, 200) ?? "";
 		}
@@ -155,11 +153,9 @@ export async function chatCompletion(
 	if (response.status < 200 || response.status >= 300) {
 		let detail = "";
 		try {
-			const body = response.json as Record<string, any> | null;
+			const body = response.json as { error?: { message?: string }; message?: string } | null;
 			detail =
-				(body?.error?.message as string) ||
-				(body?.message as string) ||
-				JSON.stringify(body).slice(0, 300);
+				body?.error?.message ?? body?.message ?? JSON.stringify(body).slice(0, 300);
 		} catch {
 			detail = response.text?.slice(0, 300) ?? "";
 		}
@@ -202,13 +198,13 @@ function messageOf(error: unknown): string {
 
 /** 给 Promise 加超时：超时则抛出 AIClientError。 */
 async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-	let timer: ReturnType<typeof setTimeout> | undefined;
+	let timer: number | undefined;
 	const timeout = new Promise<never>((_, reject) => {
-		timer = setTimeout(() => reject(new AIClientError("timeout", { ms })), ms);
+		timer = window.setTimeout(() => reject(new AIClientError("timeout", { ms })), ms);
 	});
 	try {
 		return await Promise.race([promise, timeout]);
 	} finally {
-		if (timer) clearTimeout(timer);
+		if (timer !== undefined) window.clearTimeout(timer);
 	}
 }

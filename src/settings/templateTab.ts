@@ -108,7 +108,7 @@ class TemplateEditModal extends Modal {
 		app: App,
 		private t: Translator,
 		private template: { name: string; content: string },
-		private onSave: (name: string, content: string) => void
+		private onSave: (name: string, content: string) => void | Promise<void>
 	) {
 		super(app);
 	}
@@ -160,7 +160,7 @@ class TemplateEditModal extends Modal {
 			new Notice(this.t("template.needName"));
 			return;
 		}
-		this.onSave(name, this.contentInput.value);
+		void this.onSave(name, this.contentInput.value);
 		this.close();
 	}
 }

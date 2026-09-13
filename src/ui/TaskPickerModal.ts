@@ -301,7 +301,7 @@ export class TaskPickerModal extends Modal {
 			);
 		this.parseLabelEl.setText(parts.length > 0 ? parts.join("  ·  ") : "");
 		// 仅在有解析条件时显示，避免空行占位
-		this.parseLabelEl.style.display = parts.length > 0 ? "" : "none";
+		this.parseLabelEl.toggleClass("tah-hidden", parts.length === 0);
 	}
 
 	private renderList(): void {

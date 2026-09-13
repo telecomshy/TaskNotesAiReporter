@@ -4,7 +4,7 @@
  * 遵守 ADR-0001：只通过 TaskNotes 运行时公开 API 读取任务，不改其源码。
  */
 
-import type { App, TFile } from "obsidian";
+import { TFile, type App } from "obsidian";
 import type { TaskNotesPublicApi } from "../types";
 import { createTaskRepository, type TaskRepository } from "./repository";
 
@@ -35,10 +35,9 @@ export function obsidianTaskRepository(app: App): TaskRepository {
 		},
 		readNote: async (path: string) => {
 			const file = app.vault.getAbstractFileByPath(path);
-			if (!file) return null;
+			if (!(file instanceof TFile)) return null;
 			try {
-				// 非文件（如文件夹）传给 vault.read 会抛错，由 catch 兜底
-				return await app.vault.read(file as TFile);
+				return await app.vault.read(file);
 			} catch {
 				return null;
 			}

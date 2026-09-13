@@ -212,6 +212,11 @@
 	min-width: 0;
 }
 
+/* 通用隐藏开关（替代内联 style.display 赋值） */
+.tah-hidden {
+	display: none !important;
+}
+
 /* 密钥选择控件：固定点掩码 + 原生「更改」按钮；隐藏原生「点 + ×」显示 */
 .tah-secret-host {
 	display: flex;

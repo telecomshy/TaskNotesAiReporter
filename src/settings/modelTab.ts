@@ -6,7 +6,6 @@
 import { Notice, SecretComponent, Setting } from "obsidian";
 import type { ModelConfig, ModelProvider } from "../types";
 import type { Translator } from "../i18n";
-import { genId } from "./logic";
 import { resolveSecretValue } from "./secrets";
 import { listModels, testConnection } from "../ai/client";
 import { describeAIError } from "../ai/errorMessage";
@@ -63,15 +62,13 @@ function renderActiveModelSection(container: HTMLElement, ctx: SettingsTabContex
 		.addDropdown((dropdown) => {
 			// 按供应商分组
 			for (const provider of selectable) {
-				const optgroup = document.createElement("optgroup");
+				const optgroup = dropdown.selectEl.createEl("optgroup");
 				optgroup.label = provider.name;
 				for (const model of modelsOf(provider)) {
-					const option = document.createElement("option");
+					const option = optgroup.createEl("option");
 					option.value = `${provider.id}::${model}`;
 					option.text = model;
-					optgroup.appendChild(option);
 				}
-				dropdown.selectEl.appendChild(optgroup);
 			}
 
 			const currentValue = `${ctx.plugin.settings.activeProviderId}::${ctx.plugin.settings.activeModel}`;
@@ -106,7 +103,7 @@ function renderPresetProviderCard(
 	const arrow = header.createSpan({ cls: "tah-provider-arrow", text: "▸" });
 	header.createSpan({ cls: "tah-provider-dot" });
 	header.createSpan({ cls: "tah-provider-name", text: provider.name });
-	const count = header.createSpan({ cls: "tah-provider-count" });
+	header.createSpan({ cls: "tah-provider-count" });
 	header.createSpan({
 		cls: "tah-provider-status",
 		text: configured ? t("model.configured") : t("model.notConfigured"),
@@ -115,7 +112,7 @@ function renderPresetProviderCard(
 
 	// 展开区
 	const body = card.createDiv({ cls: "tah-provider-body" });
-	body.style.display = "none";
+	body.addClass("tah-hidden");
 
 	// API 密钥 + 获取模型列表按钮（同一行，选好密钥即可点击）
 	const keyRow = body.createDiv({ cls: "tah-provider-field" });
@@ -130,17 +127,17 @@ function renderPresetProviderCard(
 
 	// 可用模型容器（默认隐藏，拉取到模型后显示）
 	const modelsLabel = body.createDiv({ cls: "tah-provider-models-label", text: t("model.availableModels") });
-	modelsLabel.style.display = "none";
+	modelsLabel.addClass("tah-hidden");
 	const modelsRow = body.createDiv({ cls: "tah-provider-models" });
 
 	const showModels = (models: string[]) => {
 		if (models.length > 0) {
-			modelsLabel.style.display = "";
+			modelsLabel.removeClass("tah-hidden");
 			modelsRow.empty();
 			renderModelTags(modelsRow, models, provider.id, card, ctx);
 			updateModelCount(card, provider, t);
 		} else {
-			modelsLabel.style.display = "none";
+			modelsLabel.addClass("tah-hidden");
 			modelsRow.empty();
 			updateModelCount(card, provider, t);
 		}
@@ -153,9 +150,9 @@ function renderPresetProviderCard(
 
 	// 头部点击折叠/展开
 	header.addEventListener("click", () => {
-		const expanded = body.style.display !== "none";
-		body.style.display = expanded ? "none" : "block";
-		arrow.setText(expanded ? "▸" : "▾");
+		const collapsed = body.hasClass("tah-hidden");
+		body.toggleClass("tah-hidden", !collapsed);
+		arrow.setText(collapsed ? "▾" : "▸");
 	});
 
 	updateModelCount(card, provider, t);
@@ -453,7 +450,7 @@ function renderCustomProviderCard(
 
 	// 展开区
 	const body = card.createDiv({ cls: "tah-provider-body" });
-	body.style.display = "none";
+	body.addClass("tah-hidden");
 
 	// ---- 全局配置区 ----
 
@@ -505,7 +502,7 @@ function renderCustomProviderCard(
 	const updateAuth = () => {
 		bearerBtn.toggleClass("tah-auth-active", provider.authType === "bearer");
 		noneBtn.toggleClass("tah-auth-active", provider.authType === "none");
-		keyRow.style.display = provider.authType === "bearer" ? "" : "none";
+		keyRow.toggleClass("tah-hidden", provider.authType !== "bearer");
 	};
 	bearerBtn.addEventListener("click", () => {
 		provider.authType = "bearer";
@@ -554,9 +551,9 @@ function renderCustomProviderCard(
 
 	// 头部点击折叠/展开
 	header.addEventListener("click", () => {
-		const expanded = body.style.display !== "none";
-		body.style.display = expanded ? "none" : "block";
-		arrow.setText(expanded ? "▸" : "▾");
+		const collapsed = body.hasClass("tah-hidden");
+		body.toggleClass("tah-hidden", !collapsed);
+		arrow.setText(collapsed ? "▾" : "▸");
 	});
 }
 

@@ -34,7 +34,7 @@ export function filterTasksByDateRange(
 	const seen = new Set<string>();
 	for (const task of tasks) {
 		if (task.archived) continue;
-		const matched = dateFields.some((field) => inRange(task[field] as string | undefined, range));
+		const matched = dateFields.some((field) => inRange(task[field], range));
 		if (matched && !seen.has(task.path)) {
 			seen.add(task.path);
 			result.push(task);

@@ -57,7 +57,7 @@ export default class TaskNotesAIHelperPlugin extends Plugin {
 	}
 
 	async loadSettings(): Promise<void> {
-		const data = await this.loadData();
+		const data: unknown = await this.loadData();
 		const { settings: normalized, pendingSecrets } = normalizeSettings(data);
 		// 一次性迁移：把旧版明文密钥导入 SecretStorage，只保留密钥名
 		const { settings, changed } = importPendingSecrets(normalized, pendingSecrets, {
