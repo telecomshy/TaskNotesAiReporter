@@ -3,8 +3,8 @@
 	"name": "TaskNotes AI Reporter",
 	"version": "0.1.0",
 	"minAppVersion": "1.12.2",
-	"description": "用自定义模板与任意 OpenAI 兼容模型，为 TaskNotes 任务生成报告（周报/月报/年报或任意形式）。",
-	"author": "TelecomShy",
+	"description": "Generate reports from TaskNotes tasks — weekly, monthly, yearly, or custom — using custom templates and any OpenAI-compatible model.",
+	"author": "telecomshy",
 	"authorUrl": "https://github.com/telecomshy",
 	"isDesktopOnly": false
 }

@@ -1,7 +1,7 @@
 {
 	"name": "tasknotes-aireporter",
 	"version": "0.1.0",
-	"description": "用自定义模板与任意 OpenAI 兼容模型，为 TaskNotes 任务生成报告的独立辅助插件",
+	"description": "Standalone helper plugin that generates reports from TaskNotes tasks using custom templates and any OpenAI-compatible model.",
 	"main": "main.js",
 	"scripts": {
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
@@ -9,7 +9,7 @@
 		"test": "node --import tsx --experimental-test-module-mocks --test \"test/*.test.ts\""
 	},
 	"keywords": [],
-	"author": "TelecomShy",
+	"author": "telecomshy",
 	"license": "MIT",
 	"devDependencies": {
 		"@types/node": "^24.3.0",
