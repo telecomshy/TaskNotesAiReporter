@@ -121,7 +121,9 @@ function renderPresetProviderCard(
 	const keyRow = body.createDiv({ cls: "tah-provider-field" });
 	keyRow.createSpan({ cls: "tah-provider-field-label", text: t("model.apiKeyLabel") });
 	const keyHost = keyRow.createDiv({ cls: "tah-provider-input" });
-	const keySecret = new SecretComponent(ctx.app, keyHost).setValue(provider.apiKeySecretId);
+	attachSecretControl(ctx, keyHost, provider, (value) =>
+		void onPresetSecretChange(card, provider, value, showModels, ctx)
+	);
 	const fetchBtn = keyRow.createEl("button", { text: t("model.fetchModels") });
 	fetchBtn.addClass("tah-fetch-models-btn");
 	fetchBtn.addEventListener("click", () => void fetchModels(card, provider, ctx));
@@ -149,9 +151,6 @@ function renderPresetProviderCard(
 		void fetchModelsSilent(provider, showModels, ctx);
 	}
 
-	// 密钥变更时：更新状态；新选了密钥则自动拉取，清空则清空模型
-	keySecret.onChange((value) => void onPresetSecretChange(card, provider, value, showModels, ctx));
-
 	// 头部点击折叠/展开
 	header.addEventListener("click", () => {
 		const expanded = body.style.display !== "none";
@@ -160,6 +159,38 @@ function renderPresetProviderCard(
 	});
 
 	updateModelCount(card, provider, t);
+}
+
+/** 固定位数的密钥掩码（8 颗圆点），替代原生「点 + ×」显示。 */
+const SECRET_MASK = "••••••••";
+
+interface SecretControl {
+	component: SecretComponent;
+	/** 同步掩码显隐（未选密钥时隐藏）。 */
+	setMask: (secretId: string) => void;
+}
+
+/**
+ * 挂载密钥选择控件：用固定点掩码取代 Obsidian 原生的「点 + ×」值显示（CSS 隐藏），
+ * 保留原生「更改/Link」按钮以复用其选择与新建密钥弹窗。变更时先同步掩码再回调。
+ */
+function attachSecretControl(
+	ctx: SettingsTabContext,
+	host: HTMLElement,
+	provider: ModelProvider,
+	onChange: (value: string) => void
+): SecretControl {
+	host.addClass("tah-secret-host");
+	const mask = host.createSpan({ cls: "tah-secret-mask", text: SECRET_MASK });
+	const setMask = (secretId: string) => mask.toggleClass("is-empty", secretId.trim() === "");
+	setMask(provider.apiKeySecretId);
+
+	const component = new SecretComponent(ctx.app, host).setValue(provider.apiKeySecretId);
+	component.onChange((value) => {
+		setMask(value);
+		onChange(value);
+	});
+	return { component, setMask };
 }
 
 /** 把密钥名解析为密钥值；未选或存储中缺失时返回空串。 */
@@ -465,8 +496,7 @@ function renderCustomProviderCard(
 	const keyRow = body.createDiv({ cls: "tah-provider-field tah-custom-key-field" });
 	keyRow.createSpan({ cls: "tah-provider-field-label", text: t("model.apiKeyLabel") });
 	const keyHost = keyRow.createDiv({ cls: "tah-provider-input" });
-	const keySecret = new SecretComponent(ctx.app, keyHost).setValue(provider.apiKeySecretId);
-	keySecret.onChange((value) => {
+	const secret = attachSecretControl(ctx, keyHost, provider, (value) => {
 		provider.apiKeySecretId = value;
 		void ctx.plugin.saveSettings();
 		refreshCardState(card, provider, t);
@@ -485,7 +515,8 @@ function renderCustomProviderCard(
 	noneBtn.addEventListener("click", () => {
 		provider.authType = "none";
 		provider.apiKeySecretId = "";
-		keySecret.setValue("");
+		secret.setMask("");
+		secret.component.setValue("");
 		void ctx.plugin.saveSettings();
 		updateAuth();
 		refreshCardState(card, provider, t);

@@ -212,6 +212,33 @@
 	min-width: 0;
 }
 
+/* 密钥选择控件：固定点掩码 + 原生「更改」按钮；隐藏原生「点 + ×」显示 */
+.tah-secret-host {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.tah-secret-host .setting-secret-value {
+	display: none;
+}
+
+.tah-secret-host > button {
+	flex-shrink: 0;
+	white-space: nowrap;
+}
+
+.tah-secret-mask {
+	flex: 1;
+	min-width: 0;
+	letter-spacing: 0.15em;
+	color: var(--text-muted);
+}
+
+.tah-secret-mask.is-empty {
+	display: none;
+}
+
 .tah-provider-action {
 	display: flex;
 	gap: 0.5rem;
