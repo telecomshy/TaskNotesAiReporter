@@ -97,13 +97,13 @@ export function normalizeSettings(raw: unknown): NormalizedSettings {
 			// 过滤掉空的、纯占位的自定义供应商（旧版默认列表遗留的 "custom" 空壳）。
 			// 只有点击「+ 添加模型供应商」并填写了配置的 custom 供应商才应保留。
 			.filter((p) => {
-				const raw = p as Record<string, unknown>;
-				const t = (raw.type as string | undefined) ?? "custom";
+				const providerRaw = p as Record<string, unknown>;
+				const t = (providerRaw.type as string | undefined) ?? "custom";
 				if (t !== "custom") return true; // 预设供应商始终保留
-				const baseUrl = (raw.baseUrl as string | undefined) ?? "";
-				const secretId = (raw.apiKeySecretId as string | undefined) ?? "";
-				const legacyKey = (raw.apiKey as string | undefined) ?? "";
-				const models = Array.isArray(raw.models) ? (raw.models as string[]) : [];
+				const baseUrl = (providerRaw.baseUrl as string | undefined) ?? "";
+				const secretId = (providerRaw.apiKeySecretId as string | undefined) ?? "";
+				const legacyKey = (providerRaw.apiKey as string | undefined) ?? "";
+				const models = Array.isArray(providerRaw.models) ? (providerRaw.models as string[]) : [];
 				return (
 					baseUrl.trim() !== "" ||
 					secretId.trim() !== "" ||
@@ -112,16 +112,16 @@ export function normalizeSettings(raw: unknown): NormalizedSettings {
 				);
 			})
 			.map((p) => {
-				const raw = p as Record<string, unknown>;
-				const type = (raw.type as "preset" | "custom" | undefined) ?? "custom";
-				const authType = (raw.authType as "none" | "bearer" | undefined) ?? "bearer";
+				const providerRaw = p as Record<string, unknown>;
+				const type = (providerRaw.type as "preset" | "custom" | undefined) ?? "custom";
+				const authType = (providerRaw.authType as "none" | "bearer" | undefined) ?? "bearer";
 				const provider = {
-					...raw,
-					...readApiKeySecretId(raw),
+					...providerRaw,
+					...readApiKeySecretId(providerRaw),
 					type,
 					authType,
 				} as unknown as ModelProvider & { apiKey?: string };
-				const legacy = raw.apiKey;
+				const legacy = providerRaw.apiKey;
 				delete provider.apiKey; // 不再持久化明文密钥
 				if (typeof legacy === "string" && legacy.trim() !== "" && typeof provider.id === "string") {
 					pendingSecrets.push({ providerId: provider.id, plaintext: legacy });
@@ -129,7 +129,7 @@ export function normalizeSettings(raw: unknown): NormalizedSettings {
 				// 迁移：旧版自定义供应商用 models 字符串数组（供应商级 contextLength/maxTokens 也已废弃），
 				// 转为 customModels 每模型配置，保持常规配置下拉与卡片模型行可用。
 				if (type === "custom" && !Array.isArray(provider.customModels)) {
-					const legacyModels = Array.isArray(raw.models) ? (raw.models as string[]) : [];
+					const legacyModels = Array.isArray(providerRaw.models) ? (providerRaw.models as string[]) : [];
 					provider.customModels = legacyModels.map((modelId) => ({
 						id: genId(),
 						modelId,
@@ -199,8 +199,13 @@ export function normalizeSettings(raw: unknown): NormalizedSettings {
 }
 
 /** 从原始供应商读取密钥名（新结构）；旧版明文由 normalizeSettings 收集进 pendingSecrets。 */
-function readApiKeySecretId(raw: Record<string, unknown>): Pick<ModelProvider, "apiKeySecretId"> {
-	return { apiKeySecretId: typeof raw.apiKeySecretId === "string" ? raw.apiKeySecretId : "" };
+function readApiKeySecretId(
+	providerRaw: Record<string, unknown>
+): Pick<ModelProvider, "apiKeySecretId"> {
+	return {
+		apiKeySecretId:
+			typeof providerRaw.apiKeySecretId === "string" ? providerRaw.apiKeySecretId : "",
+	};
 }
 
 /** 把未被用户改动的旧中文示例模板迁移为当前英文默认版；改过的模板原样保留。 */

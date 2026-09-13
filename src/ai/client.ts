@@ -85,9 +85,7 @@ export async function listModels(
 	if (response.status < 200 || response.status >= 300) {
 		let detail = "";
 		try {
-			const body = response.json as { error?: { message?: string }; message?: string } | null;
-			detail =
-				body?.error?.message ?? body?.message ?? JSON.stringify(body).slice(0, 200);
+			detail = extractErrorDetail(response.json, 200);
 		} catch {
 			detail = response.text?.slice(0, 200) ?? "";
 		}
@@ -153,9 +151,7 @@ export async function chatCompletion(
 	if (response.status < 200 || response.status >= 300) {
 		let detail = "";
 		try {
-			const body = response.json as { error?: { message?: string }; message?: string } | null;
-			detail =
-				body?.error?.message ?? body?.message ?? JSON.stringify(body).slice(0, 300);
+			detail = extractErrorDetail(response.json, 300);
 		} catch {
 			detail = response.text?.slice(0, 300) ?? "";
 		}
@@ -196,15 +192,21 @@ function messageOf(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
+/** 从 OpenAI 兼容错误响应里取可读信息，取不到则回退到截断的 JSON。 */
+function extractErrorDetail(json: unknown, maxLength: number): string {
+	const body = json as { error?: { message?: string }; message?: string } | null;
+	return body?.error?.message ?? body?.message ?? JSON.stringify(body).slice(0, maxLength);
+}
+
 /** 给 Promise 加超时：超时则抛出 AIClientError。 */
 async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-	let timer: number | undefined;
+	let timer: ReturnType<typeof setTimeout> | undefined;
 	const timeout = new Promise<never>((_, reject) => {
-		timer = window.setTimeout(() => reject(new AIClientError("timeout", { ms })), ms);
+		timer = setTimeout(() => reject(new AIClientError("timeout", { ms })), ms);
 	});
 	try {
 		return await Promise.race([promise, timeout]);
 	} finally {
-		if (timer !== undefined) window.clearTimeout(timer);
+		if (timer) clearTimeout(timer);
 	}
 }

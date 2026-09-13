@@ -149,11 +149,7 @@ function renderPresetProviderCard(
 	}
 
 	// 头部点击折叠/展开
-	header.addEventListener("click", () => {
-		const collapsed = body.hasClass("tah-hidden");
-		body.toggleClass("tah-hidden", !collapsed);
-		arrow.setText(collapsed ? "▾" : "▸");
-	});
+	wireCollapse(header, body, arrow);
 
 	updateModelCount(card, provider, t);
 }
@@ -188,6 +184,15 @@ function attachSecretControl(
 		onChange(value);
 	});
 	return { component, setMask };
+}
+
+/** 绑定卡片头部点击折叠/展开：切换 tah-hidden 并同步箭头。 */
+function wireCollapse(header: HTMLElement, body: HTMLElement, arrow: HTMLElement): void {
+	header.addEventListener("click", () => {
+		const collapsed = body.hasClass("tah-hidden");
+		body.toggleClass("tah-hidden", !collapsed);
+		arrow.setText(collapsed ? "▾" : "▸");
+	});
 }
 
 /** 把密钥名解析为密钥值；未选或存储中缺失时返回空串。 */
@@ -550,11 +555,7 @@ function renderCustomProviderCard(
 	renderModelRows();
 
 	// 头部点击折叠/展开
-	header.addEventListener("click", () => {
-		const collapsed = body.hasClass("tah-hidden");
-		body.toggleClass("tah-hidden", !collapsed);
-		arrow.setText(collapsed ? "▾" : "▸");
-	});
+	wireCollapse(header, body, arrow);
 }
 
 /** 渲染单个模型配置行（模型ID + Context Length + Max Tokens + 测试 + 删除） */
