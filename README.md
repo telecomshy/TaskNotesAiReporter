@@ -1,70 +1,81 @@
----
-AIGC:
-  ContentProducer: '001191110102MAD55U9H0F10002'
-  ContentPropagator: '001191110102MAD55U9H0F10002'
-  Label: '1'
-  ProduceID: '30095df3-9bd2-48ec-881d-b565e2700e3d'
-  PropagateID: '30095df3-9bd2-48ec-881d-b565e2700e3d'
-  ReservedCode1: '47ffad8f-dc66-48e6-98d4-509556ff5697'
-  ReservedCode2: '47ffad8f-dc66-48e6-98d4-509556ff5697'
----
-
 # TaskNotes AI Reporter
 
-为 [TaskNotes](https://github.com/callumalpass/tasknotes) 生成 AI 报告的独立辅助插件：用**自定义模板**与任意 OpenAI 兼容模型，生成周报 / 月报 / 年报，或任意形式的报告。
+Generate weekly, monthly, yearly, or fully custom reports from [TaskNotes](https://github.com/callumalpass/tasknotes) tasks. Pick the tasks, choose a template, and let any OpenAI-compatible model write the report into a new note in your vault.
 
-- 自定义任意 **OpenAI 兼容** 大模型（DeepSeek、通义千问、豆包、Kimi、OpenAI 等）
-- 按日期自动筛选 TaskNotes 任务，支持在界面中**手动添加 / 删除**任务
-- 日历区间选择 + 本周 / 本月 / 本年等快捷方式
-- 生成结果写入 vault 内新笔记，不覆盖历史
+## Features
 
-## 前置依赖
+- Use any **OpenAI-compatible** model (DeepSeek, Qwen, Doubao, Kimi, OpenAI, …).
+- Auto-select tasks by date, then add or remove tasks manually in the picker.
+- Calendar range picker plus quick shortcuts (this week / month / year).
+- Write each report to a new note; existing notes are never overwritten.
+- Bilingual UI (English / Chinese) with a separate report output language.
 
-- Obsidian 需已启用 **TaskNotes** 插件（本插件通过其公开 API 读取任务数据，不改其源码）。
+## Requirements
 
-## 安装
+- Obsidian **1.12.2** or newer.
+- The **TaskNotes** plugin enabled (this plugin reads tasks through its public API and does not modify it).
 
-1. 构建（或直接使用已构建产物）：
+## Installation
+
+### From the community plugins directory
+
+1. Open **Settings → Community plugins → Browse**.
+2. Search for **TaskNotes AI Reporter** and install it.
+3. Enable the plugin.
+
+### Manual
+
+1. Build (or use the built artifacts):
 
    ```bash
    npm install
    npm run build
    ```
 
-2. 将以下文件复制到你的 vault 的 `.obsidian/plugins/tasknotes-aireporter/` 目录：
+2. Copy `main.js`, `manifest.json`, and `styles.css` into `<your vault>/.obsidian/plugins/tasknotes-aireporter/`.
+3. Enable **TaskNotes AI Reporter** in **Settings → Community plugins**.
 
-   - `manifest.json`
-   - `main.js`
-   - `styles.css`
+## Setup
 
-3. 在 Obsidian 的「第三方插件」中启用 **TaskNotes AI Reporter**。
+Open **Settings → Community plugins → TaskNotes AI Reporter**:
 
-## 配置
+1. **Model provider** — pick a preset (DeepSeek, Qwen, Kimi, MiniMax) or add a custom OpenAI-compatible provider with its base URL. For the API key, select an existing **secret** or create a new one; keys are kept in Obsidian's SecretStorage, not in the plugin's data.
+2. **Current model** — choose the model used to generate reports.
+3. **Report folder** — where reports are written (default `TaskNotes/Reports`).
+4. **Date fields** — which date fields participate in auto-filtering (completed / due / scheduled / created).
+5. **UI language** and **report language** — set independently.
 
-打开「设置 → 社区插件 → TaskNotes AI Reporter」：
+## Usage
 
-1. **AI 模型配置**：填写 Base URL、API Key、模型名称，点「测试连接」验证。
-   - 示例（DeepSeek）：Base URL `https://api.deepseek.com/v1`，模型 `deepseek-chat`
-2. **报告输出目录**：默认 `TaskNotes/Reports`。
-3. **日期口径**：勾选参与自动筛选的日期字段（完成 / 到期 / 计划 / 创建时间）。
-4. **报告板块**：勾选需要 AI 生成的板块。
+1. Click the ✨ ribbon icon or run **Generate task report** from the command palette.
+2. Select tasks (by date or by title), or add them manually.
+3. Optionally pick a report template, then click **Generate report** and save.
 
-## 使用
+## Network use
 
-1. 点击左侧 Ribbon 的 ✨ 按钮，或命令面板执行「生成任务报告」。
-2. 在弹窗左侧选择时间范围（快捷按钮或日历点选区间）。
-3. 右侧查看自动筛选出的任务，可「移除」或「+ 添加任务」（搜索任意任务，含未填日期的）。
-4. 点击「生成报告」，AI 生成后在预览中确认，点「保存」写入 vault。
+This plugin talks only to the OpenAI-compatible endpoint(s) **you configure** (built-in presets such as DeepSeek, Qwen, Kimi, MiniMax, or a custom base URL). It sends the selected task data and the generated prompt to that endpoint to produce the report, and fetches the model list from it. No data is sent anywhere else, and the plugin collects **no telemetry**.
 
-## 开发
+API keys are stored in Obsidian's **SecretStorage**; the plugin's own `data.json` stores only the secret's name.
+
+## Development
 
 ```bash
-npm install        # 安装依赖
-npm run dev        # 开发监听构建
-npm run build      # 生产构建（含 tsc 类型检查）
-npm test           # 运行单元测试
+npm install        # install dependencies
+npm run dev        # watch build
+npm run build      # production build (with type checking)
+npm test           # run unit tests
 ```
 
-核心纯函数（日期范围、任务筛选、文件名、提示词）位于 `src/core/`，均有单元测试覆盖。
+Pure logic (date ranges, task filtering, filenames, prompts) lives in `src/core/` and is covered by unit tests.
 
-> AI生成
+## 中文说明
+
+从 [TaskNotes](https://github.com/callumalpass/tasknotes) 任务生成 AI 报告：选择任务与模板，用任意 OpenAI 兼容模型生成周报 / 月报 / 年报或自定义报告，并写入 vault 新笔记。
+
+- 按日期自动筛选任务，也可在界面中手动添加 / 删除。
+- 日历区间选择 + 本周 / 本月 / 本年等快捷方式。
+- API 密钥保存在 Obsidian 的 SecretStorage 中（设置里只保存密钥名），不在插件数据文件中明文保存。
+
+**网络用途**：插件只会访问你自己配置的 OpenAI 兼容端点（内置 DeepSeek、通义千问、Kimi、MiniMax 预设，或自定义 Base URL），把所选任务数据与提示词发送过去以生成报告，并从该端点拉取模型列表；不会发送到其它地方，也不收集任何遥测。
+
+安装：在「设置 → 第三方插件 → 浏览」中搜索 **TaskNotes AI Reporter** 安装并启用（需先启用 **TaskNotes** 插件）。
