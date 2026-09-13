@@ -159,8 +159,8 @@ const SECRET_MASK = "••••••••";
 
 interface SecretControl {
 	component: SecretComponent;
-	/** 同步掩码显隐（未选密钥时隐藏）。 */
-	setMask: (secretId: string) => void;
+	/** 重新计算掩码显隐与「密钥不可用」提示。 */
+	refresh: (secretId: string) => void;
 }
 
 /**
@@ -186,9 +186,8 @@ function attachSecretControl(
 	const hint = host.createSpan({ cls: "tah-secret-hint tah-hidden", text: t("model.secretUnavailable") });
 
 	const refresh = (secretId: string) => {
-		const selected = secretId.trim() !== "";
-		mask.toggleClass("is-empty", !selected);
-		hint.toggleClass("tah-hidden", !(selected && resolveSecret(ctx, secretId) === ""));
+		mask.toggleClass("is-empty", secretId.trim() === "");
+		hint.toggleClass("tah-hidden", !isSecretMissing(ctx, secretId));
 	};
 	refresh(provider.apiKeySecretId);
 
@@ -196,10 +195,20 @@ function attachSecretControl(
 		refresh(value);
 		onChange(value);
 	});
-	return { component, setMask: refresh };
+	return { component, refresh };
 }
 
-/** 打开 Obsidian 的「密钥存储」设置页（内部 API 不在公开类型里，带降级提示）。 */
+/** Obsidian「密钥存储」设置页的 tab id（内部 API 跳转，见 ADR-0008）。 */
+const SECRET_STORAGE_TAB_ID = "keychain";
+
+/** 所选密钥名在 SecretStorage 中缺失（区别于存在但值为空）。 */
+function isSecretMissing(ctx: SettingsTabContext, secretId: string): boolean {
+	const id = secretId.trim();
+	if (id === "") return false;
+	return ctx.app.secretStorage.getSecret(id) === null;
+}
+
+/** 打开 Obsidian 的「密钥存储」设置页（内部 API 不在公开类型里，见 ADR-0008；带降级提示）。 */
 function openSecretStorage(ctx: SettingsTabContext): void {
 	const setting = (ctx.app as unknown as {
 		setting?: { open?: () => void; openTabById?: (id: string) => void };
@@ -207,7 +216,7 @@ function openSecretStorage(ctx: SettingsTabContext): void {
 	try {
 		if (setting?.open && setting?.openTabById) {
 			setting.open();
-			setting.openTabById("keychain");
+			setting.openTabById(SECRET_STORAGE_TAB_ID);
 			return;
 		}
 	} catch {
@@ -547,7 +556,7 @@ function renderCustomProviderCard(
 	noneBtn.addEventListener("click", () => {
 		provider.authType = "none";
 		provider.apiKeySecretId = "";
-		secret.setMask("");
+		secret.refresh("");
 		secret.component.setValue("");
 		void ctx.plugin.saveSettings();
 		updateAuth();

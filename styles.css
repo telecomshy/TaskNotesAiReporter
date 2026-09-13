@@ -212,7 +212,9 @@
 	min-width: 0;
 }
 
-/* 通用隐藏开关（替代内联 style.display 赋值；双类提高优先级以覆盖元素自身 display） */
+/* 通用隐藏开关（替代内联 style.display 赋值；双类提高优先级以覆盖元素自身 display）。
+   取舍：优先级低于主题中带 !important 的声明——`.tah-*` 类不会被主题针对，属可接受；
+   目录 CSS lint 要求移除 !important，故不在此使用。 */
 .tah-hidden.tah-hidden {
 	display: none;
 }

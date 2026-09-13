@@ -6,7 +6,7 @@
  *  - generalTab.ts    「常规配置」Tab
  */
 
-import { PluginSettingTab, type App } from "obsidian";
+import { PluginSettingTab, type App, type EventRef } from "obsidian";
 import type TaskNotesAIHelperPlugin from "../../main";
 import { renderModelTab } from "./modelTab";
 import { renderGeneralTab } from "./generalTab";
@@ -24,6 +24,8 @@ type TabName = "model" | "general" | "template";
 
 export class TaskNotesAIHelperSettingTab extends PluginSettingTab {
 	private currentTab: TabName = "model";
+	/** 密钥存储变化订阅（每次 display 重新绑定，见 ADR-0008）。 */
+	private secretRef: EventRef | null = null;
 
 	constructor(
 		app: App,
@@ -90,6 +92,18 @@ export class TaskNotesAIHelperSettingTab extends PluginSettingTab {
 			refresh();
 		});
 
+		// 密钥存储变化（增删改）时重渲染，刷新密钥控件的「不可用」提示。
+		if (this.secretRef) this.app.secretStorage.offref(this.secretRef);
+		this.secretRef = this.app.secretStorage.on("changed", () => refresh());
+
 		refresh();
+	}
+
+	hide(): void {
+		if (this.secretRef) {
+			this.app.secretStorage.offref(this.secretRef);
+			this.secretRef = null;
+		}
+		super.hide();
 	}
 }
