@@ -1,8 +1,8 @@
 /* TaskNotes AI Reporter 样式 */
 
-/* 左侧 Ribbon 按钮置底 */
-.tah-ribbon-bottom {
-	margin-top: auto !important;
+/* 左侧 Ribbon 按钮置底（提高优先级以覆盖 Obsidian 默认样式，避免强制声明） */
+.tah-ribbon-bottom.tah-ribbon-bottom {
+	margin-top: auto;
 }
 
 /* ===== 设置页 ===== */
@@ -212,9 +212,9 @@
 	min-width: 0;
 }
 
-/* 通用隐藏开关（替代内联 style.display 赋值） */
-.tah-hidden {
-	display: none !important;
+/* 通用隐藏开关（替代内联 style.display 赋值；双类提高优先级以覆盖元素自身 display） */
+.tah-hidden.tah-hidden {
+	display: none;
 }
 
 /* 密钥选择控件：固定点掩码 + 原生「更改」按钮；隐藏原生「点 + ×」显示 */
@@ -457,22 +457,22 @@
 
 /* ===== 生成报告弹窗 ===== */
 
-/* 覆盖 Obsidian 默认 .modal 的宽度限制，避免横向滚动条 */
-.tah-modal-root {
-	max-width: min(92vw, 960px) !important;
-	width: min(92vw, 960px) !important;
+/* 覆盖 Obsidian 默认 .modal 的宽度限制，避免横向滚动条（.modal 复合类提高优先级，避免强制声明） */
+.modal.tah-modal-root {
+	max-width: min(92vw, 960px);
+	width: min(92vw, 960px);
 }
 
 /* 主窗口（单栏任务列表）窄宽度 */
-.tah-modal-root-narrow {
-	max-width: min(92vw, 560px) !important;
-	width: min(92vw, 560px) !important;
+.modal.tah-modal-root-narrow {
+	max-width: min(92vw, 560px);
+	width: min(92vw, 560px);
 }
 
 /* 选择任务窗口（筛选区 + 任务列表上下排列）窄宽度 */
-.tah-modal-root-picker {
-	max-width: min(92vw, 520px) !important;
-	width: min(92vw, 520px) !important;
+.modal.tah-modal-root-picker {
+	max-width: min(92vw, 520px);
+	width: min(92vw, 520px);
 }
 
 .tah-modal {
@@ -812,12 +812,12 @@
 	}
 }
 
-/* 模板下拉 — 无边框透明样式，只保留原生下拉箭头 */
-.tah-template-select {
+/* 模板下拉 — 无边框透明样式，只保留原生下拉箭头（双类提高优先级，避免强制声明） */
+.tah-template-select.tah-template-select {
 	padding: 0.5rem 1.4rem 0.5rem 0.4rem;
 	border: none;
 	border-radius: 0;
-	background: transparent !important;
+	background: transparent;
 	max-width: 18rem;
 	min-width: 8rem;
 	cursor: pointer;
@@ -826,10 +826,10 @@
 	height: auto;
 	color: var(--text-normal);
 	transition: color 0.15s;
-	appearance: auto !important;
-	-webkit-appearance: auto !important;
-	-moz-appearance: auto !important;
-	box-shadow: none !important;
+	appearance: auto;
+	-webkit-appearance: auto;
+	-moz-appearance: auto;
+	box-shadow: none;
 	vertical-align: middle;
 }
 
@@ -837,12 +837,12 @@
 	color: var(--text-normal);
 }
 
-.tah-template-select:focus,
-.tah-template-select:focus-visible {
+.tah-template-select.tah-template-select:focus,
+.tah-template-select.tah-template-select:focus-visible {
 	border: none;
 	outline: none;
-	box-shadow: none !important;
-	color: var(--text-normal) !important;
+	box-shadow: none;
+	color: var(--text-normal);
 }
 
 /* 模板配置 Tab */
