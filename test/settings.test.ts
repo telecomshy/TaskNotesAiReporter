@@ -214,11 +214,50 @@ test("normalizeSettings 保留合法界面语言", () => {
 	assert.equal(normalizeSettings({ uiLanguage: "auto" }).uiLanguage, "auto");
 });
 
-test("normalizeSettings 空或纯空白报告语言回退中文", () => {
-	assert.equal(normalizeSettings({ language: "" }).language, "中文");
-	assert.equal(normalizeSettings({ language: "   " }).language, "中文");
+test("normalizeSettings 空或纯空白报告语言回退英文", () => {
+	assert.equal(normalizeSettings({ language: "" }).language, "English");
+	assert.equal(normalizeSettings({ language: "   " }).language, "English");
 });
 
 test("normalizeSettings 保留自定义报告语言", () => {
-	assert.equal(normalizeSettings({ language: "English" }).language, "English");
+	assert.equal(normalizeSettings({ language: "日本語" }).language, "日本語");
+});
+
+const LEGACY_EXAMPLE_NAME = "周报（示例）";
+const LEGACY_EXAMPLE_CONTENT =
+	"请根据以下任务数据，生成一份工作周报。\n\n报告时间范围：{{range}}\n\n要求：\n- 客观基于给定任务数据，不编造不存在的任务或事实。\n- 语言精炼、条理清晰，适合向上汇报。\n- 使用 Markdown 格式。\n\n任务数据如下：\n{{tasks}}";
+
+test("normalizeSettings 空数据给出英文示例模板与英文报告语言", () => {
+	const settings = normalizeSettings({});
+	assert.equal(settings.language, "English");
+	const tpl = settings.templates.find((t) => t.id === "tpl_weekly_example")!;
+	assert.equal(tpl.name, "Weekly report (example)");
+	assert.ok(tpl.content.includes("{{tasks}}"));
+});
+
+test("normalizeSettings 把未改动的旧中文示例模板迁移为英文", () => {
+	const settings = normalizeSettings({
+		templates: [
+			{ id: "tpl_weekly_example", name: LEGACY_EXAMPLE_NAME, content: LEGACY_EXAMPLE_CONTENT },
+		],
+	});
+	assert.equal(settings.templates[0].name, "Weekly report (example)");
+	assert.ok(!settings.templates[0].content.includes("请根据以下任务数据"));
+	assert.ok(settings.templates[0].content.includes("{{tasks}}"));
+});
+
+test("normalizeSettings 保留用户改过的示例模板", () => {
+	const settings = normalizeSettings({
+		templates: [{ id: "tpl_weekly_example", name: "我的周报", content: "自定义 {{tasks}}" }],
+	});
+	assert.equal(settings.templates[0].name, "我的周报");
+	assert.equal(settings.templates[0].content, "自定义 {{tasks}}");
+});
+
+test("normalizeSettings 不迁移非示例 id 的模板", () => {
+	const settings = normalizeSettings({
+		templates: [{ id: "tpl_a", name: LEGACY_EXAMPLE_NAME, content: LEGACY_EXAMPLE_CONTENT }],
+	});
+	assert.equal(settings.templates[0].name, LEGACY_EXAMPLE_NAME);
+	assert.equal(settings.templates[0].content, LEGACY_EXAMPLE_CONTENT);
 });

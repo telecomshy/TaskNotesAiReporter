@@ -79,7 +79,7 @@ export function renderGeneralTab(container: HTMLElement, ctx: SettingsTabContext
 				.setPlaceholder(t("settings.reportLanguagePlaceholder"))
 				.setValue(ctx.plugin.settings.language)
 				.onChange(async (value) => {
-					ctx.plugin.settings.language = value.trim() || "中文";
+					ctx.plugin.settings.language = value.trim() || "English";
 					await ctx.plugin.saveSettings();
 				})
 		);

@@ -166,14 +166,14 @@ export const DEFAULT_SETTINGS: TaskNotesAIHelperSettings = {
 	reportFolder: "TaskNotes/Reports",
 	dateFields: ["completedDate", "scheduled", "due"],
 	weekStartsOnMonday: true,
-	language: "中文",
+	language: "English",
 	uiLanguage: "auto",
 	templates: [
 		{
 			id: "tpl_weekly_example",
-			name: "周报（示例）",
+			name: "Weekly report (example)",
 			content:
-				"请根据以下任务数据，生成一份工作周报。\n\n报告时间范围：{{range}}\n\n要求：\n- 客观基于给定任务数据，不编造不存在的任务或事实。\n- 语言精炼、条理清晰，适合向上汇报。\n- 使用 Markdown 格式。\n\n任务数据如下：\n{{tasks}}",
+				"Generate a work weekly report from the following task data.\n\nReport period: {{range}}\n\nRequirements:\n- Base the report strictly on the given task data; do not invent tasks or facts.\n- Keep it concise and well-structured, suitable for reporting upward.\n- Use Markdown.\n\nTask data:\n{{tasks}}",
 		},
 	],
 	selectedTemplateId: "",

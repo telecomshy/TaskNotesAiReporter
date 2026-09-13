@@ -8,10 +8,19 @@ import {
 	PRESET_PROVIDERS,
 	type ActiveModelConfig,
 	type ModelProvider,
+	type ReportTemplate,
 	type TaskNotesAIHelperSettings,
 } from "../types";
 
 export type { TaskNotesAIHelperSettings } from "../types";
+
+/** 旧版中文默认示例模板；仅当用户从未改动过它时，一次性迁移为当前英文默认版。 */
+const LEGACY_DEFAULT_TEMPLATE = {
+	id: "tpl_weekly_example",
+	name: "周报（示例）",
+	content:
+		"请根据以下任务数据，生成一份工作周报。\n\n报告时间范围：{{range}}\n\n要求：\n- 客观基于给定任务数据，不编造不存在的任务或事实。\n- 语言精炼、条理清晰，适合向上汇报。\n- 使用 Markdown 格式。\n\n任务数据如下：\n{{tasks}}",
+};
 
 /** 旧版单一模型配置（用于迁移） */
 interface LegacySettings {
@@ -44,7 +53,7 @@ export function normalizeSettings(raw: unknown): TaskNotesAIHelperSettings {
 		settings.weekStartsOnMonday = data.weekStartsOnMonday;
 	}
 	if (typeof data.language === "string") {
-		settings.language = data.language.trim() || "中文";
+		settings.language = data.language.trim() || "English";
 	}
 	if (data.uiLanguage === "auto" || data.uiLanguage === "zh" || data.uiLanguage === "en") {
 		settings.uiLanguage = data.uiLanguage;
@@ -58,6 +67,7 @@ export function normalizeSettings(raw: unknown): TaskNotesAIHelperSettings {
 				content: t.content,
 			}));
 	}
+	settings.templates = migrateExampleTemplate(settings.templates);
 
 	// 上次选择的模板 ID：仅在模板存在时保留，否则回退为不选模板
 	if (typeof data.selectedTemplateId === "string") {
@@ -163,6 +173,19 @@ export function normalizeSettings(raw: unknown): TaskNotesAIHelperSettings {
 	}
 
 	return settings;
+}
+
+/** 把未被用户改动的旧中文示例模板迁移为当前英文默认版；改过的模板原样保留。 */
+function migrateExampleTemplate(templates: ReportTemplate[]): ReportTemplate[] {
+	const fresh = DEFAULT_SETTINGS.templates.find((t) => t.id === LEGACY_DEFAULT_TEMPLATE.id);
+	if (!fresh) return templates;
+	return templates.map((t) =>
+		t.id === LEGACY_DEFAULT_TEMPLATE.id &&
+		t.name === LEGACY_DEFAULT_TEMPLATE.name &&
+		t.content === LEGACY_DEFAULT_TEMPLATE.content
+			? { ...t, name: fresh.name, content: fresh.content }
+			: t
+	);
 }
 
 /** 根据设置解析当前生效的 AI 配置（baseUrl/apiKey/model），并携带该模型的自定义参数 */

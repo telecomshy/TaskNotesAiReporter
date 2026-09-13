@@ -109,8 +109,8 @@ export const en = {
 		weekStartsMondayName: "Monday as week start",
 		weekStartsMondayDesc: "When enabled, a week starts on Monday; otherwise on Sunday.",
 		reportLanguageName: "Report language",
-		reportLanguageDesc: "Language used to generate reports, defaults to Chinese.",
-		reportLanguagePlaceholder: "Chinese",
+		reportLanguageDesc: "Language used to generate reports, defaults to English.",
+		reportLanguagePlaceholder: "English",
 		uiLanguageName: "Interface language",
 		uiLanguageDesc:
 			"Language of the plugin interface. \"Auto\" follows Obsidian's display language.",
