@@ -63,8 +63,11 @@ API keys are stored in Obsidian's **SecretStorage**; the plugin's own `data.json
 npm install        # install dependencies
 npm run dev        # watch build
 npm run build      # production build (with type checking)
+npm run deploy     # build, then copy the artifacts into your local test vault
 npm test           # run unit tests
 ```
+
+`npm run deploy` copies `main.js` / `manifest.json` / `styles.css` into the vault's plugin folder (never `data.json`). It finds your vault via `$OBSIDIAN_VAULT`, or the open vault in Obsidian's `obsidian.json`.
 
 Pure logic (date ranges, task filtering, filenames, prompts) lives in `src/core/` and is covered by unit tests.
 

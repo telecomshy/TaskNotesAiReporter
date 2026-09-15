@@ -14,4 +14,4 @@ Read `docs/agents/domain.md` before exploring the codebase or naming domain conc
 
 ### Research notes
 
-When a task asks you to research a topic, save the findings under `docs/research/` (one Markdown file per topic).
+When you research a topic — web fetches, or research delegated to a sub-agent — save the findings under `docs/research/` (one Markdown file per topic), with sources cited and the upstream version pinned.

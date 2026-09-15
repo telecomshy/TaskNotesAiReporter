@@ -7,7 +7,7 @@ import {
 	hydrateTask,
 } from "../src/tasks/repository";
 import { fakeTaskRepository } from "./fakes/taskRepository";
-import { task } from "./fakes/task";
+import { makeTask } from "./fakes/task";
 import type { TaskInfo } from "../src/types";
 
 const baseTask: TaskInfo = {
@@ -23,9 +23,9 @@ const baseTask: TaskInfo = {
 test("createTaskRepository.list 过滤归档与无路径任务", async () => {
 	const repo = createTaskRepository({
 		listTasks: async () => [
-			task({ path: "a" }),
-			task({ path: "b", archived: true }),
-			task({ path: "" }),
+			makeTask({ path: "a" }),
+			makeTask({ path: "b", archived: true }),
+			makeTask({ path: "" }),
 		],
 		readNote: async () => null,
 	});

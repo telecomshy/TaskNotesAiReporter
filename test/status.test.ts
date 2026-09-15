@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { isCompletedStatus, isInProgressStatus, filterTasksBySubset } from "../src/core/status";
-import { task } from "./fakes/task";
+import { makeTask } from "./fakes/task";
 import type { StatusDefinition } from "../src/types";
 
 const statuses: StatusDefinition[] = [
@@ -38,9 +38,9 @@ test("已完成优先于进行中命名冲突", () => {
 
 test("filterTasksBySubset 切出已完成 / 进行中 / 未完成", () => {
 	const tasks = [
-		task({ path: "a", status: "done" }),
-		task({ path: "b", status: "in-progress" }),
-		task({ path: "c", status: "open" }),
+		makeTask({ path: "a", status: "done" }),
+		makeTask({ path: "b", status: "in-progress" }),
+		makeTask({ path: "c", status: "open" }),
 	];
 	assert.deepEqual(
 		filterTasksBySubset(tasks, "completed", statuses).map((t) => t.path),
@@ -57,7 +57,7 @@ test("filterTasksBySubset 切出已完成 / 进行中 / 未完成", () => {
 });
 
 test("无状态目录时全部视为未完成", () => {
-	const tasks = [task({ path: "a", status: "done" })];
+	const tasks = [makeTask({ path: "a", status: "done" })];
 	assert.deepEqual(filterTasksBySubset(tasks, "completed", []), []);
 	assert.equal(filterTasksBySubset(tasks, "open", []).length, 1);
 });

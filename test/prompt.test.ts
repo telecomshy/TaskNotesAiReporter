@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildReportPrompt, formatTaskLine } from "../src/core/prompt";
-import { task as makeTask } from "./fakes/task";
+import { makeTask } from "./fakes/task";
 import type { StatusDefinition, TaskInfo } from "../src/types";
 
 const task: TaskInfo = {
