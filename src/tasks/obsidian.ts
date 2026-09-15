@@ -5,7 +5,7 @@
  */
 
 import { TFile, type App } from "obsidian";
-import type { TaskNotesPublicApi } from "../types";
+import type { StatusDefinition, TaskNotesPublicApi } from "../types";
 import { createTaskRepository, type TaskRepository } from "./repository";
 
 /** 获取 TaskNotes 插件暴露的公开 API；未启用或不可用则返回 null。 */
@@ -38,6 +38,18 @@ export function obsidianTaskRepository(app: App): TaskRepository {
 			if (!(file instanceof TFile)) return null;
 			try {
 				return await app.vault.read(file);
+			} catch {
+				return null;
+			}
+		},
+		listStatuses: async (): Promise<StatusDefinition[] | null> => {
+			const api = getTaskNotesApi(app);
+			if (!api?.catalog) return null;
+			try {
+				return api.catalog.statuses().map((status) => ({
+					value: status.value,
+					isCompleted: status.isCompleted,
+				}));
 			} catch {
 				return null;
 			}

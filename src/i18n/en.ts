@@ -164,7 +164,7 @@ export const en = {
 	template: {
 		heading: "Report templates",
 		intro:
-			"Custom report templates. Each has a title and content; content supports {{tasks}} (task list) and {{range}} (date range). Without a template, only the task list is given to the model.",
+			"Custom report templates. Each has a title and content. Without a template, only the task list is given to the model.",
 		add: "+ Add template",
 		empty: "No templates yet. Click \"Add template\" to create one.",
 		edit: "Edit",
@@ -173,7 +173,8 @@ export const en = {
 		modalNameHeading: "Template title",
 		modalNamePlaceholder: "e.g. Weekly, Monthly, Year-end summary",
 		modalContentHeading: "Template content",
-		modalContentHint: "Placeholders: {{tasks}} (task list), {{range}} (date range)",
+		modalContentHint:
+			"Placeholders: {{tasks}} (all tasks), {{completedTasks}} / {{inProgressTasks}} / {{openTasks}} (status subsets), {{count}} / {{completedCount}} / {{inProgressCount}} / {{openCount}} (counts), {{totalTrackedTime}} (tracked time), {{range}} / {{range.start}} / {{range.end}} (date range), {{today}} (generation date); unrecognized placeholders are kept as-is.",
 		modalContentPlaceholder: "Generate a report from the following tasks…\n\n{{tasks}}",
 		save: "Save",
 		cancel: "Cancel",

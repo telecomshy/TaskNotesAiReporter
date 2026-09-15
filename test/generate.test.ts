@@ -147,6 +147,28 @@ test("模型参数回退：无自带上限用全局", async () => {
 	assert.equal(captured.chatConfig?.maxTokens, 8192);
 });
 
+test("占位符：generate 把状态目录与 now 传给提示词", async () => {
+	const { deps, captured } = setup({
+		repository: fakeTaskRepository({
+			statuses: [{ value: "done", isCompleted: true }],
+		}),
+	});
+	await generateReport(
+		baseInput({
+			tasks: [
+				task({ path: "a", title: "A", status: "done" }),
+				task({ path: "b", title: "B", status: "open" }),
+			],
+			templateId: "t1",
+			templates: [{ id: "t1", name: "周报", content: "{{completedTasks}}\n{{today}}" }],
+		}),
+		deps
+	);
+	assert.ok(captured.prompt?.includes("标题：A"));
+	assert.ok(!captured.prompt?.includes("标题：B"));
+	assert.ok(captured.prompt?.includes("2026-09-03"));
+});
+
 test("模板命中：提示词含模板内容", async () => {
 	const { deps, captured } = setup();
 	await generateReport(

@@ -37,6 +37,12 @@ export interface TimeEntry {
 	duration?: number;
 }
 
+/** 任务状态定义（用于把状态归类为已完成 / 进行中 / 未完成） */
+export interface StatusDefinition {
+	value: string;
+	isCompleted?: boolean;
+}
+
 /** TaskNotes 插件实例对外暴露的公开 API（通过 app.plugins.plugins["tasknotes"].api 访问） */
 export interface TaskNotesPublicApi {
 	tasks: {
@@ -65,7 +71,7 @@ export type ReportType = "week" | "month" | "year" | "custom";
 export interface ReportTemplate {
 	id: string; // 唯一标识
 	name: string; // 模板标题
-	content: string; // 模板内容，支持 {{tasks}} 与 {{range}} 占位符
+	content: string; // 模板内容，支持占位符（见模板编辑提示）
 }
 
 /** 单个模型供应商配置 */

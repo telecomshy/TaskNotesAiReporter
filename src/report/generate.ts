@@ -74,7 +74,8 @@ export async function generateReport(
 		return { ok: false, reason: "missing-credentials" };
 	}
 
-	const range = getReportRange(input.tasks, input.weekStartsOnMonday, deps.now());
+	const now = deps.now();
+	const range = getReportRange(input.tasks, input.weekStartsOnMonday, now);
 	const template = input.templates.find((t) => t.id === input.templateId);
 
 	let content: string;
@@ -82,11 +83,14 @@ export async function generateReport(
 		const tasksWithDetails = await Promise.all(
 			input.tasks.map((task) => hydrateTask(deps.repository, task))
 		);
+		const statuses = await deps.repository.statuses();
 		const prompt = buildReportPrompt(tasksWithDetails, {
 			range,
 			type: input.type,
 			language: input.language,
 			templateContent: template?.content,
+			now,
+			statuses,
 		});
 		content = await deps.chat(prompt, {
 			baseUrl: active.baseUrl,

@@ -162,7 +162,7 @@ export const zh: Strings = {
 	template: {
 		heading: "报告模板",
 		intro:
-			"自定义报告模板，每个模板包含标题与内容。内容支持占位符 {{tasks}}（任务列表）与 {{range}}（时间范围）。不选择模板时，仅提供任务列表给模型自由生成。",
+			"自定义报告模板，每个模板包含标题与内容。不选择模板时，仅提供任务列表给模型自由生成。",
 		add: "+ 添加模板",
 		empty: "暂无模板，点击「添加模板」创建。",
 		edit: "编辑",
@@ -171,7 +171,8 @@ export const zh: Strings = {
 		modalNameHeading: "模板标题",
 		modalNamePlaceholder: "如：周报、月报、年终总结",
 		modalContentHeading: "模板内容",
-		modalContentHint: "支持占位符：{{tasks}}（任务列表）、{{range}}（时间范围）",
+		modalContentHint:
+			"支持占位符：{{tasks}}（全部任务）、{{completedTasks}} / {{inProgressTasks}} / {{openTasks}}（状态子集）、{{count}} / {{completedCount}} / {{inProgressCount}} / {{openCount}}（计数）、{{totalTrackedTime}}（总耗时）、{{range}} / {{range.start}} / {{range.end}}（时间范围）、{{today}}（生成日期）；未识别的占位符原样保留。",
 		modalContentPlaceholder: "请根据以下任务数据生成报告…\n\n{{tasks}}",
 		save: "保存",
 		cancel: "取消",

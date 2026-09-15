@@ -38,6 +38,24 @@ test("createTaskRepository.list 在底层不可用时返回 null", async () => {
 	assert.equal(await repo.list(), null);
 });
 
+test("createTaskRepository.statuses 返回状态目录", async () => {
+	const repo = createTaskRepository({
+		listTasks: async () => [],
+		readNote: async () => null,
+		listStatuses: async () => [{ value: "done", isCompleted: true }],
+	});
+	assert.deepEqual(await repo.statuses(), [{ value: "done", isCompleted: true }]);
+});
+
+test("createTaskRepository.statuses 底层不可用时返回空数组", async () => {
+	const repo = createTaskRepository({
+		listTasks: async () => [],
+		readNote: async () => null,
+		listStatuses: async () => null,
+	});
+	assert.deepEqual(await repo.statuses(), []);
+});
+
 test("createTaskRepository.readBody 去掉 frontmatter", async () => {
 	const repo = createTaskRepository({
 		listTasks: async () => [],

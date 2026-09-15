@@ -6,7 +6,7 @@
  * 遵守 ADR-0001：仅通过 TaskNotes 运行时公开 API 读取任务，不改其源码。
  */
 
-import type { TaskInfo } from "../types";
+import type { StatusDefinition, TaskInfo } from "../types";
 
 /** 任务数据访问接口。 */
 export interface TaskRepository {
@@ -14,6 +14,8 @@ export interface TaskRepository {
 	list(): Promise<TaskInfo[] | null>;
 	/** 读取任务笔记正文（已去掉 frontmatter）；笔记不存在时返回空串。 */
 	readBody(path: string): Promise<string>;
+	/** 读取任务状态目录（用于状态子集分类）；不可用时返回空数组。 */
+	statuses(): Promise<StatusDefinition[]>;
 }
 
 /** 底层数据来源（由 adapter 提供；测试中可注入 fake）。 */
@@ -22,6 +24,8 @@ export interface TaskRepositoryDeps {
 	listTasks(): Promise<TaskInfo[] | null>;
 	/** 读取笔记原始内容；文件不存在返回 null。 */
 	readNote(path: string): Promise<string | null>;
+	/** 列出状态目录；不可用返回 null（缺省视为空目录）。 */
+	listStatuses?(): Promise<StatusDefinition[] | null>;
 }
 
 /** 由底层来源构造 TaskRepository。 */
@@ -35,6 +39,9 @@ export function createTaskRepository(deps: TaskRepositoryDeps): TaskRepository {
 		async readBody(path: string): Promise<string> {
 			const raw = await deps.readNote(path);
 			return raw === null ? "" : stripFrontmatter(raw);
+		},
+		async statuses(): Promise<StatusDefinition[]> {
+			return (await deps.listStatuses?.()) ?? [];
 		},
 	};
 }

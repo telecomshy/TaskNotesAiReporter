@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildReportPrompt, formatTaskLine } from "../src/core/prompt";
-import type { TaskInfo } from "../src/types";
+import { task as makeTask } from "./fakes/task";
+import type { StatusDefinition, TaskInfo } from "../src/types";
 
 const task: TaskInfo = {
 	title: "写周报",
@@ -70,6 +71,121 @@ test("buildReportPrompt 模板模式：同样声明输出语言且位于末尾",
 	});
 	assert.ok(prompt.includes("输出语言：English。"), "模板模式也应声明输出语言");
 	assert.ok(prompt.trimEnd().endsWith("输出语言：English。"));
+});
+
+const range = { start: "2026-09-01", end: "2026-09-30" };
+
+const statuses: StatusDefinition[] = [
+	{ value: "open" },
+	{ value: "in-progress" },
+	{ value: "done", isCompleted: true },
+];
+
+test("占位符：{{range.start}} / {{range.end}} 引用起止日期", () => {
+	const prompt = buildReportPrompt([task], {
+		range,
+		type: "month",
+		language: "中文",
+		templateContent: "{{range.start}} ~ {{range.end}}",
+	});
+	assert.ok(prompt.includes("2026-09-01 ~ 2026-09-30"));
+});
+
+test("占位符：{{today}} 取注入的 now", () => {
+	const prompt = buildReportPrompt([task], {
+		range,
+		type: "week",
+		language: "中文",
+		now: new Date(2026, 8, 7),
+		templateContent: "生成于 {{today}}",
+	});
+	assert.ok(prompt.includes("生成于 2026-09-07"));
+});
+
+test("占位符：{{count}} 与各子集计数", () => {
+	const tasks = [
+		makeTask({ path: "a", status: "done" }),
+		makeTask({ path: "b", status: "in-progress" }),
+		makeTask({ path: "c", status: "open" }),
+	];
+	const prompt = buildReportPrompt(tasks, {
+		range,
+		type: "week",
+		language: "中文",
+		statuses,
+		templateContent:
+			"总 {{count}}，完成 {{completedCount}}，进行 {{inProgressCount}}，未完成 {{openCount}}",
+	});
+	assert.ok(prompt.includes("总 3，完成 1，进行 1，未完成 2"));
+});
+
+test("占位符：{{completedTasks}} 只注入已完成任务", () => {
+	const tasks = [
+		makeTask({ path: "a", status: "done" }),
+		makeTask({ path: "b", status: "in-progress" }),
+		makeTask({ path: "c", status: "open" }),
+	];
+	const prompt = buildReportPrompt(tasks, {
+		range,
+		type: "week",
+		language: "中文",
+		statuses,
+		templateContent: "{{completedTasks}}",
+	});
+	assert.ok(prompt.includes("标题：a"));
+	assert.ok(!prompt.includes("标题：b"));
+	assert.ok(!prompt.includes("标题：c"));
+});
+
+test("占位符：{{openTasks}} 含进行中与未开始", () => {
+	const tasks = [
+		makeTask({ path: "a", status: "done" }),
+		makeTask({ path: "b", status: "in-progress" }),
+		makeTask({ path: "c", status: "open" }),
+	];
+	const prompt = buildReportPrompt(tasks, {
+		range,
+		type: "week",
+		language: "中文",
+		statuses,
+		templateContent: "{{openTasks}}",
+	});
+	assert.ok(!prompt.includes("标题：a"));
+	assert.ok(prompt.includes("标题：b"));
+	assert.ok(prompt.includes("标题：c"));
+});
+
+test("占位符：{{totalTrackedTime}} 汇总耗时", () => {
+	const tasks = [makeTask({ path: "a", totalTrackedTime: 90 }), makeTask({ path: "b", totalTrackedTime: 30 })];
+	const prompt = buildReportPrompt(tasks, {
+		range,
+		type: "week",
+		language: "中文",
+		templateContent: "耗时 {{totalTrackedTime}}",
+	});
+	assert.ok(prompt.includes("耗时 2小时"));
+});
+
+test("占位符：大小写不敏感且容许内部空格", () => {
+	const prompt = buildReportPrompt([task], {
+		range,
+		type: "week",
+		language: "中文",
+		templateContent: "{{ RANGE }}|{{COUNT}}|{{ Range.Start }}",
+	});
+	assert.ok(prompt.includes("2026-09-01 至 2026-09-30"));
+	assert.ok(prompt.includes("|1|"));
+	assert.ok(prompt.includes("|2026-09-01"));
+});
+
+test("占位符：未知占位符原样保留", () => {
+	const prompt = buildReportPrompt([task], {
+		range,
+		type: "week",
+		language: "中文",
+		templateContent: "{{Task}} {{nope}}",
+	});
+	assert.ok(prompt.includes("{{Task}} {{nope}}"));
 });
 
 test("formatTaskLine 包含标题与项目", () => {
