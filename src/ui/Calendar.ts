@@ -1,6 +1,8 @@
 /**
  * 月视图日历组件：支持日期区间选择（点起始 → 点结束），高亮区间。
  * 纯 DOM 实现，不依赖第三方库。
+ * 只持有瞬态视图状态（viewYear/viewMonth、start/end/selecting）；
+ * 已提交区间由调用方在构造时注入，快捷按钮改区间时由调用方重建本组件。
  */
 
 import type { DateRange } from "../types";
@@ -24,6 +26,7 @@ export class CalendarWidget {
 		weekStartsOnMonday: boolean,
 		t: Translator,
 		language: UiLanguage,
+		initialRange: DateRange | null,
 		onChange: (range: DateRange | null) => void
 	) {
 		this.containerEl = containerEl;
@@ -31,9 +34,16 @@ export class CalendarWidget {
 		this.t = t;
 		this.language = language;
 		this.onChange = onChange;
-		const now = new Date();
-		this.viewYear = now.getFullYear();
-		this.viewMonth = now.getMonth();
+		if (initialRange) {
+			this.start = this.parse(initialRange.start);
+			this.end = this.parse(initialRange.end);
+			this.viewYear = this.start.getFullYear();
+			this.viewMonth = this.start.getMonth();
+		} else {
+			const now = new Date();
+			this.viewYear = now.getFullYear();
+			this.viewMonth = now.getMonth();
+		}
 	}
 
 	/** 获取当前选中的范围（未选起点则返回 null；仅选起点时返回单日） */
@@ -45,19 +55,11 @@ export class CalendarWidget {
 		return { start: toDateString(s), end: toDateString(e) };
 	}
 
-	/** 由外部设置选中范围（用于快捷按钮回填） */
-	setRange(range: DateRange | null): void {
-		if (!range) {
-			this.start = null;
-			this.end = null;
-			this.selecting = false;
-		} else {
-			this.start = this.parse(range.start);
-			this.end = this.parse(range.end);
-			this.selecting = false;
-			this.viewYear = this.start.getFullYear();
-			this.viewMonth = this.start.getMonth();
-		}
+	/** 清除选中范围，保留当前显示月份（清空区间时用）。 */
+	clearSelection(): void {
+		this.start = null;
+		this.end = null;
+		this.selecting = false;
 		this.render();
 	}
 

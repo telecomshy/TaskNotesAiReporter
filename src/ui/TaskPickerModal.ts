@@ -2,41 +2,35 @@
  * 选择任务窗口（一次性任务选择器）。
  * 分 Tab：按时间 / 按标题。两个 Tab 都是「筛选 → 可勾选 → 加入列表」。
  * 只呈现尚未「已加入」的任务；排除由调用方（主窗口）先行完成。
+ * 本类退化为渲染器：会话状态（Tab / 区间 / 查询 / 勾选）由 pickerSession 拥有。
  */
 
 import { App, Modal } from "obsidian";
 import { CalendarWidget } from "./Calendar";
 import { renderTaskMeta } from "./taskMeta";
-import { computeSelectAllState, initialSelection } from "./taskSelection";
 import {
-	filterTasksByDateRange,
-	filterTasksByTitleQuery,
-	isTitleQueryEmpty,
-	parseTitleQuery,
-	type TitleQuery,
-} from "../core/filter";
+	clearSelection,
+	createSession,
+	isQueryEmpty,
+	parsedQuery,
+	selectAllState,
+	selectedTasks,
+	setAll,
+	setQuery,
+	setRange,
+	switchTab,
+	toggle,
+	visibleTasks,
+	type PickerSession,
+	type PickerTab,
+} from "./pickerSession";
 import { getMonthRange, getQuarterRange, getWeekRange, getYearRange } from "../core/dates";
 import type { DateField, DateRange, TaskInfo } from "../types";
 import type { UiLanguage, Translator } from "../i18n";
 
-type PickMode = { kind: "empty" } | { kind: "range"; range: DateRange };
-type PickerTab = "time" | "title";
-
 export class TaskPickerModal extends Modal {
-	// 按时间
-	private timeMode: PickMode = { kind: "empty" };
-	private timeTasks: TaskInfo[] = [];
+	private session: PickerSession;
 	private calendar!: CalendarWidget;
-
-	// 按标题
-	private keyword = "";
-	private titleTasks: TaskInfo[] = [];
-
-	// 当前 Tab
-	private currentTab: PickerTab = "time";
-
-	// 勾选状态（仅当前 Tab 有效）
-	private checkedPaths = new Set<string>();
 
 	private filterEl!: HTMLElement;
 	private listEl!: HTMLElement;
@@ -47,20 +41,23 @@ export class TaskPickerModal extends Modal {
 	private clearBtn!: HTMLButtonElement;
 	// 标题页：解析提示行（展示输入被解析成哪些关键字/标签/上下文）
 	private parseLabelEl!: HTMLElement;
+	// 时间页：日历容器（快捷按钮改区间时只重建此容器内的日历）
+	private calendarContainer!: HTMLElement;
 
 	// 按标题页的全选复选框
 	private selectAllBox!: HTMLInputElement;
 
 	constructor(
 		app: App,
-		private allTasks: TaskInfo[],
-		private dateFields: DateField[],
+		allTasks: TaskInfo[],
+		dateFields: DateField[],
 		private weekStartsOnMonday: boolean,
 		private t: Translator,
 		private lang: UiLanguage,
 		private onConfirm: (tasks: TaskInfo[]) => void
 	) {
 		super(app);
+		this.session = createSession(allTasks, dateFields);
 	}
 
 	onOpen(): void {
@@ -75,7 +72,7 @@ export class TaskPickerModal extends Modal {
 		this.listEl = contentEl.createDiv({ cls: "tah-task-list tah-picker-list" });
 		this.renderFooter(contentEl);
 
-		this.switchTab("time");
+		this.applyTab("time");
 	}
 
 	onClose(): void {
@@ -92,16 +89,16 @@ export class TaskPickerModal extends Modal {
 		titleBtn.addClass("tah-tab-btn");
 
 		const refreshTabs = () => {
-			timeBtn.toggleClass("tah-tab-active", this.currentTab === "time");
-			titleBtn.toggleClass("tah-tab-active", this.currentTab === "title");
+			timeBtn.toggleClass("tah-tab-active", this.session.tab === "time");
+			titleBtn.toggleClass("tah-tab-active", this.session.tab === "title");
 		};
 
 		timeBtn.addEventListener("click", () => {
-			this.switchTab("time");
+			this.applyTab("time");
 			refreshTabs();
 		});
 		titleBtn.addEventListener("click", () => {
-			this.switchTab("title");
+			this.applyTab("title");
 			refreshTabs();
 		});
 
@@ -109,9 +106,9 @@ export class TaskPickerModal extends Modal {
 		refreshTabs();
 	}
 
-	private switchTab(tab: PickerTab): void {
-		this.currentTab = tab;
-		this.checkedPaths.clear();
+	/** 切换 Tab：改会话 → 重建筛选区 → 重渲染列表。 */
+	private applyTab(tab: PickerTab): void {
+		this.session = switchTab(this.session, tab);
 		this.renderFilter();
 		this.refresh();
 	}
@@ -121,7 +118,7 @@ export class TaskPickerModal extends Modal {
 	private renderFilter(): void {
 		this.filterEl.empty();
 
-		if (this.currentTab === "time") {
+		if (this.session.tab === "time") {
 			this.renderTimeFilter();
 		} else {
 			this.renderTitleFilter();
@@ -130,20 +127,25 @@ export class TaskPickerModal extends Modal {
 
 	private renderTimeFilter(): void {
 		const quickRow = this.filterEl.createDiv({ cls: "tah-quick-row" });
-		const quickButtons: Array<{ label: string; mode: PickMode }> = [
-			{ label: this.t("taskPicker.quickThisWeek"), mode: { kind: "range", range: getWeekRange(new Date(), this.weekStartsOnMonday) } },
-			{ label: this.t("taskPicker.quickThisMonth"), mode: { kind: "range", range: getMonthRange(new Date()) } },
-			{ label: this.t("taskPicker.quickThisQuarter"), mode: { kind: "range", range: getQuarterRange(new Date()) } },
-			{ label: this.t("taskPicker.quickThisYear"), mode: { kind: "range", range: getYearRange(new Date()) } },
-			{ label: this.t("taskPicker.clearRange"), mode: { kind: "empty" } },
+		const quickButtons: Array<{ label: string; range: DateRange | null }> = [
+			{ label: this.t("taskPicker.quickThisWeek"), range: getWeekRange(new Date(), this.weekStartsOnMonday) },
+			{ label: this.t("taskPicker.quickThisMonth"), range: getMonthRange(new Date()) },
+			{ label: this.t("taskPicker.quickThisQuarter"), range: getQuarterRange(new Date()) },
+			{ label: this.t("taskPicker.quickThisYear"), range: getYearRange(new Date()) },
+			{ label: this.t("taskPicker.clearRange"), range: null },
 		];
 		for (const btn of quickButtons) {
 			const el = quickRow.createEl("button", { text: btn.label });
 			el.addClass("tah-quick-btn");
 			el.addEventListener("click", () => {
-				this.timeMode = btn.mode;
-				this.calendar?.setRange(btn.mode.kind === "range" ? btn.mode.range : null);
-				this.checkedPaths.clear();
+				this.session = setRange(this.session, btn.range);
+				if (btn.range) {
+					// 快捷按钮改区间：重建日历以回填新选中范围
+					this.renderCalendar();
+				} else {
+					// 清空区间：原地清选中，保留当前显示月份
+					this.calendar.clearSelection();
+				}
 				this.refresh();
 			});
 		}
@@ -152,18 +154,24 @@ export class TaskPickerModal extends Modal {
 		this.labelEl = rangeRow.createDiv({ cls: "tah-range-label" });
 		this.createClearButton(rangeRow);
 
-		const calendarContainer = this.filterEl.createDiv({ cls: "tah-calendar-container" });
+		this.calendarContainer = this.filterEl.createDiv({ cls: "tah-calendar-container" });
+		this.renderCalendar();
+	}
+
+	/** 重建日历（用会话里已提交的区间作初值）。 */
+	private renderCalendar(): void {
+		this.calendarContainer.empty();
 		this.calendar = new CalendarWidget(
-			calendarContainer,
+			this.calendarContainer,
 			this.weekStartsOnMonday,
 			this.t,
 			this.lang,
+			this.session.range,
 			(range) => {
-				if (range) {
-					this.timeMode = { kind: "range", range };
-					this.checkedPaths.clear();
-					this.refresh();
-				}
+				if (!range) return;
+				this.session = setRange(this.session, range);
+				// 日历自身点击：只刷列表与标签，不重建日历（重建会打断两点选择）
+				this.refresh();
 			}
 		);
 		this.calendar.render();
@@ -173,10 +181,9 @@ export class TaskPickerModal extends Modal {
 		const searchRow = this.filterEl.createDiv({ cls: "tah-search-row" });
 		this.searchInput = searchRow.createEl("input", { type: "text", placeholder: this.t("taskPicker.searchPlaceholder") });
 		this.searchInput.addClass("tah-search-input");
-		this.searchInput.value = this.keyword;
+		this.searchInput.value = this.session.query;
 		this.searchInput.addEventListener("input", () => {
-			this.keyword = this.searchInput.value;
-			this.checkedPaths.clear();
+			this.session = setQuery(this.session, this.searchInput.value);
 			this.refresh();
 		});
 
@@ -187,10 +194,7 @@ export class TaskPickerModal extends Modal {
 		this.selectAllBox = allLabel.createEl("input", { type: "checkbox" });
 		allLabel.createSpan({ text: this.t("taskPicker.selectAll") });
 		this.selectAllBox.addEventListener("change", () => {
-			for (const task of this.titleTasks) {
-				if (this.selectAllBox.checked) this.checkedPaths.add(task.path);
-				else this.checkedPaths.delete(task.path);
-			}
+			this.session = setAll(this.session, this.selectAllBox.checked);
 			this.renderList();
 		});
 		this.labelEl = left.createDiv({ cls: "tah-range-label" });
@@ -215,77 +219,49 @@ export class TaskPickerModal extends Modal {
 
 	// ===== 数据与展示 =====
 
-	private getDisplayedTasks(): TaskInfo[] {
-		if (this.currentTab === "time") return this.timeTasks;
-		return this.titleTasks;
-	}
-
-	/** 清空当前展示任务的勾选（随后刷新列表与按钮状态）。 */
-	private clearSelection(): void {
-		for (const task of this.getDisplayedTasks()) this.checkedPaths.delete(task.path);
-		this.renderList();
-	}
-
 	/** 创建「清空选择」按钮并绑定点击。 */
 	private createClearButton(parent: HTMLElement): void {
 		this.clearBtn = parent.createEl("button", { text: this.t("taskPicker.clearSelection"), cls: "tah-picker-clear" });
-		this.clearBtn.addEventListener("click", () => this.clearSelection());
+		this.clearBtn.addEventListener("click", () => {
+			this.session = clearSelection(this.session);
+			this.renderList();
+		});
 	}
 
 	private updateLabel(): void {
 		if (!this.labelEl) return;
-		if (this.currentTab === "time") {
-			if (this.timeMode.kind === "empty") {
+		if (this.session.tab === "time") {
+			if (this.session.range === null) {
 				this.labelEl.textContent = this.t("taskPicker.noDate");
 			} else {
 				this.labelEl.textContent = this.t("taskPicker.currentFilter", {
-					start: this.timeMode.range.start,
-					end: this.timeMode.range.end,
+					start: this.session.range.start,
+					end: this.session.range.end,
 				});
 			}
 		} else {
-			const query = parseTitleQuery(this.keyword);
-			if (isTitleQueryEmpty(query)) {
-				this.labelEl.textContent = this.t("taskPicker.allTasks", {
-					count: this.titleTasks.length,
-				});
+			const count = visibleTasks(this.session).length;
+			if (isQueryEmpty(this.session)) {
+				this.labelEl.textContent = this.t("taskPicker.allTasks", { count });
 			} else {
 				this.labelEl.textContent = this.t("taskPicker.searchResult", {
-					query: this.keyword.trim(),
-					count: this.titleTasks.length,
+					query: this.session.query.trim(),
+					count,
 				});
 			}
 		}
 	}
 
 	private refresh(): void {
-		if (this.currentTab === "time") {
-			if (this.timeMode.kind === "empty") {
-				this.timeTasks = [];
-			} else {
-				this.timeTasks = filterTasksByDateRange(
-					this.allTasks,
-					this.timeMode.range,
-					this.dateFields
-				);
-			}
-			// 默认全选
-			this.checkedPaths = initialSelection(this.timeTasks, true);
-		} else {
-			const query = parseTitleQuery(this.keyword);
-			this.titleTasks = filterTasksByTitleQuery(this.allTasks, query);
-			// 按标题页：默认都不勾选，由用户通过「全选」或单个勾选自行选择
-			this.checkedPaths = initialSelection(this.titleTasks, false);
-			this.updateParseLabel(query);
-		}
-
+		if (this.session.tab === "title") this.updateParseLabel();
 		this.updateLabel();
 		this.renderList();
 	}
 
 	/** 更新标题页的解析提示行：展示输入被解析成哪些条件。 */
-	private updateParseLabel(query: TitleQuery): void {
+	private updateParseLabel(): void {
 		if (!this.parseLabelEl) return;
+		const query = parsedQuery(this.session);
 		const parts: string[] = [];
 		if (query.keywords.length > 0)
 			parts.push(this.t("taskPicker.parseKeywords", { value: query.keywords.join(" ") }));
@@ -306,11 +282,11 @@ export class TaskPickerModal extends Modal {
 
 	private renderList(): void {
 		this.listEl.empty();
-		const tasks = this.getDisplayedTasks();
+		const tasks = visibleTasks(this.session);
 
 		if (tasks.length === 0) {
 			const emptyText =
-				this.currentTab === "time" && this.timeMode.kind === "empty"
+				this.session.tab === "time" && this.session.range === null
 					? this.t("taskPicker.emptyPickRange")
 					: this.t("taskPicker.emptyNoTasks");
 			this.listEl.createDiv({ text: emptyText, cls: "tah-empty" });
@@ -321,13 +297,9 @@ export class TaskPickerModal extends Modal {
 
 			const checkbox = item.createEl("input", { type: "checkbox" });
 			checkbox.addClass("tah-task-checkbox");
-			checkbox.checked = this.checkedPaths.has(task.path);
+			checkbox.checked = this.session.checked.has(task.path);
 			checkbox.addEventListener("change", () => {
-				if (checkbox.checked) {
-					this.checkedPaths.add(task.path);
-				} else {
-					this.checkedPaths.delete(task.path);
-				}
+				this.session = toggle(this.session, task.path);
 				this.updateConfirmState();
 			});
 
@@ -342,21 +314,21 @@ export class TaskPickerModal extends Modal {
 
 	private updateConfirmState(): void {
 		if (!this.confirmBtn) return;
-		const count = this.checkedPaths.size;
+		const count = selectedTasks(this.session).length;
 		this.confirmBtn.setText(this.t("taskPicker.join", { count }));
 		this.confirmBtn.disabled = count === 0;
 		if (this.clearBtn) this.clearBtn.disabled = count === 0;
 
 		// 按标题页：同步「全选」复选框状态
-		if (this.currentTab === "title" && this.selectAllBox) {
-			const state = computeSelectAllState(this.titleTasks, this.checkedPaths);
+		if (this.session.tab === "title" && this.selectAllBox) {
+			const state = selectAllState(this.session);
 			this.selectAllBox.checked = state.checked;
 			this.selectAllBox.indeterminate = state.indeterminate;
 		}
 	}
 
 	private confirm(): void {
-		const tasks = this.getDisplayedTasks().filter((t) => this.checkedPaths.has(t.path));
+		const tasks = selectedTasks(this.session);
 		if (tasks.length === 0) return;
 		this.onConfirm(tasks);
 		this.close();
