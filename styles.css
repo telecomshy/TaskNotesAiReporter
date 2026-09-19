@@ -1059,6 +1059,8 @@
 .tah-picker-list {
 	flex: 1 1 auto;
 	min-height: 0;
+	/* 覆盖 .tah-task-list 的 22rem 上限：列表填满弹窗，页脚贴底 */
+	max-height: none;
 	overflow-y: auto;
 	overflow-x: hidden;
 	border: 1px solid var(--background-modifier-border);
