@@ -9,6 +9,7 @@ import { ReportModal } from "./src/ui/ReportModal";
 import { obsidianTaskRepository } from "./src/tasks/obsidian";
 import { normalizeSettings, type TaskNotesAIHelperSettings } from "./src/settings/logic";
 import { importPendingSecrets } from "./src/settings/secrets";
+import { createProviderSettings, type ProviderSettings } from "./src/settings/providerSettings";
 import {
 	BUNDLES,
 	createTranslator,
@@ -19,6 +20,8 @@ import {
 
 export default class TaskNotesAIHelperPlugin extends Plugin {
 	settings: TaskNotesAIHelperSettings;
+	/** 供应商配置门面：命令转移、当前模型解析与密钥读取（见 src/settings/providerSettings.ts）。 */
+	providers!: ProviderSettings;
 	/** 当前界面语言的翻译器；由 `applyLanguage` 依据设置与 Obsidian 语言解析。 */
 	t: Translator = createTranslator(BUNDLES.en);
 	/** 当前解析出的界面语言。 */
@@ -66,6 +69,21 @@ export default class TaskNotesAIHelperPlugin extends Plugin {
 		});
 		this.settings = settings;
 		if (changed) await this.saveSettings();
+
+		this.providers = createProviderSettings({
+			getState: () => ({
+				providers: this.settings.providers,
+				activeProviderId: this.settings.activeProviderId,
+				activeModel: this.settings.activeModel,
+			}),
+			commit: (state) => {
+				this.settings.providers = state.providers;
+				this.settings.activeProviderId = state.activeProviderId;
+				this.settings.activeModel = state.activeModel;
+				void this.saveSettings();
+			},
+			getSecret: (id) => this.app.secretStorage.getSecret(id),
+		});
 	}
 
 	async saveSettings(): Promise<void> {

@@ -6,14 +6,10 @@
 import { Notice, SecretComponent, Setting } from "obsidian";
 import type { ModelConfig, ModelProvider } from "../types";
 import type { Translator } from "../i18n";
-import { resolveSecretValue } from "./secrets";
 import { listModels, testConnection } from "../ai/client";
 import { describeAIError } from "../ai/errorMessage";
-import { modelsOf, isConfigured, isSelectable, isActiveModel } from "./provider";
+import { modelsOf, isConfigured, isSelectable, isActiveModel } from "./providerSettings";
 import type { SettingsTabContext } from "./index";
-
-/** 新自定义供应商的默认名称：作为持久化数据，保持语言无关，不随界面语言变化。 */
-const DEFAULT_CUSTOM_PROVIDER_NAME = "自定义供应商";
 
 /** 渲染「模型配置」Tab */
 export function renderModelTab(container: HTMLElement, ctx: SettingsTabContext): void {
@@ -77,9 +73,7 @@ function renderActiveModelSection(container: HTMLElement, ctx: SettingsTabContex
 			dropdown.onChange((value) => {
 				const sepIndex = value.indexOf("::");
 				if (sepIndex < 0) return;
-				ctx.plugin.settings.activeProviderId = value.slice(0, sepIndex);
-				ctx.plugin.settings.activeModel = value.slice(sepIndex + 2);
-				void ctx.plugin.saveSettings();
+				ctx.plugin.providers.selectActiveModel(value.slice(0, sepIndex), value.slice(sepIndex + 2));
 				// 刷新以更新模型标签/行的「当前」高亮
 				ctx.refresh();
 			});
@@ -187,7 +181,7 @@ function attachSecretControl(
 
 	const refresh = (secretId: string) => {
 		mask.toggleClass("is-empty", secretId.trim() === "");
-		hint.toggleClass("tah-hidden", !isSecretMissing(ctx, secretId));
+		hint.toggleClass("tah-hidden", !ctx.plugin.providers.isSecretMissing(secretId));
 	};
 	refresh(provider.apiKeySecretId);
 
@@ -200,13 +194,6 @@ function attachSecretControl(
 
 /** Obsidian「密钥存储」设置页的 tab id（内部 API 跳转，见 ADR-0008）。 */
 const SECRET_STORAGE_TAB_ID = "keychain";
-
-/** 所选密钥名在 SecretStorage 中缺失（区别于存在但值为空）。 */
-function isSecretMissing(ctx: SettingsTabContext, secretId: string): boolean {
-	const id = secretId.trim();
-	if (id === "") return false;
-	return ctx.app.secretStorage.getSecret(id) === null;
-}
 
 /** 打开 Obsidian 的「密钥存储」设置页（内部 API 不在公开类型里，见 ADR-0008；带降级提示）。 */
 function openSecretStorage(ctx: SettingsTabContext): void {
@@ -234,11 +221,6 @@ function wireCollapse(header: HTMLElement, body: HTMLElement, arrow: HTMLElement
 	});
 }
 
-/** 把密钥名解析为密钥值；未选或存储中缺失时返回空串。 */
-function resolveSecret(ctx: SettingsTabContext, secretId: string): string {
-	return resolveSecretValue(secretId, (id) => ctx.app.secretStorage.getSecret(id));
-}
-
 /** 预设供应商的密钥变更：保存并更新状态；新选了密钥则自动拉取，清空则清空模型。 */
 async function onPresetSecretChange(
 	card: HTMLElement,
@@ -248,15 +230,12 @@ async function onPresetSecretChange(
 	ctx: SettingsTabContext
 ): Promise<void> {
 	const oldId = provider.apiKeySecretId;
-	provider.apiKeySecretId = value;
-	await ctx.plugin.saveSettings();
+	ctx.plugin.providers.setSecretId(provider.id, value);
 	refreshCardState(card, provider, ctx.plugin.t);
 
 	if (provider.apiKeySecretId && provider.apiKeySecretId !== oldId) {
 		await fetchModels(card, provider, ctx, showModels);
 	} else if (!provider.apiKeySecretId) {
-		provider.models = [];
-		await ctx.plugin.saveSettings();
 		showModels([]);
 		ctx.refresh();
 	}
@@ -269,8 +248,11 @@ async function fetchModelsSilent(
 	ctx: SettingsTabContext
 ): Promise<void> {
 	try {
-		const models = await listModels(provider.baseUrl, resolveSecret(ctx, provider.apiKeySecretId));
-		await applyModels(provider, models, showModels, false, ctx);
+		const models = await listModels(
+			provider.baseUrl,
+			ctx.plugin.providers.secretValue(provider.apiKeySecretId)
+		);
+		applyModels(provider, models, showModels, false, ctx);
 	} catch {
 		// 静默失败：模型保持为空，不显示模型区域
 		showModels([]);
@@ -278,16 +260,15 @@ async function fetchModelsSilent(
 }
 
 /** 应用模型列表到 provider 并更新 UI */
-async function applyModels(
+function applyModels(
 	provider: ModelProvider,
 	models: string[],
 	showModels: (models: string[]) => void,
 	notify: boolean,
 	ctx: SettingsTabContext
-): Promise<void> {
+): void {
 	const t = ctx.plugin.t;
-	provider.models = models;
-	await ctx.plugin.saveSettings();
+	ctx.plugin.providers.applyFetchedModels(provider.id, models);
 	if (models.length > 0) {
 		if (notify) new Notice(t("model.fetched", { count: models.length }));
 		showModels(models);
@@ -388,7 +369,7 @@ async function fetchModels(
 		new Notice(t("model.fetchNeedKey"));
 		return;
 	}
-	const apiKey = resolveSecret(ctx, provider.apiKeySecretId);
+	const apiKey = ctx.plugin.providers.secretValue(provider.apiKeySecretId);
 	if (apiKey === "") {
 		new Notice(t("model.fetchSecretMissing"));
 		return;
@@ -397,8 +378,7 @@ async function fetchModels(
 	try {
 		const models = await listModels(provider.baseUrl, apiKey);
 		if (models.length > 0) {
-			provider.models = models;
-			await ctx.plugin.saveSettings();
+			ctx.plugin.providers.applyFetchedModels(provider.id, models);
 			new Notice(t("model.fetched", { count: models.length }));
 			updateModelCount(card, provider, t);
 			if (showModels) showModels(models);
@@ -432,32 +412,13 @@ function refreshCardState(card: HTMLElement, provider: ModelProvider, t: Transla
 
 /** 添加自定义供应商：直接新增一张卡片，在卡片内维护配置与模型 */
 function addCustomProvider(ctx: SettingsTabContext): void {
-	const newProvider: ModelProvider = {
-		id: `custom_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
-		name: DEFAULT_CUSTOM_PROVIDER_NAME,
-		type: "custom",
-		baseUrl: "",
-		apiKeySecretId: "",
-		models: [],
-		authType: "bearer",
-		customModels: [],
-	};
-	ctx.plugin.settings.providers.push(newProvider);
-	void ctx.plugin.saveSettings();
+	ctx.plugin.providers.addProvider();
 	ctx.refresh();
 }
 
 /** 删除自定义供应商 */
 function deleteCustomProvider(provider: ModelProvider, ctx: SettingsTabContext): void {
-	ctx.plugin.settings.providers = ctx.plugin.settings.providers.filter(
-		(p) => p.id !== provider.id
-	);
-	// 如果删除的是当前选用的供应商，重置选择
-	if (ctx.plugin.settings.activeProviderId === provider.id) {
-		ctx.plugin.settings.activeProviderId = ctx.plugin.settings.providers[0]?.id ?? "";
-		ctx.plugin.settings.activeModel = "";
-	}
-	void ctx.plugin.saveSettings();
+	ctx.plugin.providers.removeProvider(provider.id);
 	ctx.refresh();
 }
 
@@ -506,8 +467,8 @@ function renderCustomProviderCard(
 	nameInput.value = provider.name;
 	nameInput.placeholder = t("model.providerNamePlaceholder");
 	nameInput.addEventListener("change", () => {
-		provider.name = nameInput.value.trim() || DEFAULT_CUSTOM_PROVIDER_NAME;
-		void ctx.plugin.saveSettings();
+		ctx.plugin.providers.setProviderName(provider.id, nameInput.value);
+		nameInput.value = provider.name;
 		const nameEl = card.querySelector(".tah-provider-name");
 		if (nameEl) nameEl.textContent = provider.name;
 	});
@@ -520,8 +481,8 @@ function renderCustomProviderCard(
 	urlInput.value = provider.baseUrl;
 	urlInput.placeholder = "https://api.example.com/v1";
 	urlInput.addEventListener("change", () => {
-		provider.baseUrl = urlInput.value.trim();
-		void ctx.plugin.saveSettings();
+		ctx.plugin.providers.setProviderBaseUrl(provider.id, urlInput.value);
+		urlInput.value = provider.baseUrl;
 		refreshCardState(card, provider, t);
 	});
 
@@ -538,8 +499,7 @@ function renderCustomProviderCard(
 	keyRow.createSpan({ cls: "tah-provider-field-label", text: t("model.apiKeyLabel") });
 	const keyHost = keyRow.createDiv({ cls: "tah-provider-input" });
 	const secret = attachSecretControl(ctx, keyHost, provider, (value) => {
-		provider.apiKeySecretId = value;
-		void ctx.plugin.saveSettings();
+		ctx.plugin.providers.setSecretId(provider.id, value);
 		refreshCardState(card, provider, t);
 	});
 
@@ -549,16 +509,13 @@ function renderCustomProviderCard(
 		keyRow.toggleClass("tah-hidden", provider.authType !== "bearer");
 	};
 	bearerBtn.addEventListener("click", () => {
-		provider.authType = "bearer";
-		void ctx.plugin.saveSettings();
+		ctx.plugin.providers.setAuthType(provider.id, "bearer");
 		updateAuth();
 	});
 	noneBtn.addEventListener("click", () => {
-		provider.authType = "none";
-		provider.apiKeySecretId = "";
+		ctx.plugin.providers.setAuthType(provider.id, "none");
 		secret.refresh("");
 		secret.component.setValue("");
-		void ctx.plugin.saveSettings();
 		updateAuth();
 		refreshCardState(card, provider, t);
 	});
@@ -581,12 +538,7 @@ function renderCustomProviderCard(
 	const addModelBtn = addModelRow.createEl("button", { text: t("model.newModel") });
 	addModelBtn.addClass("tah-add-model-btn");
 	addModelBtn.addEventListener("click", () => {
-		if (!provider.customModels) provider.customModels = [];
-		provider.customModels.push({
-			id: `mc_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
-			modelId: "",
-		});
-		void ctx.plugin.saveSettings();
+		ctx.plugin.providers.addModel(provider.id);
 		renderModelRows();
 		refreshCardState(card, provider, t);
 	});
@@ -623,7 +575,8 @@ function renderCustomModelRow(
 	idInput.value = mc.modelId;
 	idInput.placeholder = "deepseek-v4-pro";
 	idInput.addEventListener("change", () => {
-		mc.modelId = idInput.value.trim();
+		ctx.plugin.providers.renameModel(provider.id, mc.id, idInput.value);
+		idInput.value = mc.modelId;
 		syncCustomModels(provider, card, ctx);
 	});
 
@@ -635,7 +588,9 @@ function renderCustomModelRow(
 	ctxInput.value = mc.contextLength?.toString() ?? "";
 	ctxInput.placeholder = "204800";
 	ctxInput.addEventListener("change", () => {
-		mc.contextLength = parseIntSafe(ctxInput.value);
+		ctx.plugin.providers.setModelParams(provider.id, mc.id, {
+			contextLength: parseIntSafe(ctxInput.value),
+		});
 		syncCustomModels(provider, card, ctx);
 	});
 
@@ -647,7 +602,9 @@ function renderCustomModelRow(
 	maxInput.value = mc.maxTokens?.toString() ?? "";
 	maxInput.placeholder = "65535";
 	maxInput.addEventListener("change", () => {
-		mc.maxTokens = parseIntSafe(maxInput.value);
+		ctx.plugin.providers.setModelParams(provider.id, mc.id, {
+			maxTokens: parseIntSafe(maxInput.value),
+		});
 		syncCustomModels(provider, card, ctx);
 	});
 
@@ -668,7 +625,10 @@ function renderCustomModelRow(
 		new Notice(t("model.testing"));
 		void testConnection({
 			baseUrl: provider.baseUrl.trim(),
-			apiKey: provider.authType === "bearer" ? resolveSecret(ctx, provider.apiKeySecretId) : "",
+			apiKey:
+				provider.authType === "bearer"
+					? ctx.plugin.providers.secretValue(provider.apiKeySecretId)
+					: "",
 			model: modelId,
 			temperature: ctx.plugin.settings.temperature,
 			maxTokens: parseIntSafe(maxInput.value) ?? ctx.plugin.settings.maxTokens,
@@ -686,8 +646,7 @@ function renderCustomModelRow(
 	const delBtn = actions.createEl("button", { text: "✕" });
 	delBtn.addClass("tah-model-del-btn");
 	delBtn.addEventListener("click", () => {
-		provider.customModels = (provider.customModels ?? []).filter((m) => m.id !== mc.id);
-		void ctx.plugin.saveSettings();
+		ctx.plugin.providers.removeModel(provider.id, mc.id);
 		listEl.empty();
 		updateModelCount(card, provider, t);
 		for (const m2 of provider.customModels ?? []) {
@@ -697,13 +656,12 @@ function renderCustomModelRow(
 	});
 }
 
-/** 模型行参数变更或删除后保存并更新状态 */
+/** 模型行参数变更后刷新计数与卡片状态 */
 function syncCustomModels(
 	provider: ModelProvider,
 	card: HTMLElement,
 	ctx: SettingsTabContext
 ): void {
-	void ctx.plugin.saveSettings();
 	updateModelCount(card, provider, ctx.plugin.t);
 	refreshCardState(card, provider, ctx.plugin.t);
 }
@@ -714,8 +672,6 @@ function parseIntSafe(value: string): number | undefined {
 }
 
 function selectModel(providerId: string, model: string, ctx: SettingsTabContext): void {
-	ctx.plugin.settings.activeProviderId = providerId;
-	ctx.plugin.settings.activeModel = model;
-	void ctx.plugin.saveSettings();
+	ctx.plugin.providers.selectActiveModel(providerId, model);
 	ctx.refresh();
 }

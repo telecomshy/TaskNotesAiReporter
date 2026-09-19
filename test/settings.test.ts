@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeSettings, resolveActiveModelConfig } from "../src/settings/logic";
+import { normalizeSettings } from "../src/settings/logic";
 import { PRESET_PROVIDERS } from "../src/types";
 
 /** 只取归一化后的设置本身（迁移密钥由 pendingSecrets 单独测）。 */
@@ -126,75 +126,6 @@ test("normalizeSettings 修正不存在的 activeProviderId", () => {
 	assert.notEqual(settings.activeProviderId, "nonexistent");
 });
 
-test("resolveActiveModelConfig 用密钥名向存储解析出密钥值", () => {
-	const settings = load({
-		providers: [
-			{
-				id: "deepseek",
-				name: "DeepSeek",
-				type: "preset" as const,
-				baseUrl: "https://api.deepseek.com",
-				apiKeySecretId: "my-key",
-				models: ["deepseek-v4-flash"],
-				authType: "bearer" as const,
-			},
-		],
-		activeProviderId: "deepseek",
-		activeModel: "deepseek-v4-flash",
-	});
-	const active = resolveActiveModelConfig(settings, (id) =>
-		id === "my-key" ? "sk-resolved" : null
-	)!;
-	assert.equal(active.baseUrl, "https://api.deepseek.com");
-	assert.equal(active.apiKey, "sk-resolved");
-	assert.equal(active.model, "deepseek-v4-flash");
-});
-
-test("resolveActiveModelConfig 密钥名存在但存储中缺失 → apiKey 为空", () => {
-	const settings = load({
-		providers: [
-			{
-				id: "deepseek",
-				name: "DeepSeek",
-				type: "preset" as const,
-				baseUrl: "https://api.deepseek.com",
-				apiKeySecretId: "gone",
-				models: ["m"],
-				authType: "bearer" as const,
-			},
-		],
-		activeProviderId: "deepseek",
-		activeModel: "m",
-	});
-	const active = resolveActiveModelConfig(settings, () => null)!;
-	assert.equal(active.apiKey, "");
-});
-
-test("resolveActiveModelConfig 未选密钥 → 不查存储且 apiKey 为空", () => {
-	const settings = load({
-		providers: [
-			{
-				id: "deepseek",
-				name: "DeepSeek",
-				type: "preset" as const,
-				baseUrl: "https://api.deepseek.com",
-				apiKeySecretId: "",
-				models: ["m"],
-				authType: "bearer" as const,
-			},
-		],
-		activeProviderId: "deepseek",
-		activeModel: "m",
-	});
-	let calls = 0;
-	const active = resolveActiveModelConfig(settings, () => {
-		calls++;
-		return "x";
-	})!;
-	assert.equal(active.apiKey, "");
-	assert.equal(calls, 0);
-});
-
 test("normalizeBaseUrl 归一化（通过匹配验证）", () => {
 	// 带 /v1 后缀也能匹配到预设
 	const settings = load({
@@ -245,44 +176,6 @@ test("normalizeSettings 保留已存在的 customModels（不重复迁移）", (
 	assert.equal(p.customModels!.length, 1);
 	assert.equal(p.customModels![0].id, "fixed");
 	assert.equal(p.customModels![0].maxTokens, 4096);
-});
-
-test("resolveActiveModelConfig 对自定义供应商提取该模型的独立参数", () => {
-	const providers = [
-		{
-			id: "custom_m",
-			name: "多模型供应商",
-			type: "custom" as const,
-			baseUrl: "https://x.com/v1",
-			apiKey: "sk-x",
-			models: ["small", "large"],
-			authType: "none" as const,
-			customModels: [
-				{ id: "a", modelId: "small", contextLength: 4096, maxTokens: 2048 },
-				{ id: "b", modelId: "large", contextLength: 131072, maxTokens: 65535 },
-			],
-		},
-	];
-	const settings = load({ providers }) as any;
-	settings.activeProviderId = "custom_m";
-
-	const noSecret = () => null;
-
-	settings.activeModel = "small";
-	const small = resolveActiveModelConfig(settings, noSecret)!;
-	assert.equal(small.maxTokens, 2048);
-	assert.equal(small.contextLength, 4096);
-
-	settings.activeModel = "large";
-	const large = resolveActiveModelConfig(settings, noSecret)!;
-	assert.equal(large.maxTokens, 65535);
-	assert.equal(large.contextLength, 131072);
-
-	// 未在 customModels 中匹配的模型，不返回独立参数
-	settings.activeModel = "nonexistent";
-	const none = resolveActiveModelConfig(settings, noSecret)!;
-	assert.equal(none.maxTokens, undefined);
-	assert.equal(none.contextLength, undefined);
 });
 
 test("normalizeSettings 默认界面语言为 auto", () => {

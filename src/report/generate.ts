@@ -6,7 +6,7 @@
  */
 
 import type {
-	ActiveModelConfig,
+	ActiveModelResolution,
 	DateRange,
 	ReportTemplate,
 	ReportType,
@@ -25,7 +25,8 @@ export interface GenerateReportInput {
 	language: string;
 	weekStartsOnMonday: boolean;
 	reportFolder: string;
-	activeModel: ActiveModelConfig | null;
+	/** 供应商模块对当前模型的解析结果：成功给出配置，失败给出原因。 */
+	activeModel: ActiveModelResolution;
 	temperature: number;
 	maxTokens: number;
 	timeoutSeconds: number;
@@ -67,12 +68,13 @@ export async function generateReport(
 	}
 
 	const active = input.activeModel;
-	if (!active || !active.model) {
-		return { ok: false, reason: "no-model" };
+	if (!active.ok) {
+		return {
+			ok: false,
+			reason: active.reason === "missing-credentials" ? "missing-credentials" : "no-model",
+		};
 	}
-	if (!active.baseUrl || !active.apiKey) {
-		return { ok: false, reason: "missing-credentials" };
-	}
+	const config = active.config;
 
 	const now = deps.now();
 	const range = getReportRange(input.tasks, input.weekStartsOnMonday, now);
@@ -93,11 +95,11 @@ export async function generateReport(
 			statuses,
 		});
 		content = await deps.chat(prompt, {
-			baseUrl: active.baseUrl,
-			apiKey: active.apiKey,
-			model: active.model,
+			baseUrl: config.baseUrl,
+			apiKey: config.apiKey,
+			model: config.model,
 			temperature: input.temperature,
-			maxTokens: active.maxTokens ?? input.maxTokens,
+			maxTokens: config.maxTokens ?? input.maxTokens,
 			timeoutSeconds: input.timeoutSeconds,
 		});
 	} catch (error) {

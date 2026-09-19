@@ -20,7 +20,7 @@ function baseInput(over: Partial<GenerateReportInput> = {}): GenerateReportInput
 		language: "中文",
 		weekStartsOnMonday: true,
 		reportFolder: "TaskNotes/Reports",
-		activeModel: { baseUrl: "https://api.example.com", apiKey: "sk", model: "m" },
+		activeModel: { ok: true, config: { baseUrl: "https://api.example.com", apiKey: "sk", model: "m" } },
 		temperature: 0.7,
 		maxTokens: 8192,
 		timeoutSeconds: 30,
@@ -74,13 +74,24 @@ test("无任务 → no-tasks", async () => {
 });
 
 test("未选模型 → no-model", async () => {
-	const result = await generateReport(baseInput({ activeModel: null }), setup().deps);
+	const result = await generateReport(
+		baseInput({ activeModel: { ok: false, reason: "no-model" } }),
+		setup().deps
+	);
+	assert.equal(failure(result).reason, "no-model");
+});
+
+test("无当前供应商 → no-model（并入）", async () => {
+	const result = await generateReport(
+		baseInput({ activeModel: { ok: false, reason: "no-provider" } }),
+		setup().deps
+	);
 	assert.equal(failure(result).reason, "no-model");
 });
 
 test("缺凭证 → missing-credentials", async () => {
 	const result = await generateReport(
-		baseInput({ activeModel: { baseUrl: "", apiKey: "", model: "m" } }),
+		baseInput({ activeModel: { ok: false, reason: "missing-credentials" } }),
 		setup().deps
 	);
 	assert.equal(failure(result).reason, "missing-credentials");
@@ -133,7 +144,10 @@ test("模型参数回退：该模型自带上限优先", async () => {
 	const { deps, captured } = setup();
 	await generateReport(
 		baseInput({
-			activeModel: { baseUrl: "https://x", apiKey: "k", model: "m", maxTokens: 4096 },
+			activeModel: {
+				ok: true,
+				config: { baseUrl: "https://x", apiKey: "k", model: "m", maxTokens: 4096 },
+			},
 			maxTokens: 8192,
 		}),
 		deps

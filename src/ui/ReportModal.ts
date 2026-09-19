@@ -6,7 +6,6 @@
 
 import { App, Modal, Notice, TFile } from "obsidian";
 import type TaskNotesAIHelperPlugin from "../../main";
-import { resolveActiveModelConfig } from "../settings/logic";
 import type { ReportType, TaskInfo } from "../types";
 import type { Translator } from "../i18n";
 import type { TaskRepository } from "../tasks/repository";
@@ -214,9 +213,7 @@ export class ReportModal extends Modal {
 					language: s.language,
 					weekStartsOnMonday: s.weekStartsOnMonday,
 					reportFolder: s.reportFolder,
-					activeModel: resolveActiveModelConfig(s, (id) =>
-						this.app.secretStorage.getSecret(id)
-					),
+					activeModel: this.plugin.providers.resolveActive(),
 					temperature: s.temperature,
 					maxTokens: s.maxTokens,
 					timeoutSeconds: s.timeoutSeconds,

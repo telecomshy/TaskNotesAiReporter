@@ -6,12 +6,11 @@
 import {
 	DEFAULT_SETTINGS,
 	PRESET_PROVIDERS,
-	type ActiveModelConfig,
 	type ModelProvider,
 	type ReportTemplate,
 	type TaskNotesAIHelperSettings,
 } from "../types";
-import { resolveSecretValue, type PendingSecret } from "./secrets";
+import type { PendingSecret } from "./secrets";
 
 export type { TaskNotesAIHelperSettings } from "../types";
 
@@ -219,32 +218,6 @@ function migrateExampleTemplate(templates: ReportTemplate[]): ReportTemplate[] {
 			? { ...t, name: fresh.name, content: fresh.content }
 			: t
 	);
-}
-
-/**
- * 根据设置解析当前生效的 AI 配置（baseUrl/apiKey/model），并携带该模型的自定义参数。
- * 密钥值通过注入的 `getSecret(密钥名)` 从 SecretStorage 解析；未选密钥时不查询，缺失则解析为空串。
- */
-export function resolveActiveModelConfig(
-	settings: TaskNotesAIHelperSettings,
-	getSecret: (id: string) => string | null
-): ActiveModelConfig | null {
-	const provider = settings.providers.find((p) => p.id === settings.activeProviderId);
-	if (!provider) return null;
-	const cfg: ActiveModelConfig = {
-		baseUrl: provider.baseUrl,
-		apiKey: resolveSecretValue(provider.apiKeySecretId, getSecret),
-		model: settings.activeModel,
-	};
-	// 自定义供应商：匹配当前选中模型的行配置，提取其独立参数
-	if (provider.type === "custom" && Array.isArray(provider.customModels)) {
-		const mc = provider.customModels.find((m) => m.modelId === settings.activeModel);
-		if (mc) {
-			cfg.maxTokens = mc.maxTokens;
-			cfg.contextLength = mc.contextLength;
-		}
-	}
-	return cfg;
 }
 
 /** 规范化 base URL（去掉末尾斜杠与 /v1 版本段），用于供应商匹配 */

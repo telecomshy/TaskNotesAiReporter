@@ -1,8 +1,8 @@
 /**
  * 类型定义：TaskNotes 公开 API 的最小类型桩 + 本插件设置类型。
  * 这里只声明本插件实际用到的字段，避免依赖 TaskNotes 源码类型。
- * 设置相关的业务逻辑（normalizeSettings / resolveActiveModelConfig 等）
- * 已迁移到 src/settings/logic.ts。
+ * 设置相关的业务逻辑已迁移：归一化在 src/settings/logic.ts，
+ * 供应商配置与当前模型解析在 src/settings/providerSettings.ts。
  */
 
 import type { UiLanguageSetting } from "./i18n";
@@ -102,6 +102,14 @@ export interface ActiveModelConfig {
 	maxTokens?: number;
 	contextLength?: number;
 }
+
+/** 当前模型无法解析的原因：没有当前供应商 / 没有当前模型 / 缺必填配置或凭据。 */
+export type ActiveModelFailureReason = "no-provider" | "no-model" | "missing-credentials";
+
+/** 当前模型解析结果：成功给出配置，失败给出原因（由供应商模块产出，见 ADR-0010）。 */
+export type ActiveModelResolution =
+	| { ok: true; config: ActiveModelConfig }
+	| { ok: false; reason: ActiveModelFailureReason };
 
 /** 预设供应商（内置，仅需 api key，baseUrl 固定，模型动态拉取） */
 export const PRESET_PROVIDERS: Omit<ModelProvider, "apiKeySecretId" | "authType">[] = [
