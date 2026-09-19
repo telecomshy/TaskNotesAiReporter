@@ -14,7 +14,6 @@ import { generateReport } from "../report/generate";
 import { describeReportFailure } from "../report/errorMessage";
 import { TaskPickerModal } from "./TaskPickerModal";
 import { renderTaskMeta } from "./taskMeta";
-import { getAddableTasks } from "./taskSelection";
 import {
 	applyGenerateButtonState,
 	getGenerateButtonState,
@@ -143,11 +142,11 @@ export class ReportModal extends Modal {
 	}
 
 	private openTaskPicker(): void {
-		const addable = getAddableTasks(this.allTasks, new Set(this.candidateTasks.keys()));
 		new TaskPickerModal(
 			this.app,
-			addable,
+			this.allTasks,
 			this.plugin.settings.dateFields,
+			new Set(this.candidateTasks.keys()),
 			this.plugin.settings.weekStartsOnMonday,
 			this.plugin.t,
 			this.plugin.lang,

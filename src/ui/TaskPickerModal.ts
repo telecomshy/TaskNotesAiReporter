@@ -1,7 +1,7 @@
 /**
  * 选择任务窗口（一次性任务选择器）。
  * 分 Tab：按时间 / 按标题。两个 Tab 都是「筛选 → 可勾选 → 加入列表」。
- * 只呈现尚未「已加入」的任务；排除由调用方（主窗口）先行完成。
+ * 只呈现尚未「已加入」的任务；排除由会话（pickerSession）据已加入集合自行完成。
  * 本类退化为渲染器：会话状态（Tab / 区间 / 查询 / 勾选）由 pickerSession 拥有。
  */
 
@@ -51,13 +51,14 @@ export class TaskPickerModal extends Modal {
 		app: App,
 		allTasks: TaskInfo[],
 		dateFields: DateField[],
+		candidatePaths: Set<string>,
 		private weekStartsOnMonday: boolean,
 		private t: Translator,
 		private lang: UiLanguage,
 		private onConfirm: (tasks: TaskInfo[]) => void
 	) {
 		super(app);
-		this.session = createSession(allTasks, dateFields);
+		this.session = createSession(allTasks, dateFields, candidatePaths);
 	}
 
 	onOpen(): void {

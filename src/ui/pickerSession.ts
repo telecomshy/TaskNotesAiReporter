@@ -17,15 +17,18 @@ import type { DateField, DateRange, TaskInfo } from "../types";
 export type PickerTab = "time" | "title";
 
 /**
- * 会话状态。`allTasks` / `dateFields` 是构造时注入、生命周期内恒定的输入，
+ * 会话状态。`addableTasks` / `dateFields` 是构造时注入、生命周期内恒定的输入，
  * 随会话值携带，供转移内部重算可见任务。
+ *
+ * `addableTasks` 是「全部任务」减去「已加入」后的「可加入」集合，在构造时一次性派生；
+ * 因此会话内的可见 / 可勾选 / 可加入天然不含已加入任务。
  */
 export interface PickerSession {
 	tab: PickerTab;
 	range: DateRange | null;
 	query: string;
 	checked: Set<string>;
-	allTasks: TaskInfo[];
+	addableTasks: TaskInfo[];
 	dateFields: DateField[];
 }
 
@@ -34,9 +37,17 @@ export interface SelectAllState {
 	indeterminate: boolean;
 }
 
-/** 构造初始会话：时间页、无区间、空查询、无勾选。 */
-export function createSession(allTasks: TaskInfo[], dateFields: DateField[]): PickerSession {
-	return { tab: "time", range: null, query: "", checked: new Set(), allTasks, dateFields };
+/**
+ * 构造初始会话：时间页、无区间、空查询、无勾选。
+ * 接收「全部任务 + 已加入路径集合」，派生「可加入」集合。
+ */
+export function createSession(
+	allTasks: TaskInfo[],
+	dateFields: DateField[],
+	candidatePaths: Set<string>
+): PickerSession {
+	const addableTasks = allTasks.filter((task) => !candidatePaths.has(task.path));
+	return { tab: "time", range: null, query: "", checked: new Set(), addableTasks, dateFields };
 }
 
 // ===== 选择器 =====
@@ -45,10 +56,10 @@ export function createSession(allTasks: TaskInfo[], dateFields: DateField[]): Pi
 export function visibleTasks(session: PickerSession): TaskInfo[] {
 	if (session.tab === "time") {
 		return session.range
-			? filterTasksByDateRange(session.allTasks, session.range, session.dateFields)
+			? filterTasksByDateRange(session.addableTasks, session.range, session.dateFields)
 			: [];
 	}
-	return filterTasksByTitleQuery(session.allTasks, parsedQuery(session));
+	return filterTasksByTitleQuery(session.addableTasks, parsedQuery(session));
 }
 
 /** 当前可见且已勾选的任务（「加入」的实际结果）。 */
