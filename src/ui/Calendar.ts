@@ -1,20 +1,29 @@
 /**
  * 月视图日历组件：支持日期区间选择（点起始 → 点结束），高亮区间。
  * 纯 DOM 实现，不依赖第三方库。
- * 只持有瞬态视图状态（viewYear/viewMonth、start/end/selecting）；
+ * 本类退化为渲染器：区间选择规则由 calendarSelection 拥有，这里只持有
+ * 选择值与当前显示月份，把网格单元翻译成日字符串后向纯模块提问并画出来。
  * 已提交区间由调用方在构造时注入，快捷按钮改区间时由调用方重建本组件。
  */
 
 import type { DateRange } from "../types";
 import { toDateString } from "../core/dates";
 import { calendarLabels, type UiLanguage, type Translator } from "../i18n";
+import {
+	clearRange as clearSelectionRange,
+	clickDay,
+	containsDay,
+	emptySelection,
+	isEdgeDay,
+	rangeOf,
+	selectionFromRange,
+	type CalendarSelection,
+} from "./calendarSelection";
 
 export class CalendarWidget {
 	private viewYear: number;
 	private viewMonth: number; // 0-based
-	private start: Date | null = null;
-	private end: Date | null = null;
-	private selecting = false; // 是否已选定起点、正在等待终点
+	private selection: CalendarSelection;
 	private readonly onChange: (range: DateRange | null) => void;
 	private readonly weekStartsOnMonday: boolean;
 	private readonly t: Translator;
@@ -35,76 +44,37 @@ export class CalendarWidget {
 		this.language = language;
 		this.onChange = onChange;
 		if (initialRange) {
-			this.start = this.parse(initialRange.start);
-			this.end = this.parse(initialRange.end);
-			this.viewYear = this.start.getFullYear();
-			this.viewMonth = this.start.getMonth();
+			this.selection = selectionFromRange(initialRange);
+			const [year, month] = this.parseView(initialRange.start);
+			this.viewYear = year;
+			this.viewMonth = month;
 		} else {
+			this.selection = emptySelection();
 			const now = new Date();
 			this.viewYear = now.getFullYear();
 			this.viewMonth = now.getMonth();
 		}
 	}
 
-	/** 获取当前选中的范围（未选起点则返回 null；仅选起点时返回单日） */
-	getRange(): DateRange | null {
-		if (!this.start) return null;
-		const end = this.end ?? this.start;
-		const [s, e] =
-			this.start.getTime() <= end.getTime() ? [this.start, end] : [end, this.start];
-		return { start: toDateString(s), end: toDateString(e) };
-	}
-
 	/** 清除选中范围，保留当前显示月份（清空区间时用）。 */
-	clearSelection(): void {
-		this.start = null;
-		this.end = null;
-		this.selecting = false;
+	clearRange(): void {
+		this.selection = clearSelectionRange(this.selection);
 		this.render();
 	}
 
-	private parse(s: string): Date {
-		const [y, m, d] = s.split("-").map(Number);
-		return new Date(y, m - 1, d);
-	}
-
-	private inSelectedRange(date: Date): boolean {
-		if (!this.start) return false;
-		const end = this.end ?? this.start;
-		const s = this.start.getTime();
-		const e = end.getTime();
-		const lo = Math.min(s, e);
-		const hi = Math.max(s, e);
-		const t = date.getTime();
-		return t >= lo && t <= hi;
-	}
-
-	private isSelectedEdge(date: Date): boolean {
-		if (!this.start) return false;
-		const same = (a: Date, b: Date) =>
-			a.getFullYear() === b.getFullYear() &&
-			a.getMonth() === b.getMonth() &&
-			a.getDate() === b.getDate();
-		if (same(date, this.start)) return true;
-		return this.end ? same(date, this.end) : false;
+	/** 从 YYYY-MM-DD 解析出显示用的年与 0-based 月。 */
+	private parseView(day: string): [number, number] {
+		const [year, month] = day.split("-").map(Number);
+		return [year, month - 1];
 	}
 
 	private handleDayClick(date: Date): void {
-		if (!this.selecting) {
-			// 第一次点击：设为起点，进入等待终点状态
-			this.start = date;
-			this.end = null;
-			this.selecting = true;
-		} else {
-			// 第二次点击：设为终点，完成区间选择
-			this.end = date;
-			this.selecting = false;
-		}
+		this.selection = clickDay(this.selection, toDateString(date));
 		this.render();
-		this.onChange(this.getRange());
+		this.onChange(rangeOf(this.selection));
 	}
 
-	/** 切换到上一月/下一月，并清空选择 */
+	/** 切换到上一月/下一月。只移动显示月份，不动选择。 */
 	private moveMonth(delta: number): void {
 		this.viewMonth += delta;
 		if (this.viewMonth < 0) {
@@ -162,22 +132,19 @@ export class CalendarWidget {
 			grid.createDiv({ cls: "tah-calendar-cell tah-calendar-empty" });
 		}
 		// 当月日期
-		const today = new Date();
+		const today = toDateString(new Date());
 		for (let day = 1; day <= daysInMonth; day++) {
 			const date = new Date(this.viewYear, this.viewMonth, day);
+			const dayString = toDateString(date);
 			const cell = grid.createDiv({ cls: "tah-calendar-cell" });
 			cell.setText(String(day));
-			if (
-				date.getFullYear() === today.getFullYear() &&
-				date.getMonth() === today.getMonth() &&
-				date.getDate() === today.getDate()
-			) {
+			if (dayString === today) {
 				cell.addClass("tah-calendar-today");
 			}
-			if (this.inSelectedRange(date)) {
+			if (containsDay(this.selection, dayString)) {
 				cell.addClass("tah-calendar-selected");
 			}
-			if (this.isSelectedEdge(date)) {
+			if (isEdgeDay(this.selection, dayString)) {
 				cell.addClass("tah-calendar-edge");
 			}
 			cell.addEventListener("click", () => this.handleDayClick(date));

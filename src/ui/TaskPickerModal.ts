@@ -144,7 +144,7 @@ export class TaskPickerModal extends Modal {
 					this.renderCalendar();
 				} else {
 					// 清空区间：原地清选中，保留当前显示月份
-					this.calendar.clearSelection();
+					this.calendar.clearRange();
 				}
 				this.refresh();
 			});
