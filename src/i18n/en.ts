@@ -59,6 +59,9 @@ export const en = {
 		addTasks: "+ Select tasks",
 		appendHint: "Newly selected tasks will be appended to the list.",
 		noTemplate: "No template (default)",
+		extraRequirements: "Extra requirements",
+		extraRequirementsPlaceholder:
+			"One-off instructions for this report only (e.g. tone, length, focus)…",
 		generate: "Generate report",
 		saved: "Report saved: {{path}}",
 		failureNoTasks: "Add tasks before generating a report",

@@ -75,6 +75,55 @@ test("buildReportPrompt 模板模式：同样声明输出语言且位于末尾",
 
 const range = { start: "2026-09-01", end: "2026-09-30" };
 
+test("附加要求：位于正文之后、输出语言行之前", () => {
+	const prompt = buildReportPrompt([task], {
+		range,
+		type: "month",
+		language: "中文",
+		templateContent: "请生成月报。\n\n{{tasks}}",
+		extraRequirements: "请用轻松的语气。",
+	});
+	const extraIndex = prompt.indexOf("请用轻松的语气。");
+	assert.ok(extraIndex > -1, "附加要求应出现在提示词中");
+	assert.ok(prompt.indexOf("请生成月报。") < extraIndex, "附加要求应在正文之后");
+	assert.ok(extraIndex < prompt.indexOf("输出语言：中文。"), "附加要求应在语言行之前");
+	assert.ok(prompt.trimEnd().endsWith("输出语言：中文。"));
+});
+
+test("附加要求：极简模式（无模板）下同样追加", () => {
+	const prompt = buildReportPrompt([task], {
+		range,
+		type: "week",
+		language: "中文",
+		extraRequirements: "请聚焦数据准确性。",
+	});
+	assert.ok(prompt.includes("请聚焦数据准确性。"));
+	assert.ok(prompt.indexOf("请聚焦数据准确性。") < prompt.indexOf("输出语言：中文。"));
+	assert.ok(prompt.trimEnd().endsWith("输出语言：中文。"));
+});
+
+test("附加要求：占位符按字面保留，不参与替换", () => {
+	const prompt = buildReportPrompt([task], {
+		range,
+		type: "week",
+		language: "中文",
+		templateContent: "模板：{{tasks}}",
+		extraRequirements: "请参考 {{tasks}} 的格式。",
+	});
+	assert.ok(prompt.includes("请参考 {{tasks}} 的格式。"), "附加要求中的占位符应原样保留");
+});
+
+test("附加要求：纯空白不追加，与无该字段完全一致", () => {
+	const without = buildReportPrompt([task], { range, type: "week", language: "中文" });
+	const blank = buildReportPrompt([task], {
+		range,
+		type: "week",
+		language: "中文",
+		extraRequirements: "   \n\t ",
+	});
+	assert.equal(blank, without);
+});
+
 const statuses: StatusDefinition[] = [
 	{ value: "open" },
 	{ value: "in-progress" },

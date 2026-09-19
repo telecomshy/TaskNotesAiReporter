@@ -579,6 +579,26 @@
 	gap: 0.6rem;
 }
 
+/* 附加要求：默认折叠，展开后多行输入 */
+.tah-extra-requirements {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.tah-extra-requirements > summary {
+	cursor: pointer;
+	font-size: 0.85rem;
+	color: var(--text-muted);
+	user-select: none;
+}
+
+.tah-extra-requirements-input {
+	width: 100%;
+	box-sizing: border-box;
+	margin-top: 0.4rem;
+	resize: vertical;
+}
+
 /* 快捷按钮 */
 .tah-quick-row {
 	display: flex;

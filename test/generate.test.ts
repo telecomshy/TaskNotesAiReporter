@@ -198,6 +198,19 @@ test("模板命中：提示词含模板内容", async () => {
 	assert.ok(captured.prompt?.includes("请生成："));
 });
 
+test("附加要求：透传到被捕获的提示词", async () => {
+	const { deps, captured } = setup();
+	await generateReport(
+		baseInput({
+			templateId: "t1",
+			templates: [{ id: "t1", name: "周报", content: "请生成：{{tasks}}" }],
+			extraRequirements: "请用轻松的语气。",
+		}),
+		deps
+	);
+	assert.ok(captured.prompt?.includes("请用轻松的语气。"));
+});
+
 test("模板未命中：走极简模式（不含模板内容）", async () => {
 	const { deps, captured } = setup();
 	await generateReport(baseInput({ templateId: "missing", templates: [] }), deps);

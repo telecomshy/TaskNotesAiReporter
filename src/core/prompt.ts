@@ -57,6 +57,8 @@ export interface BuildPromptOptions {
 	type: ReportType;
 	language: string;
 	templateContent?: string; // 模板内容（含占位符）；为空则极简模式
+	/** 本次生成追加在模板之后的额外指令；按字面拼接，不参与占位符替换。纯空白视为缺省。 */
+	extraRequirements?: string;
 	/** 生成时刻，用于 {{today}}；缺省用当前时间。 */
 	now?: Date;
 	/** 状态目录，用于把任务归类为已完成 / 进行中 / 未完成；缺省视为空。 */
@@ -121,7 +123,7 @@ function renderPlaceholders(template: string, values: Record<string, string>): s
  * - 否则（极简模式）：仅提供任务列表与时间范围，让模型自由生成报告。
  */
 export function buildReportPrompt(tasks: TaskInfo[], options: BuildPromptOptions): string {
-	const { range, type, language, templateContent } = options;
+	const { range, type, language, templateContent, extraRequirements } = options;
 	const rangeText = `${range.start} 至 ${range.end}`;
 
 	let body: string;
@@ -136,6 +138,11 @@ export function buildReportPrompt(tasks: TaskInfo[], options: BuildPromptOptions
 			`任务数据如下：`,
 			tasks.map(formatTaskLine).join("\n"),
 		].join("\n");
+	}
+
+	// 本次附加要求按字面追加在正文之后、语言行之前；纯空白等同没有该功能
+	if (extraRequirements && extraRequirements.trim()) {
+		body = `${body}\n\n${extraRequirements}`;
 	}
 
 	// 两种模式统一在末尾声明输出语言（模板模式下同样生效）

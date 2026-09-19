@@ -59,6 +59,8 @@ export const zh: Strings = {
 		addTasks: "+ 选择任务",
 		appendHint: "新选任务将追加到列表。",
 		noTemplate: "无模板（默认）",
+		extraRequirements: "附加要求",
+		extraRequirementsPlaceholder: "仅作用于本次报告的一次性指令（如语气、篇幅、侧重点）…",
 		generate: "生成报告",
 		saved: "报告已保存：{{path}}",
 		failureNoTasks: "请先添加要生成报告的任务",

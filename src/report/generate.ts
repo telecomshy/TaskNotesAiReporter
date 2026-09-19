@@ -22,6 +22,8 @@ export interface GenerateReportInput {
 	type: ReportType;
 	templateId: string;
 	templates: ReportTemplate[];
+	/** 本次生成追加在模板之后的额外指令；纯空白视为缺省。 */
+	extraRequirements?: string;
 	language: string;
 	weekStartsOnMonday: boolean;
 	reportFolder: string;
@@ -94,6 +96,7 @@ export async function generateReport(
 			type: input.type,
 			language: input.language,
 			templateContent: template?.content,
+			extraRequirements: input.extraRequirements,
 			now,
 			statuses,
 		});

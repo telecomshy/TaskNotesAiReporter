@@ -27,6 +27,7 @@ export class ReportModal extends Modal {
 	private listWrapEl!: HTMLElement;
 	private footerEl!: HTMLElement;
 	private generateBtn: HTMLButtonElement | null = null;
+	private extraRequirementsInput: HTMLTextAreaElement | null = null;
 	private generating = false;
 	// 记录并记住上次选择的模板（空字符串表示不选模板，极简模式）
 	private selectedTemplateId = "";
@@ -165,6 +166,17 @@ export class ReportModal extends Modal {
 	private renderFooter(): void {
 		this.footerEl.empty();
 
+		// 左侧：附加要求（默认折叠；仅本次生成有效，每次打开清空）
+		const extraDetails = this.footerEl.createEl("details", { cls: "tah-extra-requirements" });
+		extraDetails.createEl("summary", { text: this.plugin.t("report.extraRequirements") });
+		this.extraRequirementsInput = extraDetails.createEl("textarea");
+		this.extraRequirementsInput.addClass("tah-extra-requirements-input");
+		this.extraRequirementsInput.rows = 3;
+		this.extraRequirementsInput.placeholder = this.plugin.t(
+			"report.extraRequirementsPlaceholder"
+		);
+		this.extraRequirementsInput.value = "";
+
 		// 右侧：模板下拉 + 生成按钮（紧邻）
 		const actions = this.footerEl.createDiv({ cls: "tah-footer-actions" });
 		const templateSelect = actions.createEl("select", { cls: "tah-template-select" });
@@ -207,6 +219,7 @@ export class ReportModal extends Modal {
 					type: this.reportType,
 					templateId: this.selectedTemplateId,
 					templates: s.templates,
+					extraRequirements: this.extraRequirementsInput?.value ?? "",
 					language: s.language,
 					weekStartsOnMonday: s.weekStartsOnMonday,
 					reportFolder: s.reportFolder,
