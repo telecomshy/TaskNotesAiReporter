@@ -175,7 +175,6 @@ export class ReportModal extends Modal {
 		this.extraRequirementsInput.placeholder = this.plugin.t(
 			"report.extraRequirementsPlaceholder"
 		);
-		this.extraRequirementsInput.value = "";
 
 		// 右侧：模板下拉 + 生成按钮（紧邻）
 		const actions = this.footerEl.createDiv({ cls: "tah-footer-actions" });
@@ -219,7 +218,7 @@ export class ReportModal extends Modal {
 					type: this.reportType,
 					templateId: this.selectedTemplateId,
 					templates: s.templates,
-					extraRequirements: this.extraRequirementsInput?.value ?? "",
+					extraRequirements: this.extraRequirementsInput?.value,
 					language: s.language,
 					weekStartsOnMonday: s.weekStartsOnMonday,
 					reportFolder: s.reportFolder,
