@@ -4,7 +4,7 @@
  */
 
 import { requestUrl } from "obsidian";
-import type { RequestFn } from "./client";
+import type { RequestFn } from "./request";
 
 /** 基于 obsidian requestUrl 的默认 HTTP 传输实现 */
 export const requestUrlTransport: RequestFn = async (params) => {

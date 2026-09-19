@@ -3,15 +3,18 @@
  *
  * 本模块（client.ts）不直接静态依赖 obsidian：底层 HTTP 传输通过可注入的
  * RequestFn 提供，默认实现位于 transport.ts（包装 obsidian 的 requestUrl）。
- * 请求参数通过可选参数 request 注入，便于单元测试。
+ * 两个操作共享的请求机制（认证头 / JSON 内容类型 / 超时 / 错误映射）由 ./request
+ * 的 requestJson 统一承担，本模块只描述「请求什么」与「如何读取成功结果」。
  */
 
 import { requestUrlTransport } from "./transport";
 import { buildChatCompletionsUrl, buildModelsUrl } from "../core/aiUrl";
 import { AIClientError } from "./errors";
+import { requestJson, type RequestFn } from "./request";
 
 export { AIClientError };
 export type { AIClientErrorCode, AIClientErrorDetails } from "./errors";
+export type { RequestFn, RequestParams, HttpResponse } from "./request";
 
 export interface ChatMessage {
 	role: "system" | "user" | "assistant";
@@ -27,25 +30,6 @@ export interface AIClientConfig {
 	timeoutSeconds: number;
 }
 
-/** HTTP 响应的最小形态（兼容 obsidian requestUrl 响应） */
-export interface HttpResponse {
-	status: number;
-	json: unknown;
-	text: string;
-}
-
-/** 请求参数（兼容 obsidian requestUrl 参数） */
-export interface RequestParams {
-	url: string;
-	method: "GET" | "POST";
-	headers: Record<string, string>;
-	body?: string;
-	throw: boolean;
-}
-
-/** 可注入的请求函数，便于测试 mock；默认走 obsidian requestUrl（见 transport.ts） */
-export type RequestFn = (params: RequestParams) => Promise<HttpResponse>;
-
 const defaultRequest: RequestFn = requestUrlTransport;
 
 /**
@@ -58,50 +42,20 @@ export async function listModels(
 	timeoutSeconds = 30,
 	request: RequestFn = defaultRequest
 ): Promise<string[]> {
-	const url = buildModelsUrl(baseUrl);
-
-	// 认证头：apiKey 为空即无认证，此时不附带 Authorization
-	const headers: Record<string, string> = {};
-	if (apiKey.trim() !== "") {
-		headers.Authorization = `Bearer ${apiKey}`;
-	}
-
-	let response;
-	try {
-		response = await withTimeout(
-			request({
-				url,
-				method: "GET",
-				headers,
-				throw: false,
-			}),
-			timeoutSeconds * 1000
-		);
-	} catch (error) {
-		if (error instanceof AIClientError) throw error;
-		throw new AIClientError("models.network", { detail: messageOf(error) });
-	}
-
-	if (response.status < 200 || response.status >= 300) {
-		let detail = "";
-		try {
-			detail = extractErrorDetail(response.json, 200);
-		} catch {
-			detail = response.text?.slice(0, 200) ?? "";
-		}
-		throw new AIClientError("models.http", { status: response.status, detail });
-	}
-
-	try {
-		const data = response.json as { data?: Array<{ id?: string }>; models?: Array<{ id?: string }> };
-		const list = data.data ?? data.models ?? [];
-		const ids = list
-			.map((m) => m.id)
-			.filter((id): id is string => typeof id === "string" && id.length > 0);
-		return ids;
-	} catch {
-		throw new AIClientError("models.parse");
-	}
+	return requestJson(
+		{ op: "models", url: buildModelsUrl(baseUrl), method: "GET", apiKey, timeoutSeconds },
+		(json) => {
+			const data = json as {
+				data?: Array<{ id?: string }>;
+				models?: Array<{ id?: string }>;
+			};
+			const list = data.data ?? data.models ?? [];
+			return list
+				.map((m) => m.id)
+				.filter((id): id is string => typeof id === "string" && id.length > 0);
+		},
+		request
+	);
 }
 
 /**
@@ -112,65 +66,29 @@ export async function chatCompletion(
 	messages: ChatMessage[],
 	request: RequestFn = defaultRequest
 ): Promise<string> {
-	const url = buildChatCompletionsUrl(config.baseUrl);
-
-	// 保护：若 maxTokens 超出常见上限（如 DeepSeek 最大 384K），钳制到安全值，
-	// 避免直接请求导致 400 报错。
-	const safeMaxTokens = clampMaxTokens(config.maxTokens);
-
-	let response;
-	try {
-		// 认证头：apiKey 为空即无认证，此时不附带 Authorization
-		const headers: Record<string, string> = {
-			"Content-Type": "application/json",
-		};
-		if (config.apiKey.trim() !== "") {
-			headers.Authorization = `Bearer ${config.apiKey}`;
-		}
-		response = await withTimeout(
-			request({
-				url,
-				method: "POST",
-				headers,
-				body: JSON.stringify({
-					model: config.model,
-					messages,
-					temperature: config.temperature,
-					max_tokens: safeMaxTokens,
-					stream: false,
-				}),
-				throw: false,
+	return requestJson(
+		{
+			op: "chat",
+			url: buildChatCompletionsUrl(config.baseUrl),
+			method: "POST",
+			apiKey: config.apiKey,
+			body: JSON.stringify({
+				model: config.model,
+				messages,
+				temperature: config.temperature,
+				max_tokens: clampMaxTokens(config.maxTokens),
+				stream: false,
 			}),
-			config.timeoutSeconds * 1000
-		);
-	} catch (error) {
-		if (error instanceof AIClientError) throw error;
-		throw new AIClientError("chat.network", { detail: messageOf(error) });
-	}
-
-	if (response.status < 200 || response.status >= 300) {
-		let detail = "";
-		try {
-			detail = extractErrorDetail(response.json, 300);
-		} catch {
-			detail = response.text?.slice(0, 300) ?? "";
-		}
-		throw new AIClientError("chat.http", { status: response.status, detail });
-	}
-
-	try {
-		const data = response.json as {
-			choices?: Array<{ message?: { content?: string } }>;
-		};
-		const content = data.choices?.[0]?.message?.content;
-		if (!content) {
-			throw new AIClientError("chat.empty");
-		}
-		return content;
-	} catch (error) {
-		if (error instanceof AIClientError) throw error;
-		throw new AIClientError("chat.parse");
-	}
+			timeoutSeconds: config.timeoutSeconds,
+		},
+		(json) => {
+			const data = json as { choices?: Array<{ message?: { content?: string } }> };
+			const content = data.choices?.[0]?.message?.content;
+			if (!content) throw new AIClientError("chat.empty");
+			return content;
+		},
+		request
+	);
 }
 
 /** 测试连接：发送一条极简请求以校验配置是否可用。 */
@@ -186,27 +104,4 @@ function clampMaxTokens(maxTokens: number): number {
 	const MAX_SAFE = 384 * 1024; // 384K，DeepSeek 等模型的最大输出上限
 	if (!Number.isFinite(maxTokens) || maxTokens <= 0) return 8192;
 	return Math.min(maxTokens, MAX_SAFE);
-}
-
-function messageOf(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
-}
-
-/** 从 OpenAI 兼容错误响应里取可读信息，取不到则回退到截断的 JSON。 */
-function extractErrorDetail(json: unknown, maxLength: number): string {
-	const body = json as { error?: { message?: string }; message?: string } | null;
-	return body?.error?.message ?? body?.message ?? JSON.stringify(body).slice(0, maxLength);
-}
-
-/** 给 Promise 加超时：超时则抛出 AIClientError。 */
-async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-	let timer: ReturnType<typeof setTimeout> | undefined;
-	const timeout = new Promise<never>((_, reject) => {
-		timer = setTimeout(() => reject(new AIClientError("timeout", { ms })), ms);
-	});
-	try {
-		return await Promise.race([promise, timeout]);
-	} finally {
-		if (timer) clearTimeout(timer);
-	}
 }

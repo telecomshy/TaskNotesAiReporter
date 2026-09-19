@@ -16,8 +16,8 @@ export default defineConfig([
 	},
 	...obsidianmd.configs.recommended,
 	{
-		// client.ts 用全局定时器以保持 Node 测试环境可运行（ADR-0002），豁免 window 定时器规则。
-		files: ["src/ai/client.ts"],
+		// request.ts 用全局定时器以保持 Node 测试环境可运行（ADR-0002），豁免 window 定时器规则。
+		files: ["src/ai/request.ts"],
 		rules: { "obsidianmd/prefer-window-timers": "off" },
 	},
 	{

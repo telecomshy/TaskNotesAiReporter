@@ -27,11 +27,11 @@ _来源：`/improve-codebase-architecture` 巡览的候选 ②，经 `/grill-wit
 9. As an AFK implementing agent, I want test-first development to drive the shared module through that existing interface, so that the tests encode behavior rather than shape.
 10. As a plugin user, I want the same class of failure (bad key, unreachable host, server error, timeout) to read the same way regardless of which operation hit it.
 11. As a plugin user, I want raw server detail (untranslated external text) carried through on failures, so that I can diagnose the real cause.
-12. As a future maintainer, I want to add a third operation by supplying only its URL, method/body, and success parsing, so that I do not re-learn the auth/timeout/error plumbing.
+12. As a future maintainer, I want to add a third operation by supplying its URL, method/body, and success parsing plus its own error code, so that I mostly reuse the auth/timeout/error plumbing instead of re-implementing it.
 13. As a future maintainer, I want the transport seam's data types to live with the transport seam, so that the transport adapter no longer depends on the client module.
 14. As a future maintainer, I want the request module to remain free of Obsidian, so that it stays unit-testable outside the plugin runtime.
 15. As a reviewer, I want the existing public-interface tests to remain green and unchanged, so that the refactor is proven behavior-preserving.
-16. As a reviewer, I want no new domain vocabulary or ADR introduced, because this is an internal reshaping with no user-visible rule change.
+16. As a reviewer, I want no new domain vocabulary and no new ADR added, because this is an internal reshaping with no user-visible rule change.
 17. As a plugin maintainer, I want the operation-scoped error codes preserved, so that existing UI translations keep working without edits.
 18. As a plugin user, I want a model-list failure (e.g. invalid key) to keep its models-specific message.
 19. As a plugin user, I want a chat failure to keep its chat-specific message.
@@ -46,7 +46,7 @@ _来源：`/improve-codebase-architecture` 巡览的候选 ②，经 `/grill-wit
 - **Transport types move to the request module**: the request-function type and its request/response shapes now live with the request seam; the transport adapter and the client import them from there. The client re-exports them where needed for compatibility.
 - **Default request stays at the client boundary**: the client keeps defaulting the request function to the transport implementation. The request module takes the request function as a required argument, so it never statically depends on the transport (and therefore never on Obsidian). This honors ADR-0002.
 - **Unchanged public surface**: the two operations and the connection test keep their current signatures; token clamping stays in the client.
-- **No model change**: no new domain terms, no ADR; the concern is internal.
+- **No model change**: no new domain terms and no new ADR; the concern is internal. (ADR-0002's timeout pointer is updated to follow the timeout into the request module.)
 
 ## Testing Decisions
 
@@ -66,5 +66,5 @@ _来源：`/improve-codebase-architecture` 巡览的候选 ②，经 `/grill-wit
 ## Further Notes
 
 - **Constraint**: the request module stays free of Obsidian so it remains testable in Node — the same purity rule ADR-0002 established for the client.
-- **Behavior-preserving except one internal detail**: error-detail truncation length is unified (the two call sites used different lengths); no user-visible path changes.
+- **Behavior-preserving except one visible delta**: error-detail truncation length is unified to 300 (the two call sites used 200 and 300), so a model-list error can now carry up to 300 characters of server detail instead of 200. No other user-visible path changes.
 - **Related**: ADR-0002 (AI HTTP transport decoupled from Obsidian).

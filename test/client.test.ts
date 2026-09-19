@@ -79,6 +79,15 @@ const config = {
 	timeoutSeconds: 30,
 };
 
+/** 断言 rejection 是给定 code 的 AIClientError。 */
+function assertErrorCode(code: string) {
+	return (e: unknown): boolean => {
+		assert.ok(e instanceof client.AIClientError);
+		assert.equal((e as { code: string }).code, code);
+		return true;
+	};
+}
+
 test("listModels 正常返回模型 ID 列表", async () => {
 	await capture();
 	respond = () => ({ status: 200, json: { data: [{ id: "a" }, { id: "b" }, { id: "" }] } });
@@ -170,6 +179,60 @@ test("chatCompletion 空 choices 抛出 AIClientError", async () => {
 	await assert.rejects(
 		() => client.chatCompletion(config, [{ role: "user", content: "hi" }]),
 		client.AIClientError
+	);
+});
+
+test("chatCompletion 带 JSON 内容类型头", async () => {
+	await capture();
+	respond = () => ({ status: 200, json: { choices: [{ message: { content: "ok" } }] } });
+	await client.chatCompletion(config, [{ role: "user", content: "hi" }]);
+	assert.equal(captured[0].headers["Content-Type"], "application/json");
+});
+
+test("listModels 无请求体不带 Content-Type", async () => {
+	await capture();
+	respond = () => ({ status: 200, json: { data: [] } });
+	await client.listModels("https://x.com", "sk");
+	assert.equal(captured[0].headers["Content-Type"], undefined);
+});
+
+test("空 choices 与解析异常是可区分的两种错误", async () => {
+	await capture();
+	respond = () => ({ status: 200, json: { choices: [] } });
+	await assert.rejects(
+		() => client.chatCompletion(config, [{ role: "user", content: "hi" }]),
+		assertErrorCode("chat.empty")
+	);
+	const malformed = async () => ({ status: 200, json: null, text: "" });
+	await assert.rejects(
+		() => client.chatCompletion(config, [{ role: "user", content: "hi" }], malformed),
+		assertErrorCode("chat.parse")
+	);
+});
+
+test("chatCompletion 响应体不是对象 → AIClientError(chat.parse)", async () => {
+	const request = async () => ({ status: 200, json: null, text: "" });
+	await assert.rejects(
+		() => client.chatCompletion(config, [{ role: "user", content: "hi" }], request),
+		assertErrorCode("chat.parse")
+	);
+});
+
+test("listModels 响应体不是对象 → AIClientError(models.parse)", async () => {
+	const request = async () => ({ status: 200, json: null, text: "" });
+	await assert.rejects(
+		() => client.listModels("https://x.com", "sk", 30, request),
+		assertErrorCode("models.parse")
+	);
+});
+
+test("chatCompletion 网络异常 → AIClientError(chat.network)", async () => {
+	const request = async (): Promise<{ status: number; json: unknown; text: string }> => {
+		throw new Error("boom");
+	};
+	await assert.rejects(
+		() => client.chatCompletion(config, [{ role: "user", content: "hi" }], request),
+		assertErrorCode("chat.network")
 	);
 });
 
