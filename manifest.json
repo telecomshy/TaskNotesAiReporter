@@ -1,7 +1,7 @@
 {
 	"id": "tasknotes-aireporter",
 	"name": "TaskNotes AI Reporter",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"minAppVersion": "1.12.2",
 	"description": "Generate weekly, monthly, yearly, or custom reports from TaskNotes tasks using custom templates and any OpenAI-compatible model.",
 	"author": "telecomshy",
