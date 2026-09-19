@@ -565,9 +565,8 @@
 .tah-modal-footer {
 	flex: 0 0 auto;
 	display: flex;
-	align-items: center;
-	justify-content: flex-end;
-	gap: 1rem;
+	flex-direction: column;
+	gap: 0.75rem;
 	padding-top: 0.75rem;
 	margin-top: 0.75rem;
 	border-top: 1px solid var(--background-modifier-border);
@@ -576,26 +575,28 @@
 .tah-footer-actions {
 	display: flex;
 	align-items: center;
+	justify-content: flex-end;
 	gap: 0.6rem;
 }
 
-/* 附加要求：默认折叠，展开后多行输入 */
+/* 附加要求：标签 + 多行输入，单独一行 */
 .tah-extra-requirements {
-	flex: 1 1 auto;
-	min-width: 0;
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
 }
 
-.tah-extra-requirements > summary {
-	cursor: pointer;
-	font-size: 0.85rem;
+.tah-extra-requirements-label {
+	flex: 0 0 auto;
+	font-size: 0.9rem;
 	color: var(--text-muted);
-	user-select: none;
+	white-space: nowrap;
 }
 
 .tah-extra-requirements-input {
-	width: 100%;
+	flex: 1 1 auto;
+	min-width: 0;
 	box-sizing: border-box;
-	margin-top: 0.4rem;
 	resize: vertical;
 }
 

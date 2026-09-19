@@ -166,17 +166,21 @@ export class ReportModal extends Modal {
 	private renderFooter(): void {
 		this.footerEl.empty();
 
-		// 左侧：附加要求（默认折叠；仅本次生成有效，每次打开清空）
-		const extraDetails = this.footerEl.createEl("details", { cls: "tah-extra-requirements" });
-		extraDetails.createEl("summary", { text: this.plugin.t("report.extraRequirements") });
-		this.extraRequirementsInput = extraDetails.createEl("textarea");
-		this.extraRequirementsInput.addClass("tah-extra-requirements-input");
-		this.extraRequirementsInput.rows = 3;
+		// 附加要求：单独一行，标签 + 多行输入（仅本次生成有效，每次打开为空）
+		const extraLabel = this.footerEl.createEl("label", { cls: "tah-extra-requirements" });
+		extraLabel.createSpan({
+			text: this.plugin.t("report.extraRequirements"),
+			cls: "tah-extra-requirements-label",
+		});
+		this.extraRequirementsInput = extraLabel.createEl("textarea", {
+			cls: "tah-extra-requirements-input",
+		});
+		this.extraRequirementsInput.rows = 2;
 		this.extraRequirementsInput.placeholder = this.plugin.t(
 			"report.extraRequirementsPlaceholder"
 		);
 
-		// 右侧：模板下拉 + 生成按钮（紧邻）
+		// 模板下拉 + 生成按钮（右对齐）
 		const actions = this.footerEl.createDiv({ cls: "tah-footer-actions" });
 		const templateSelect = actions.createEl("select", { cls: "tah-template-select" });
 		templateSelect.createEl("option", {
