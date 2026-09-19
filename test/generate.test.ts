@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
 	generateReport,
 	type GenerateReportDeps,
+	type GenerateReportFailure,
 	type GenerateReportInput,
 	type GenerateReportResult,
 } from "../src/report/generate";
@@ -56,9 +57,9 @@ function setup(over: Partial<GenerateReportDeps> = {}): {
 	return { deps, captured };
 }
 
-function failure(result: GenerateReportResult) {
+function failure(result: GenerateReportResult): GenerateReportFailure {
 	assert.equal(result.ok, false);
-	return result as Extract<GenerateReportResult, { ok: false }>;
+	return result as GenerateReportFailure;
 }
 
 test("成功：返回 path，并保存生成的正文", async () => {
@@ -97,7 +98,7 @@ test("缺凭证 → missing-credentials", async () => {
 	assert.equal(failure(result).reason, "missing-credentials");
 });
 
-test("模型调用失败 → ai-error 且带 message", async () => {
+test("模型调用失败 → ai-error 且带原始 error", async () => {
 	const { deps } = setup({
 		chat: async () => {
 			throw new Error("boom");
@@ -105,7 +106,8 @@ test("模型调用失败 → ai-error 且带 message", async () => {
 	});
 	const result = failure(await generateReport(baseInput(), deps));
 	assert.equal(result.reason, "ai-error");
-	assert.equal(result.message, "boom");
+	assert.ok(result.error instanceof Error);
+	assert.equal(result.error.message, "boom");
 });
 
 test("保存失败 → save-error", async () => {
@@ -116,7 +118,8 @@ test("保存失败 → save-error", async () => {
 	});
 	const result = failure(await generateReport(baseInput(), deps));
 	assert.equal(result.reason, "save-error");
-	assert.equal(result.message, "disk full");
+	assert.ok(result.error instanceof Error);
+	assert.equal(result.error.message, "disk full");
 });
 
 test("时间范围：取任务最早到最晚", async () => {

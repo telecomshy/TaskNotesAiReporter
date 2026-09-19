@@ -7,12 +7,11 @@
 import { App, Modal, Notice, TFile } from "obsidian";
 import type TaskNotesAIHelperPlugin from "../../main";
 import type { ReportType, TaskInfo } from "../types";
-import type { Translator } from "../i18n";
 import type { TaskRepository } from "../tasks/repository";
 import { chatCompletion } from "../ai/client";
-import { describeAIError } from "../ai/errorMessage";
 import { saveReport } from "../report/writer";
-import { generateReport, type GenerateReportFailureReason } from "../report/generate";
+import { generateReport } from "../report/generate";
+import { describeReportFailure } from "../report/errorMessage";
 import { TaskPickerModal } from "./TaskPickerModal";
 import { renderTaskMeta } from "./taskMeta";
 import { getAddableTasks } from "./taskSelection";
@@ -235,7 +234,7 @@ export class ReportModal extends Modal {
 				}
 				this.close();
 			} else {
-				new Notice(failureMessage(result, this.plugin.t));
+				new Notice(describeReportFailure(result, this.plugin.t));
 			}
 		} finally {
 			this.generating = false;
@@ -246,24 +245,5 @@ export class ReportModal extends Modal {
 				);
 			}
 		}
-	}
-}
-
-/** 把生成失败的原因种类映射为用户提示。 */
-function failureMessage(
-	failure: { reason: GenerateReportFailureReason; message?: string; error?: unknown },
-	t: Translator
-): string {
-	switch (failure.reason) {
-		case "no-tasks":
-			return t("report.failureNoTasks");
-		case "no-model":
-			return t("report.failureNoModel");
-		case "missing-credentials":
-			return t("report.failureMissingCredentials");
-		default:
-			return t("report.failureGeneric", {
-				message: describeAIError(failure.error ?? failure.message, t),
-			});
 	}
 }
