@@ -5,7 +5,6 @@
 
 import { Setting } from "obsidian";
 import type { DateField } from "../types";
-import type { UiLanguageSetting } from "../i18n";
 import type { SettingsTabContext } from "./index";
 
 const DATE_FIELD_KEYS: Array<{ value: DateField; key: string }> = [
@@ -27,9 +26,8 @@ export function renderGeneralTab(container: HTMLElement, ctx: SettingsTabContext
 			text
 				.setPlaceholder("TaskNotes/Reports")
 				.setValue(ctx.plugin.settings.reportFolder)
-				.onChange(async (value) => {
-					ctx.plugin.settings.reportFolder = value.trim();
-					await ctx.plugin.saveSettings();
+				.onChange((value) => {
+					ctx.plugin.appSettings.setReportFolder(value);
 				})
 		);
 
@@ -45,16 +43,8 @@ export function renderGeneralTab(container: HTMLElement, ctx: SettingsTabContext
 			.addToggle((toggle) =>
 				toggle
 					.setValue(ctx.plugin.settings.dateFields.includes(option.value))
-					.onChange(async (value) => {
-						const fields = ctx.plugin.settings.dateFields;
-						if (value && !fields.includes(option.value)) {
-							fields.push(option.value);
-						} else if (!value) {
-							const idx = fields.indexOf(option.value);
-							if (idx >= 0) fields.splice(idx, 1);
-						}
-						ctx.plugin.settings.dateFields = fields;
-						await ctx.plugin.saveSettings();
+					.onChange((value) => {
+						ctx.plugin.appSettings.toggleDateField(option.value, value);
 					})
 			);
 	}
@@ -65,9 +55,8 @@ export function renderGeneralTab(container: HTMLElement, ctx: SettingsTabContext
 		.addToggle((toggle) =>
 			toggle
 				.setValue(ctx.plugin.settings.weekStartsOnMonday)
-				.onChange(async (value) => {
-					ctx.plugin.settings.weekStartsOnMonday = value;
-					await ctx.plugin.saveSettings();
+				.onChange((value) => {
+					ctx.plugin.appSettings.setWeekStartsOnMonday(value);
 				})
 		);
 
@@ -78,9 +67,8 @@ export function renderGeneralTab(container: HTMLElement, ctx: SettingsTabContext
 			text
 				.setPlaceholder(t("settings.reportLanguagePlaceholder"))
 				.setValue(ctx.plugin.settings.language)
-				.onChange(async (value) => {
-					ctx.plugin.settings.language = value.trim() || "English";
-					await ctx.plugin.saveSettings();
+				.onChange((value) => {
+					ctx.plugin.appSettings.setReportLanguage(value);
 				})
 		);
 
@@ -94,15 +82,10 @@ export function renderGeneralTab(container: HTMLElement, ctx: SettingsTabContext
 				.addOption("zh", t("settings.uiLanguageZh"))
 				.addOption("en", t("settings.uiLanguageEn"))
 				.setValue(ctx.plugin.settings.uiLanguage)
-				.onChange(async (value) => {
-					ctx.plugin.settings.uiLanguage = toUiLanguageSetting(value);
-					await ctx.plugin.saveSettings();
+				.onChange((value) => {
+					ctx.plugin.appSettings.setUiLanguage(value);
 					ctx.plugin.applyLanguage();
 					ctx.refresh();
 				})
 		);
-}
-
-function toUiLanguageSetting(value: string): UiLanguageSetting {
-	return value === "zh" || value === "en" ? value : "auto";
 }

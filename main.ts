@@ -7,9 +7,10 @@ import { getLanguage, Plugin } from "obsidian";
 import { TaskNotesAIHelperSettingTab } from "./src/settings";
 import { ReportModal } from "./src/ui/ReportModal";
 import { obsidianTaskRepository } from "./src/tasks/obsidian";
-import { normalizeSettings, type TaskNotesAIHelperSettings } from "./src/settings/logic";
-import { importPendingSecrets } from "./src/settings/secrets";
+import type { TaskNotesAIHelperSettings } from "./src/settings/logic";
+import { loadSettings as loadSettingsFromIO } from "./src/settings/loadSettings";
 import { createProviderSettings, type ProviderSettings } from "./src/settings/providerSettings";
+import { createAppSettings, type AppSettings } from "./src/settings/appSettings";
 import {
 	BUNDLES,
 	createTranslator,
@@ -22,6 +23,8 @@ export default class TaskNotesAIHelperPlugin extends Plugin {
 	settings: TaskNotesAIHelperSettings;
 	/** 供应商配置门面：命令转移、当前模型解析与密钥读取（见 src/settings/providerSettings.ts）。 */
 	providers!: ProviderSettings;
+	/** 非供应商设置门面：报告/模板等设置的命令转移与不变式（见 src/settings/appSettings.ts）。 */
+	appSettings!: AppSettings;
 	/** 当前界面语言的翻译器；由 `applyLanguage` 依据设置与 Obsidian 语言解析。 */
 	t: Translator = createTranslator(BUNDLES.en);
 	/** 当前解析出的界面语言。 */
@@ -60,15 +63,12 @@ export default class TaskNotesAIHelperPlugin extends Plugin {
 	}
 
 	async loadSettings(): Promise<void> {
-		const data: unknown = await this.loadData();
-		const { settings: normalized, pendingSecrets } = normalizeSettings(data);
-		// 一次性迁移：把旧版明文密钥导入 SecretStorage，只保留密钥名
-		const { settings, changed } = importPendingSecrets(normalized, pendingSecrets, {
-			get: (id) => this.app.secretStorage.getSecret(id),
-			set: (id, value) => this.app.secretStorage.setSecret(id, value),
+		this.settings = await loadSettingsFromIO({
+			loadRaw: () => this.loadData(),
+			save: (settings) => this.saveData(settings),
+			getSecret: (id) => this.app.secretStorage.getSecret(id),
+			setSecret: (id, value) => this.app.secretStorage.setSecret(id, value),
 		});
-		this.settings = settings;
-		if (changed) await this.saveSettings();
 
 		this.providers = createProviderSettings({
 			getState: () => ({
@@ -83,6 +83,28 @@ export default class TaskNotesAIHelperPlugin extends Plugin {
 				void this.saveSettings();
 			},
 			getSecret: (id) => this.app.secretStorage.getSecret(id),
+		});
+
+		this.appSettings = createAppSettings({
+			getState: () => ({
+				reportFolder: this.settings.reportFolder,
+				dateFields: this.settings.dateFields,
+				weekStartsOnMonday: this.settings.weekStartsOnMonday,
+				language: this.settings.language,
+				uiLanguage: this.settings.uiLanguage,
+				templates: this.settings.templates,
+				selectedTemplateId: this.settings.selectedTemplateId,
+			}),
+			commit: (state) => {
+				this.settings.reportFolder = state.reportFolder;
+				this.settings.dateFields = state.dateFields;
+				this.settings.weekStartsOnMonday = state.weekStartsOnMonday;
+				this.settings.language = state.language;
+				this.settings.uiLanguage = state.uiLanguage;
+				this.settings.templates = state.templates;
+				this.settings.selectedTemplateId = state.selectedTemplateId;
+				void this.saveSettings();
+			},
 		});
 	}
 

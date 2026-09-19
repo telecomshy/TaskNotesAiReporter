@@ -6,7 +6,6 @@
 import { Modal, Notice, type App } from "obsidian";
 import type { ReportTemplate } from "../types";
 import type { Translator } from "../i18n";
-import { genId } from "./logic";
 import type { SettingsTabContext } from "./index";
 
 /** 新建模板的默认名称：作为持久化数据，保持语言无关，不随界面语言变化。 */
@@ -68,10 +67,8 @@ function addTemplate(ctx: SettingsTabContext): void {
 		ctx.app,
 		ctx.plugin.t,
 		{ name: NEW_TEMPLATE_NAME, content: "" },
-		async (name, content) => {
-			const template: ReportTemplate = { id: genId(), name, content };
-			ctx.plugin.settings.templates.push(template);
-			await ctx.plugin.saveSettings();
+		(name, content) => {
+			ctx.plugin.appSettings.addTemplate(name, content);
 			ctx.refresh();
 		}
 	);
@@ -79,8 +76,7 @@ function addTemplate(ctx: SettingsTabContext): void {
 }
 
 function deleteTemplate(id: string, ctx: SettingsTabContext): void {
-	ctx.plugin.settings.templates = ctx.plugin.settings.templates.filter((t) => t.id !== id);
-	void ctx.plugin.saveSettings();
+	ctx.plugin.appSettings.removeTemplate(id);
 	ctx.refresh();
 }
 
@@ -89,10 +85,8 @@ function editTemplate(template: ReportTemplate, ctx: SettingsTabContext): void {
 		ctx.app,
 		ctx.plugin.t,
 		template,
-		async (name, content) => {
-			template.name = name;
-			template.content = content;
-			await ctx.plugin.saveSettings();
+		(name, content) => {
+			ctx.plugin.appSettings.updateTemplate(template.id, name, content);
 			ctx.refresh();
 		}
 	);
