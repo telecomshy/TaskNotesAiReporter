@@ -24,7 +24,7 @@
 8. 作为用户，我想看到任务的完成日期与到期日，以便写进报告。
 9. 作为用户，我想把**同一篇笔记里的多个** Tasks 任务分别加入报告，互不覆盖。
 10. 作为用户，我从报告列表移除一个任务时，不应连带移除同一文件里的其他任务。
-11. 作为用户，我希望任务的「详情」是这条任务本身的文字描述，这样报告有实质内容而不过度冗余。
+11. 作为用户，我希望任务「详情」带上这条 Tasks 行特有的信息（开始 / 取消日期、重复规则、依赖等），而不是与标题重复的同义文字，这样报告有实质内容而不过度冗余。
 12. 作为用户，当我选了 Obsidian Tasks 来源却没启用该插件时，我想看到明确的「未检测到 Obsidian Tasks 插件」提示。
 13. 作为用户，我希望切换来源后，日期口径、报告目录、报告语言等既有设置继续可用。
 14. 作为用户，我希望任务在候选集合里稳定去重，同一任务不会重复出现。
@@ -49,15 +49,19 @@
 
 - 设置新增 `taskSource: "tasknotes" | "obsidian-tasks"`，默认 `"tasknotes"`。
 - `normalizeSettings` 为旧数据补默认值，保证既有用户行为不变。
+- `taskSource` 是**非供应商设置**，按 ADR-0012 经 `appSettings` 门面：加入 `AppState`、新增命令 `setTaskSource` 与门面方法、在 `main.ts` 的 `getState` / `commit` 接线；`generalTab` 经 `plugin.appSettings.setTaskSource(...)` 变更，**不**直接改 `plugin.settings.taskSource`。
 - 设置页「常规配置」Tab 顶部新增「来源」下拉（TaskNotes / Obsidian Tasks）。
 - 来源与 AI「供应商（Provider）」完全正交：来源决定从哪个任务插件读数据，供应商决定用哪个模型生成。
 
-### 读取 seam（已与用户确认，共 2 个接缝）
+### 读取 seam（共 3 个接缝）
 
 1. **既有最高接缝 `TaskRepository`**（`list() / readBody(path) / statuses()`）不变——作为各来源后端的**行为契约**。Tasks 后端整体行为经此契约驱动，与 TaskNotes 后端测试同构（fake 先例 `test/fakes/taskRepository.ts`）。
-2. **新增小接缝：来源 → 适配器工厂**，纯函数 `createTaskRepository(app, source): TaskRepository | null`。来源不可用（插件未启用）返回 `null`，由 UI 提示。挂在 `main.ts` 构造处（当前 `obsidianTaskRepository(this.app)` 所在）。这是「来源切换 / 检测」的**唯一关心点**。
+2. **新增来源工厂**：`createSourceRepository(app, source): TaskRepository`。**恒返回一个 `TaskRepository`，不返回 `null`**；「来源不可用」统一由该后端的 `list()` 返回 `null` 表达——与现有 TaskNotes 后端 `obsidianTaskRepository` 的行为一致，`ReportModal.onOpen` 现有的 `tasks === null` 分支无需新增 null-repo 处理。挂在 `main.ts` 构造处（当前 `obsidianTaskRepository(this.app)` 所在）。这是「来源切换 / 检测」的**唯一关心点**。
+3. **新增可注入的 Tasks 后端构造**：`createTasksRepository(deps)`，`deps = { listLines(): Promise<RawTaskLine[] | null>; readNote(path): Promise<string | null> }`。把「扫 vault」与「读文件」两个 Obsidian 触碰点注入，使 `list() / readBody() / statuses()` 的行为可在 Node 用假 deps 测试（同 `TaskRepositoryDeps` 先例）。`createSourceRepository` 负责把真实的 metadataCache 扫描 / vault 读取接上。
 
 > 刻意**不**改 `TaskRepository` seam 的形态（旧规格提议的 `list()+hydrate`），以避免波及报告生成等全部调用方——本方案把来源差异全部收进适配器。
+>
+> **命名（避坑）**：既有 `src/tasks/repository.ts` 已导出 `createTaskRepository(deps)`（底层 deps → repo 的通用包装，被 `src/tasks/obsidian.ts` 与 `test/repository.test.ts` 占用）。新来源工厂必须用**不同名字**（`createSourceRepository`），不得复用 `createTaskRepository`。
 
 ### 任务身份（相对旧规格的轻量化选择）
 
@@ -73,7 +77,7 @@
 - Tasks 后端**自己**遍历 `app.vault.getMarkdownFiles()`，借助 `app.metadataCache` 识别带复选框的清单行，按行号读取原文并解析成插件统一任务模型。
 - 不依赖 Tasks 插件的内部 `getTasks()`——它是非公开、跨版本易变的（官方 `apiV1` 也没有 `list`/搜索 API，见上游 issue #2459）。
 - 不使用 Tasks 的 `apiV1`（创建 / 编辑 / 切换任务），插件只读。
-- 插件未启用：来源工厂返回 `null` → UI 提示「未检测到 Obsidian Tasks 插件」。
+- 插件未启用：`createTasksRepository` 的 `listLines()` 返回 `null` → `list()` 返回 `null` → UI 提示「未检测到 Obsidian Tasks 插件」（来源工厂本身恒返回后端，不返回 null）。
 - 因采用自扫，不存在 Tasks 冷启动「未 Warm 时暂空」问题（metadataCache 始终可用），故不沿用旧规格的有界轮询逻辑。
 
 ### 字段映射（吸收旧规格语义，调合到自扫路径）
@@ -83,17 +87,24 @@ Tasks 后端解析行时转为统一任务模型（自建 symbol → 可读名�
 - `title` = 该行去字段后的描述，**不含标签**（剥掉行尾 `#tag`，对齐 `descriptionWithoutTags` 语义）。
 - `tags` = 行内 `#tag`，**去 `#` 前缀**后存储（与 TaskNotes 存储口径一致）。
 - `status` = 由复选框符号映射为**可读名**：`[ ]`→Todo、`[x]`/`[X]`→Done、`/`→In Progress、`-`→Cancelled（内置默认映射）。
-- `statuses()`（`StatusDefinition[]`）：内置符号 → `{ value: 可读名, isCompleted }`。
+- `statuses()`（`StatusDefinition[]`）：内置符号 → `{ value: 可读名, isCompleted, type }`，`type` 取 Tasks 的 `StatusType` 口径（`TODO` / `DONE` / `IN_PROGRESS` / `CANCELLED` / `NON_TASK`），用于来源无关的「进行中」判定（见下「进行中口径」）。
 - `priority` ＝ 由箭号映射为 `Highest/High/Medium/Normal/Low/Lowest`：`🔺→Highest`、`⏫→High`、`🔼→Medium`、`🔽→Low`、`⏬→Lowest`、缺省→Normal。
 - 日期均格式化 `YYYY-MM-DD`：`completedDate ← ✅`、`due ← 📅`、`scheduled ← ⏳`、`dateCreated ← ➕`。
 - `archived` 恒为 `false`；`contexts`、`projects` 为空数组（Tasks 无对应概念）。
-- 无时间跟踪（`timeEstimate` / `timeEntries` / `totalTrackedTime`）、`dateModified`、`details` 正文文件——这些字段 Tasks 后端不提供（置空），下游自然降级。
+- 无时间跟踪（`timeEstimate` / `timeEntries` / `totalTrackedTime`）、`dateModified`——这些字段 Tasks 后端不提供（置空），下游自然降级。`details` 由 `readBody()` 回填（见下「详情」），并非正文文件。
 
 ### 「已完成」语义（isCompleted 口径）
 
 - Tasks 的 `done` 语义采 `Task.isDone()` 口径：`DONE ∪ CANCELLED ∪ NON_TASK` 都视为"已结束 / 已完成"。
 - 即映射表中 `isCompleted=true` 的符号：`[x]`、`[X]`、`-`（Cancelled）及相关 NON_TASK 符号。
 - 注：Tasks 的 `Status.isCompleted()` 仅对 `DONE` 为真；我们选 `isDone` 口径是与 Tasks 自身 `done` 过滤一致、对用户更直观的选择（grilling Q3 已定）。
+
+### 「进行中」口径（对齐 ADR-0009）
+
+- 现有 `src/core/status.ts` 的「进行中」判定靠**约定值名** `in-progress`（TaskNotes 默认状态值）。Tasks 的状态是**可读名** `In Progress`，小写后为 `in progress`，与该约定失配 → `{{inProgressTasks}}` / `{{inProgressCount}}` 对 Tasks 恒为空 / 0（静默错报告）。
+- 修法（ADR-0009 Consequences 已预告「接入 Tasks 来源时改用其 `status.type`」）：`StatusDefinition` 增加**可选** `type?: string`；`isInProgressStatus` **优先**按 `type === "IN_PROGRESS"` 判定，**回退**到 `value === "in-progress"`（TaskNotes 侧不改，回归安全）。
+- Tasks 内置表：`[ ]`→`{value:"Todo", isCompleted:false, type:"TODO"}`、`[x]`/`[X]`→`{value:"Done", isCompleted:true, type:"DONE"}`、`/`→`{value:"In Progress", isCompleted:false, type:"IN_PROGRESS"}`、`-`→`{value:"Cancelled", isCompleted:true, type:"CANCELLED"}`。
+- `StatusDefinition.type` 只增不改：TaskNotes adapter 仍只填 `{value, isCompleted}`，`isCompleted` 口径不受影响。
 
 ### 自定义状态（首版范围）
 
@@ -102,14 +113,15 @@ Tasks 后端解析行时转为统一任务模型（自建 symbol → 可读名�
 
 ### 详情（readBody 语义）
 
-- Tasks 后端的 `readBody(path)` 直接返回该行解析出的**描述文本**（去字段后的任务文字），不再"按路径读整篇笔记"。
-- `hydrateTask` 会把该描述回填成 `details`（现有 `src/tasks/repository.ts` 的 `hydrateTask` 机制，无需改动）。
-- 明确**不**采用旧规格的"嵌套子项 + 所在小节正文切片"富详情——自扫路径拿不到 `children` / `precedingHeader` 对象，且整篇/小节掏语义复杂、易把非任务文本灌入；本版本以"行描述"为详情，简单、去重安全。
+- Tasks 后端**不**复用 `src/tasks/repository.ts` 里 `createTaskRepository(deps)` 通用包装的 `readBody`（它按 `path` 找文件并 strip frontmatter，而 `path="笔记#行号"` 读不到文件、会返回空串）。Tasks 后端直接实现 `TaskRepository`：`readBody(path)` 解析 `#行号`、经注入的 `readNote` 取该行原文。
+- `readBody(path)` 返回该行的**原始任务行文本**（保留 `🛫 ❌ 🔁 🆔 ⛔ 🏁` 等未结构化字段——Out of Scope 明言它们「最多作为描述原文的一部分」），由现有 `hydrateTask` 回填 `details`（机制无需改动）。选原始行而非「去字段后的描述」：后者与 `title` 几乎逐字相同，报告里会出现两句同义文字；前者额外带上开始 / 取消日期、重复规则、依赖等 Tasks 独有信息，对模型更有增量。
+- 明确**不**采用旧规格的"嵌套子项 + 所在小节正文切片"富详情——自扫路径不做小节正文抽取，避免把非任务文本灌入；本版本以"原始行"为详情，简单、去重安全。
 
 ### 搜索语义（@上下文）
 
 - **必须在 Tasks 来源下处理**，否则是静默坑：TaskNotes 有「上下文（Contexts）」，Tasks 没有。
 - 方案（grilling Q6 已定）：Tasks 来源下，「选择任务-按标题」的 `@上下文` 输入**隐藏 / 禁用**，并提示「当前来源不支持上下文」。
+- **实现为 UI 层禁用，不改 `parseTitleQuery`**：输入被隐藏 / 禁用后用户无法输入 `@`，解析器无需感知来源（保持来源无关的纯函数）。为此需把来源 / 能力标志透传进弹窗：`ReportModal` 从 `plugin.settings.taskSource` 取来源，构造 `TaskPickerModal` 时传下去。
 - `#标签` 与关键字语义保持不变。
 - 明确**不**采用旧规格的"`@x` 退回普通关键字"——那会让用户误以为上下文筛选生效，静默返回错误结果。
 
@@ -121,18 +133,20 @@ Tasks 后端解析行时转为统一任务模型（自建 symbol → 可读名�
 
 ### 配置消费点
 
-- `main.ts` 构造报告弹窗处，以 `createTaskRepository(app, settings.taskSource)` 取代对 `obsidianTaskRepository(app)` 的直接调用。
+- `main.ts` 构造报告弹窗处，以 `createSourceRepository(app, settings.taskSource)` 取代对 `obsidianTaskRepository(app)` 的直接调用。
 
 ## Testing Decisions
 
-- **什么算好测试**：只断言**外部行为**——来源工厂返回的 `TaskRepository` 经 `list()` / `readBody()` / `statuses()` 产出的任务内容、去重身份、状态归类，以及来源不可用返回 `null` 的提示路径；不测适配器内部实现细节。
+- **什么算好测试**：只断言**外部行为**——来源工厂返回的 `TaskRepository` 经 `list()` / `readBody()` / `statuses()` 产出的任务内容、去重身份、状态归类，以及来源不可用（`list()` 返回 `null`）的提示路径；不测适配器内部实现细节。
 - **主 seam**：`TaskRepository`（`list` / `readBody` / `statuses`），沿用 `test/fakes/taskRepository.ts` 的 in-process fake 注入方式（先例：`test/repository.test.ts`、`test/generate.test.ts`）。
-- **新 seam 测试**：`createTaskRepository(app, source)` 用注入的假「行解析器 + vault 扫描」驱动，验证来源=tasknotes/obsidian-tasks 时返回正确后端、来源插件缺失时返回 `null`。
+- **新 seam 测试**：
+  - `createTasksRepository(deps)` 用注入的假 `listLines` / `readNote` 驱动：验证 `list()` 自扫映射、`readBody()` 取行原文、`listLines()` 返回 `null` 时 `list()` 返回 `null`。
+  - `createSourceRepository(app, source)` 用假 app 验证按来源返回对应后端（恒非 `null`）。
 - **纯函数单测**（先例：`test/filter.test.ts`、`test/prompt.test.ts`，逻辑抽到 `src/core` 层、无 Obsidian 依赖）：
   - Tasks 行 → 统一任务模型的映射（标题去标签、标签去 `#`、状态 / 优先级可读名、日期格式化、archived 恒 false、contexts/projects 空）。
   - 内置状态表的 `isCompleted`（isDone 口径：`[x]`/`-` true，`[]`/`/` false）。
+  - 内置状态表的 `type` 驱动「进行中」判定：`/` 命中 `in-progress` 子集；TaskNotes 的 `value="in-progress"` 回退路径保持既有测试通过。
   - 基于 `path="路径#行号"` 的去重 / 候选计算。
-  - 来源感知的查询解析（Tasks 下 `@` 被禁用而非当作普通关键字）。
 - **编排测试**：`generate.ts` 用 fake repository 覆盖（先例 `test/generate.test.ts`），确保换来源后报告生成仍通过。
 - **回归**：TaskNotes 路径的既有测试全程保持通过、预期不变。
 
@@ -160,7 +174,7 @@ Tasks 后端解析行时转为统一任务模型（自建 symbol → 可读名�
 
 ### 风险
 
-- `metadataCache` 是 Obsidian 第一方公开 API，稳定；解析逻辑由我们自维护，不随 Tasks 内部 T Read析版本漂移。风险低于依赖 `getTasks()`。
+- `metadataCache` 是 Obsidian 第一方公开 API，稳定；解析逻辑由我们自维护，不随 Tasks 内部实现版本漂移。风险低于依赖 `getTasks()`。
 - 自扫需自己实现行解析（缩进 / 复选框 / emoji 字段），工作量在解析纯函数及其测试上，均已列出覆盖。
 
 ### 参考资料
