@@ -25,6 +25,7 @@ import {
 	type PickerTab,
 } from "./pickerSession";
 import { getMonthRange, getQuarterRange, getWeekRange, getYearRange } from "../core/dates";
+import { stripContextTokens } from "../core/filter";
 import type { DateField, DateRange, TaskInfo } from "../types";
 import type { UiLanguage, Translator } from "../i18n";
 
@@ -55,6 +56,8 @@ export class TaskPickerModal extends Modal {
 		private weekStartsOnMonday: boolean,
 		private t: Translator,
 		private lang: UiLanguage,
+		/** 当前来源是否支持「上下文（@）」；不支持时禁用 @ 输入。 */
+		private contextSupported: boolean,
 		private onConfirm: (tasks: TaskInfo[]) => void
 	) {
 		super(app);
@@ -180,11 +183,23 @@ export class TaskPickerModal extends Modal {
 
 	private renderTitleFilter(): void {
 		const searchRow = this.filterEl.createDiv({ cls: "tah-search-row" });
-		this.searchInput = searchRow.createEl("input", { type: "text", placeholder: this.t("taskPicker.searchPlaceholder") });
+		this.searchInput = searchRow.createEl("input", {
+			type: "text",
+			placeholder: this.t(
+				this.contextSupported
+					? "taskPicker.searchPlaceholder"
+					: "taskPicker.searchPlaceholderNoContext"
+			),
+		});
 		this.searchInput.addClass("tah-search-input");
 		this.searchInput.value = this.session.query;
 		this.searchInput.addEventListener("input", () => {
-			this.session = setQuery(this.session, this.searchInput.value);
+			// 来源不支持上下文时，在 UI 层去掉 @token（解析器保持来源无关）
+			const value = this.contextSupported
+				? this.searchInput.value
+				: stripContextTokens(this.searchInput.value);
+			if (value !== this.searchInput.value) this.searchInput.value = value;
+			this.session = setQuery(this.session, value);
 			this.refresh();
 		});
 
@@ -203,6 +218,14 @@ export class TaskPickerModal extends Modal {
 		this.createClearButton(actionRow);
 
 		this.parseLabelEl = this.filterEl.createDiv({ cls: "tah-parse-label tah-range-label" });
+
+		// 来源不支持上下文时给出说明（@ 输入已被禁用/去除）
+		if (!this.contextSupported) {
+			this.filterEl.createDiv({
+				text: this.t("taskPicker.contextUnsupported"),
+				cls: "tah-parse-label tah-range-label",
+			});
+		}
 	}
 
 	// ===== 底部 =====

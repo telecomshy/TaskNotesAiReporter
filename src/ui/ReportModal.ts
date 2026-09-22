@@ -63,7 +63,11 @@ export class ReportModal extends Modal {
 		if (tasks === null) {
 			this.listWrapEl.empty();
 			this.listWrapEl.createEl("p", {
-				text: this.plugin.t("report.tasknotesMissing"),
+				text: this.plugin.t(
+					this.plugin.settings.taskSource === "obsidian-tasks"
+						? "report.obsidianTasksMissing"
+						: "report.tasknotesMissing"
+				),
 				cls: "tah-error",
 			});
 			return;
@@ -151,6 +155,8 @@ export class ReportModal extends Modal {
 			this.plugin.settings.weekStartsOnMonday,
 			this.plugin.t,
 			this.plugin.lang,
+			// 「上下文」仅 TaskNotes 来源提供
+			this.plugin.settings.taskSource !== "obsidian-tasks",
 			(tasks) => {
 				for (const task of tasks) {
 					this.candidateTasks.set(task.path, task);

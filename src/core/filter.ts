@@ -81,6 +81,18 @@ export function isTitleQueryEmpty(query: TitleQuery): boolean {
 	return query.keywords.length === 0 && query.tags.length === 0 && query.contexts.length === 0;
 }
 
+/**
+ * 去掉输入中的 `@上下文` token，保留关键字与 `#标签`。
+ * 供不支持上下文的来源（Obsidian Tasks）在 UI 层禁用 `@` 输入；解析器本身保持来源无关。
+ */
+export function stripContextTokens(input: string): string {
+	return input
+		.trim()
+		.split(/\s+/)
+		.filter((token) => token !== "" && !token.startsWith("@"))
+		.join(" ");
+}
+
 /** 标签是否命中查询：支持层级前缀匹配（#work 命中 work 及 work/xxx 子级）。 */
 function matchesTag(taskTag: string, queryTag: string): boolean {
 	return taskTag === queryTag || taskTag.startsWith(queryTag + "/");

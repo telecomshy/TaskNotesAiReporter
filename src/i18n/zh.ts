@@ -52,6 +52,8 @@ export const zh: Strings = {
 		title: "生成任务报告",
 		loading: "正在加载任务…",
 		tasknotesMissing: "未检测到 TaskNotes 插件，请先在 Obsidian 中启用 TaskNotes。",
+		obsidianTasksMissing:
+			"未检测到 Obsidian Tasks 插件，请先在 Obsidian 中启用 Tasks 插件。",
 		joinedTasks: "已加入任务（{{count}}）",
 		clear: "清空",
 		empty: "暂无任务。点击下方「选择任务」筛选并添加任务。",
@@ -82,6 +84,8 @@ export const zh: Strings = {
 		allTasks: "全部任务（共 {{count}} 个）",
 		searchResult: "搜索「{{query}}」（匹配 {{count}} 个）",
 		searchPlaceholder: "关键字 #标签 @上下文（空格分隔）…",
+		searchPlaceholderNoContext: "关键字 #标签（空格分隔）…",
+		contextUnsupported: "当前来源不支持上下文。",
 		selectAll: "全选",
 		parseKeywords: "关键字：{{value}}",
 		parseTags: "标签：{{value}}",
