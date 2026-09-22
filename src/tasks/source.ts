@@ -26,21 +26,3 @@ export function selectSourceRepository(
 ): TaskRepository {
 	return source === "obsidian-tasks" ? backends.obsidianTasks(app) : backends.tasknotes(app);
 }
-
-/**
- * 「来源不可用」后端：插件未启用 / 后端尚未实现时使用。
- * `list()` → null 让报告弹窗走「未检测到插件」提示；其余退化为空。
- */
-export function unavailableRepository(): TaskRepository {
-	return {
-		async list() {
-			return null;
-		},
-		async readBody() {
-			return "";
-		},
-		async statuses() {
-			return [];
-		},
-	};
-}

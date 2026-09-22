@@ -21,6 +21,17 @@ function getTaskNotesApi(app: App): TaskNotesPublicApi | null {
 	}
 }
 
+/** 读取 vault 中某个笔记的原始内容；文件不存在或读取失败返回 null。 */
+export async function readVaultNote(app: App, path: string): Promise<string | null> {
+	const file = app.vault.getAbstractFileByPath(path);
+	if (!(file instanceof TFile)) return null;
+	try {
+		return await app.vault.read(file);
+	} catch {
+		return null;
+	}
+}
+
 /** 用 Obsidian 应用构造生产用的 TaskRepository。 */
 export function obsidianTaskRepository(app: App): TaskRepository {
 	return createTaskRepository({
@@ -33,15 +44,7 @@ export function obsidianTaskRepository(app: App): TaskRepository {
 				return null;
 			}
 		},
-		readNote: async (path: string) => {
-			const file = app.vault.getAbstractFileByPath(path);
-			if (!(file instanceof TFile)) return null;
-			try {
-				return await app.vault.read(file);
-			} catch {
-				return null;
-			}
-		},
+		readNote: (path: string) => readVaultNote(app, path),
 		listStatuses: async (): Promise<StatusDefinition[] | null> => {
 			const api = getTaskNotesApi(app);
 			if (!api?.catalog) return null;
