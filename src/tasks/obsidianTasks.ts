@@ -1,9 +1,10 @@
 /**
  * Tasks 后端的 Obsidian 接线：借 metadataCache 自扫 vault 里的清单行（ADR-0013）。
  *
- * 只依赖第一方公开 API（vault.getMarkdownFiles / metadataCache.getFileCache /
- * listItems[].task / position.start.line），不依赖 Tasks 插件的内部 getTasks()。
- * 这是对 ADR-0001「仅运行时公开 API」的一次有界破例，仅限 Tasks 后端。
+ * 读取来自第一方公开 API：`vault.getMarkdownFiles` / `metadataCache.getFileCache` /
+ * `listItems[].task` / `position.start.line`；另按 ADR-0001 的先例，经
+ * `app.plugins.plugins["obsidian-tasks-plugin"]` 判断 Tasks 插件是否启用。
+ * 不依赖 Tasks 插件的内部 getTasks()。这是对 ADR-0001「仅运行时公开 API」的一次有界破例，仅限 Tasks 后端。
  */
 
 import type { App } from "obsidian";

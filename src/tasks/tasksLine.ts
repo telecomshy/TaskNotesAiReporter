@@ -6,7 +6,7 @@
  * 首版只内置默认状态符号映射；读 Tasks data.json 的自定义状态留作后续增强。
  */
 
-import type { StatusDefinition, TaskInfo } from "../types";
+import type { DateField, StatusDefinition, TaskInfo } from "../types";
 
 /** 一条待解析的 Tasks 行：所属笔记路径、0 基行号、原始行文本。 */
 export interface RawTaskLine {
@@ -55,18 +55,16 @@ const PRIORITIES: ReadonlyArray<readonly [string, string]> = [
 	["⏬", "Lowest"],
 ];
 
-type DateFieldKey = "dateCreated" | "scheduled" | "due" | "completedDate";
-
 /** 日期字段 emoji → 统一模型字段。 */
-const DATE_FIELDS: ReadonlyArray<readonly [string, DateFieldKey]> = [
+const DATE_FIELDS: ReadonlyArray<readonly [string, DateField]> = [
 	["➕", "dateCreated"],
 	["⏳", "scheduled"],
 	["📅", "due"],
 	["✅", "completedDate"],
 ];
 
-/** 复选框行：允许前导缩进与 `-` / `*` / `+` 标记。 */
-const CHECKBOX_RE = /^\s*[-*+]\s*\[(.)\]\s?(.*)$/;
+/** 复选框行：允许前导缩进，标记为无序（`-` / `*` / `+`）或有序（`1.` / `1)`，对齐 metadataCache 的清单行。 */
+const CHECKBOX_RE = /^\s*(?:[-*+]|\d+[.)])\s*\[(.)\]\s?(.*)$/;
 
 /**
  * 解析一条 Tasks 行，生成统一任务模型。
@@ -104,7 +102,7 @@ export function parseTaskLine(raw: RawTaskLine): TaskInfo {
 	}
 
 	// 日期：抽取并格式化（Tasks 本就写 YYYY-MM-DD），同时从描述文本中剥掉。
-	const dates: Partial<Record<DateFieldKey, string>> = {};
+	const dates: Partial<Record<DateField, string>> = {};
 	for (const [emoji, field] of DATE_FIELDS) {
 		const re = new RegExp(`${emoji}\\s*(\\d{4}-\\d{2}-\\d{2})?`, "g");
 		text = text.replace(re, (_match, value: string | undefined) => {

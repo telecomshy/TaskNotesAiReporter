@@ -62,6 +62,13 @@ test("parseTaskLine 标题去字段、去标签，保留未结构化字段", () 
 	assert.deepEqual(task.tags, ["标签"]);
 });
 
+test("parseTaskLine 支持有序列表标记（1. [x] 亦被 metadataCache 视为清单行）", () => {
+	const task = parseTaskLine({ path: "a.md", line: 0, text: "1. [x] 已完成 ✅ 2026-09-02" });
+	assert.equal(task.status, "Done");
+	assert.equal(task.title, "已完成");
+	assert.equal(task.completedDate, "2026-09-02");
+});
+
 test("parseTaskLine 同一笔记不同行得到互不覆盖的唯一路径", () => {
 	const first = parseTaskLine({ path: "a.md", line: 3, text: "- [ ] 甲" });
 	const second = parseTaskLine({ path: "a.md", line: 7, text: "- [ ] 乙" });
