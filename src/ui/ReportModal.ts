@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 生成报告主弹窗。
  * 只有一个任务列表区域：通过「选择任务」窗口追加任务，列表中的任务全部送模型生成报告。
  * 每项右侧的小 × 直接从列表移除；工具栏的「清空」清空整个列表。
@@ -124,7 +124,7 @@ export class ReportModal extends Modal {
 			const removeBtn = item.createEl("button", { text: "×", cls: "tah-task-remove" });
 			removeBtn.setAttr("aria-label", this.plugin.t("report.removeAria"));
 			removeBtn.addEventListener("click", () => {
-				this.candidateTasks.delete(task.path);
+				this.candidateTasks.delete(task.id);
 				this.renderTaskList();
 			});
 		}
@@ -153,7 +153,7 @@ export class ReportModal extends Modal {
 			this.plugin.lang,
 			(tasks) => {
 				for (const task of tasks) {
-					this.candidateTasks.set(task.path, task);
+					this.candidateTasks.set(task.id, task);
 				}
 				this.renderTaskList();
 				new Notice(this.plugin.t("notice.addedTasks", { count: tasks.length }));

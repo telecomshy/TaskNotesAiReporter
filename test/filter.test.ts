@@ -1,4 +1,4 @@
-import { test } from "node:test";
+﻿import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
 	normalizeDateValue,
@@ -9,7 +9,7 @@ import {
 } from "../src/core/filter";
 import type { DateField, TaskInfo } from "../src/types";
 
-function makeTask(overrides: Partial<TaskInfo> & { path: string; title: string }): TaskInfo {
+function makeTask(overrides: Partial<TaskInfo> & { id: string; title: string }): TaskInfo {
 	return {
 		status: "open",
 		priority: "normal",
@@ -30,13 +30,13 @@ test("normalizeDateValue 提取 YYYY-MM-DD", () => {
 test("filterTasksByDateRange 按完成日期筛选", () => {
 	const range = { start: "2026-08-31", end: "2026-09-06" };
 	const tasks = [
-		makeTask({ path: "a", title: "A", completedDate: "2026-09-01" }),
-		makeTask({ path: "b", title: "B", completedDate: "2026-09-10" }),
-		makeTask({ path: "c", title: "C", due: "2026-09-02" }),
+		makeTask({ id: "a", title: "A", completedDate: "2026-09-01" }),
+		makeTask({ id: "b", title: "B", completedDate: "2026-09-10" }),
+		makeTask({ id: "c", title: "C", due: "2026-09-02" }),
 	];
 	const result = filterTasksByDateRange(tasks, range, dateFields);
 	assert.deepEqual(
-		result.map((t) => t.path).sort(),
+		result.map((t) => t.id).sort(),
 		["a", "c"]
 	);
 });
@@ -44,18 +44,18 @@ test("filterTasksByDateRange 按完成日期筛选", () => {
 test("filterTasksByDateRange 排除已归档任务", () => {
 	const range = { start: "2026-08-31", end: "2026-09-06" };
 	const tasks = [
-		makeTask({ path: "a", title: "A", completedDate: "2026-09-01" }),
-		makeTask({ path: "b", title: "B", completedDate: "2026-09-02", archived: true }),
+		makeTask({ id: "a", title: "A", completedDate: "2026-09-01" }),
+		makeTask({ id: "b", title: "B", completedDate: "2026-09-02", archived: true }),
 	];
 	const result = filterTasksByDateRange(tasks, range, dateFields);
-	assert.deepEqual(result.map((t) => t.path), ["a"]);
+	assert.deepEqual(result.map((t) => t.id), ["a"]);
 });
 
 test("filterTasksByDateRange 多字段命中去重", () => {
 	const range = { start: "2026-08-31", end: "2026-09-06" };
 	const tasks = [
 		makeTask({
-			path: "a",
+			id: "a",
 			title: "A",
 			completedDate: "2026-09-01",
 			due: "2026-09-03",
@@ -92,11 +92,11 @@ test("parseTitleQuery 空输入返回三空数组", () => {
 
 test("filterTasksByTitleQuery 仅关键字匹配标题（兼容原行为）", () => {
 	const tasks = [
-		makeTask({ path: "a", title: "修复登录 Bug" }),
-		makeTask({ path: "b", title: "编写文档" }),
+		makeTask({ id: "a", title: "修复登录 Bug" }),
+		makeTask({ id: "b", title: "编写文档" }),
 	];
 	const result = filterTasksByTitleQuery(tasks, { keywords: ["bug"], tags: [], contexts: [] });
-	assert.deepEqual(result.map((t) => t.path), ["a"]);
+	assert.deepEqual(result.map((t) => t.id), ["a"]);
 
 	// 同一维度内多个关键字为 OR：命中任一即可
 	const result2 = filterTasksByTitleQuery(tasks, {
@@ -104,7 +104,7 @@ test("filterTasksByTitleQuery 仅关键字匹配标题（兼容原行为）", ()
 		tags: [],
 		contexts: [],
 	});
-	assert.deepEqual(result2.map((t) => t.path).sort(), ["a", "b"]);
+	assert.deepEqual(result2.map((t) => t.id).sort(), ["a", "b"]);
 });
 
 test("isTitleQueryEmpty 判断三个维度是否全空", () => {
@@ -116,71 +116,71 @@ test("isTitleQueryEmpty 判断三个维度是否全空", () => {
 
 test("filterTasksByTitleQuery 标签命中（OR）并排除归档", () => {
 	const tasks = [
-		makeTask({ path: "a", title: "A", tags: ["前端"] }),
-		makeTask({ path: "b", title: "B", tags: ["后端"] }),
-		makeTask({ path: "c", title: "C", tags: ["前端"], archived: true }),
+		makeTask({ id: "a", title: "A", tags: ["前端"] }),
+		makeTask({ id: "b", title: "B", tags: ["后端"] }),
+		makeTask({ id: "c", title: "C", tags: ["前端"], archived: true }),
 	];
 	const result = filterTasksByTitleQuery(tasks, { keywords: [], tags: ["前端"], contexts: [] });
-	assert.deepEqual(result.map((t) => t.path), ["a"]);
+	assert.deepEqual(result.map((t) => t.id), ["a"]);
 });
 
 test("filterTasksByTitleQuery 标签层级前缀匹配", () => {
 	const tasks = [
-		makeTask({ path: "a", title: "A", tags: ["work"] }),
-		makeTask({ path: "b", title: "B", tags: ["work/report"] }),
-		makeTask({ path: "c", title: "C", tags: ["work/design"] }),
-		makeTask({ path: "d", title: "D", tags: ["home"] }),
+		makeTask({ id: "a", title: "A", tags: ["work"] }),
+		makeTask({ id: "b", title: "B", tags: ["work/report"] }),
+		makeTask({ id: "c", title: "C", tags: ["work/design"] }),
+		makeTask({ id: "d", title: "D", tags: ["home"] }),
 	];
 	const result = filterTasksByTitleQuery(tasks, { keywords: [], tags: ["work"], contexts: [] });
-	assert.deepEqual(result.map((t) => t.path).sort(), ["a", "b", "c"]);
+	assert.deepEqual(result.map((t) => t.id).sort(), ["a", "b", "c"]);
 	// 精确标签 work 不匹配 work/report 子级以外
 	const result2 = filterTasksByTitleQuery(tasks, { keywords: [], tags: ["home"], contexts: [] });
-	assert.deepEqual(result2.map((t) => t.path), ["d"]);
+	assert.deepEqual(result2.map((t) => t.id), ["d"]);
 });
 
 test("filterTasksByTitleQuery 上下文命中（OR，精确匹配）", () => {
 	const tasks = [
-		makeTask({ path: "a", title: "A", contexts: ["工作"] }),
-		makeTask({ path: "b", title: "B", contexts: ["家庭"] }),
+		makeTask({ id: "a", title: "A", contexts: ["工作"] }),
+		makeTask({ id: "b", title: "B", contexts: ["家庭"] }),
 	];
 	const result = filterTasksByTitleQuery(tasks, { keywords: [], tags: [], contexts: ["家庭"] });
-	assert.deepEqual(result.map((t) => t.path), ["b"]);
+	assert.deepEqual(result.map((t) => t.id), ["b"]);
 });
 
 test("filterTasksByTitleQuery 三条件 AND 组合", () => {
 	const tasks = [
 		// 关键字不匹配
-		makeTask({ path: "a", title: "需求 A", tags: ["前端"], contexts: ["工作"] }),
+		makeTask({ id: "a", title: "需求 A", tags: ["前端"], contexts: ["工作"] }),
 		// 标签不匹配
-		makeTask({ path: "b", title: "需要 A", tags: ["后端"], contexts: ["工作"] }),
+		makeTask({ id: "b", title: "需要 A", tags: ["后端"], contexts: ["工作"] }),
 		// 上下文不匹配
-		makeTask({ path: "c", title: "需要 A", tags: ["前端"], contexts: ["家庭"] }),
+		makeTask({ id: "c", title: "需要 A", tags: ["前端"], contexts: ["家庭"] }),
 		// 全部命中
-		makeTask({ path: "d", title: "需要 A", tags: ["前端"], contexts: ["工作"] }),
+		makeTask({ id: "d", title: "需要 A", tags: ["前端"], contexts: ["工作"] }),
 	];
 	const result = filterTasksByTitleQuery(tasks, {
 		keywords: ["需要"],
 		tags: ["前端"],
 		contexts: ["工作"],
 	});
-	assert.deepEqual(result.map((t) => t.path), ["d"]);
+	assert.deepEqual(result.map((t) => t.id), ["d"]);
 });
 
 test("filterTasksByTitleQuery 空查询返回全部非归档任务", () => {
 	const tasks = [
-		makeTask({ path: "a", title: "A" }),
-		makeTask({ path: "b", title: "B", archived: true }),
+		makeTask({ id: "a", title: "A" }),
+		makeTask({ id: "b", title: "B", archived: true }),
 	];
 	const result = filterTasksByTitleQuery(tasks, { keywords: [], tags: [], contexts: [] });
-	assert.deepEqual(result.map((t) => t.path), ["a"]);
+	assert.deepEqual(result.map((t) => t.id), ["a"]);
 });
 
 test("filterTasksByTitleQuery 上下文为精确匹配，不做子串匹配", () => {
 	const tasks = [
-		makeTask({ path: "a", title: "A", contexts: ["office"] }),
-		makeTask({ path: "b", title: "B", contexts: ["workplace"] }),
+		makeTask({ id: "a", title: "A", contexts: ["office"] }),
+		makeTask({ id: "b", title: "B", contexts: ["workplace"] }),
 	];
 	// @office 只匹配精确等于 office 的上下文，不匹配 workplace 的子串 office
 	const result = filterTasksByTitleQuery(tasks, { keywords: [], tags: [], contexts: ["office"] });
-	assert.deepEqual(result.map((t) => t.path), ["a"]);
+	assert.deepEqual(result.map((t) => t.id), ["a"]);
 });

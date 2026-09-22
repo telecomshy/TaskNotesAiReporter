@@ -1,4 +1,4 @@
-import { test } from "node:test";
+﻿import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
 	toDateString,
@@ -64,8 +64,8 @@ test("getQuarterRange 正确", () => {
 
 test("getReportRange 取任务最早到最晚日期", () => {
 	const tasks = [
-		makeTask({ path: "a", completedDate: "2026-09-05" }),
-		makeTask({ path: "b", due: "2026-09-01" }),
+		makeTask({ id: "a", completedDate: "2026-09-05" }),
+		makeTask({ id: "b", due: "2026-09-01" }),
 	];
 	assert.deepEqual(getReportRange(tasks, true, new Date(2026, 8, 3)), {
 		start: "2026-09-01",
@@ -75,8 +75,8 @@ test("getReportRange 取任务最早到最晚日期", () => {
 
 test("getReportRange 纳入创建时间（ISO 时间戳）并规范化为日期", () => {
 	const tasks = [
-		makeTask({ path: "a", dateCreated: "2026-09-10T08:30:00" }),
-		makeTask({ path: "b", completedDate: "2026-09-05" }),
+		makeTask({ id: "a", dateCreated: "2026-09-10T08:30:00" }),
+		makeTask({ id: "b", completedDate: "2026-09-05" }),
 	];
 	assert.deepEqual(getReportRange(tasks, true, new Date(2026, 8, 3)), {
 		start: "2026-09-05",
@@ -85,7 +85,7 @@ test("getReportRange 纳入创建时间（ISO 时间戳）并规范化为日期"
 });
 
 test("getReportRange 仅有创建时间时也恒有定义", () => {
-	const tasks = [makeTask({ path: "a", dateCreated: "2026-09-10T08:30:00" })];
+	const tasks = [makeTask({ id: "a", dateCreated: "2026-09-10T08:30:00" })];
 	assert.deepEqual(getReportRange(tasks, true, new Date(2026, 8, 3)), {
 		start: "2026-09-10",
 		end: "2026-09-10",
@@ -93,7 +93,7 @@ test("getReportRange 仅有创建时间时也恒有定义", () => {
 });
 
 test("getReportRange 无日期任务回退到 now 所在周", () => {
-	const tasks = [makeTask({ path: "a" })];
+	const tasks = [makeTask({ id: "a" })];
 	// now = 2026-09-03（周四），周一为起始 → 2026-08-31 ~ 2026-09-06
 	assert.deepEqual(getReportRange(tasks, true, new Date(2026, 8, 3)), {
 		start: "2026-08-31",

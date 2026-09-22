@@ -7,15 +7,17 @@
 
 import type { UiLanguageSetting } from "./i18n";
 
-/** TaskNotes 任务（精简字段，与本插件相关） */
+/**
+ * TaskNotes 任务（精简字段，与本插件相关）。
+ * `id` 是任务标识：缝外一律不透明，不解释也不拆解其内部结构（TaskNotes 下即笔记路径）。
+ */
 export interface TaskInfo {
-	id?: string;
+	id: string;
 	title: string;
 	status: string;
 	priority: string;
 	due?: string;
 	scheduled?: string;
-	path: string;
 	archived: boolean;
 	tags?: string[];
 	contexts?: string[];
@@ -47,7 +49,6 @@ export interface StatusDefinition {
 export interface TaskNotesPublicApi {
 	tasks: {
 		list(query?: unknown): Promise<TaskInfo[]>;
-		get(path: string): Promise<TaskInfo | null>;
 	};
 	catalog?: {
 		statuses(): Array<{ value: string; label: string; isCompleted?: boolean; color?: string }>;

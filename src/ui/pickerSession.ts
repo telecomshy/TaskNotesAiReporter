@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 「选择任务」窗口的会话状态：Tab / 时间区间 / 标题查询 / 勾选集合。
  *
  * 纯状态值 + 具名转移 + 选择器，无 DOM、无 obsidian，可在 Node 单元测试。
@@ -44,9 +44,9 @@ export interface SelectAllState {
 export function createSession(
 	allTasks: TaskInfo[],
 	dateFields: DateField[],
-	candidatePaths: Set<string>
+	candidateIds: Set<string>
 ): PickerSession {
-	const addableTasks = allTasks.filter((task) => !candidatePaths.has(task.path));
+	const addableTasks = allTasks.filter((task) => !candidateIds.has(task.id));
 	return { tab: "time", range: null, query: "", checked: new Set(), addableTasks, dateFields };
 }
 
@@ -64,7 +64,7 @@ export function visibleTasks(session: PickerSession): TaskInfo[] {
 
 /** 当前可见且已勾选的任务（「加入」的实际结果）。 */
 export function selectedTasks(session: PickerSession): TaskInfo[] {
-	return visibleTasks(session).filter((task) => session.checked.has(task.path));
+	return visibleTasks(session).filter((task) => session.checked.has(task.id));
 }
 
 /** 标题查询的解析结果（关键字 / 标签 / 上下文）。 */
@@ -80,7 +80,7 @@ export function isQueryEmpty(session: PickerSession): boolean {
 /** 「全选」复选框三态：全部勾选为全选，部分勾选为半选。 */
 export function selectAllState(session: PickerSession): SelectAllState {
 	const displayed = visibleTasks(session);
-	const checkedCount = displayed.filter((task) => session.checked.has(task.path)).length;
+	const checkedCount = displayed.filter((task) => session.checked.has(task.id)).length;
 	return {
 		checked: displayed.length > 0 && checkedCount === displayed.length,
 		indeterminate: checkedCount > 0 && checkedCount < displayed.length,
@@ -118,8 +118,8 @@ export function toggle(session: PickerSession, path: string): PickerSession {
 export function setAll(session: PickerSession, checked: boolean): PickerSession {
 	const next = new Set(session.checked);
 	for (const task of visibleTasks(session)) {
-		if (checked) next.add(task.path);
-		else next.delete(task.path);
+		if (checked) next.add(task.id);
+		else next.delete(task.id);
 	}
 	return { ...session, checked: next };
 }
@@ -127,7 +127,7 @@ export function setAll(session: PickerSession, checked: boolean): PickerSession 
 /** 清空当前可见任务的勾选。 */
 export function clearSelection(session: PickerSession): PickerSession {
 	const next = new Set(session.checked);
-	for (const task of visibleTasks(session)) next.delete(task.path);
+	for (const task of visibleTasks(session)) next.delete(task.id);
 	return { ...session, checked: next };
 }
 
@@ -139,5 +139,5 @@ function defaultSelection(session: PickerSession): Set<string> {
 }
 
 function selectAll(tasks: TaskInfo[]): Set<string> {
-	return new Set(tasks.map((task) => task.path));
+	return new Set(tasks.map((task) => task.id));
 }

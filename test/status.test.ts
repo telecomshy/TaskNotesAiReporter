@@ -1,4 +1,4 @@
-import { test } from "node:test";
+﻿import { test } from "node:test";
 import assert from "node:assert/strict";
 import { isCompletedStatus, isInProgressStatus, filterTasksBySubset } from "../src/core/status";
 import { makeTask } from "./fakes/task";
@@ -38,26 +38,26 @@ test("已完成优先于进行中命名冲突", () => {
 
 test("filterTasksBySubset 切出已完成 / 进行中 / 未完成", () => {
 	const tasks = [
-		makeTask({ path: "a", status: "done" }),
-		makeTask({ path: "b", status: "in-progress" }),
-		makeTask({ path: "c", status: "open" }),
+		makeTask({ id: "a", status: "done" }),
+		makeTask({ id: "b", status: "in-progress" }),
+		makeTask({ id: "c", status: "open" }),
 	];
 	assert.deepEqual(
-		filterTasksBySubset(tasks, "completed", statuses).map((t) => t.path),
+		filterTasksBySubset(tasks, "completed", statuses).map((t) => t.id),
 		["a"]
 	);
 	assert.deepEqual(
-		filterTasksBySubset(tasks, "in-progress", statuses).map((t) => t.path),
+		filterTasksBySubset(tasks, "in-progress", statuses).map((t) => t.id),
 		["b"]
 	);
 	assert.deepEqual(
-		filterTasksBySubset(tasks, "open", statuses).map((t) => t.path),
+		filterTasksBySubset(tasks, "open", statuses).map((t) => t.id),
 		["b", "c"]
 	);
 });
 
 test("无状态目录时全部视为未完成", () => {
-	const tasks = [makeTask({ path: "a", status: "done" })];
+	const tasks = [makeTask({ id: "a", status: "done" })];
 	assert.deepEqual(filterTasksBySubset(tasks, "completed", []), []);
 	assert.equal(filterTasksBySubset(tasks, "open", []).length, 1);
 });

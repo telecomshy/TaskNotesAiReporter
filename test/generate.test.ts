@@ -1,4 +1,4 @@
-import { test } from "node:test";
+﻿import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
 	generateReport,
@@ -14,7 +14,7 @@ import type { DateRange, ReportType } from "../src/types";
 
 function baseInput(over: Partial<GenerateReportInput> = {}): GenerateReportInput {
 	return {
-		tasks: [makeTask({ path: "a", title: "A", completedDate: "2026-09-03" })],
+		tasks: [makeTask({ id: "a", title: "A", completedDate: "2026-09-03" })],
 		type: "custom",
 		templateId: "",
 		templates: [],
@@ -127,8 +127,8 @@ test("时间范围：取任务最早到最晚", async () => {
 	await generateReport(
 		baseInput({
 			tasks: [
-				makeTask({ path: "a", completedDate: "2026-09-05" }),
-				makeTask({ path: "b", due: "2026-09-01" }),
+				makeTask({ id: "a", completedDate: "2026-09-05" }),
+				makeTask({ id: "b", due: "2026-09-01" }),
 			],
 		}),
 		deps
@@ -138,7 +138,7 @@ test("时间范围：取任务最早到最晚", async () => {
 
 test("时间范围：无日期回退到本周（now 注入）", async () => {
 	const { deps, captured } = setup();
-	await generateReport(baseInput({ tasks: [makeTask({ path: "a" })] }), deps);
+	await generateReport(baseInput({ tasks: [makeTask({ id: "a" })] }), deps);
 	// now = 2026-09-03（周四），周一为起始 → 2026-08-31 ~ 2026-09-06
 	assert.deepEqual(captured.saved?.range, { start: "2026-08-31", end: "2026-09-06" });
 });
@@ -173,8 +173,8 @@ test("占位符：generate 把状态目录与 now 传给提示词", async () => 
 	await generateReport(
 		baseInput({
 			tasks: [
-				makeTask({ path: "a", title: "A", status: "done" }),
-				makeTask({ path: "b", title: "B", status: "open" }),
+				makeTask({ id: "a", title: "A", status: "done" }),
+				makeTask({ id: "b", title: "B", status: "open" }),
 			],
 			templateId: "t1",
 			templates: [{ id: "t1", name: "周报", content: "{{completedTasks}}\n{{today}}" }],

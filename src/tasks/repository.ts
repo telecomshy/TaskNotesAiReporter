@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 任务数据访问的 seam。
  *
  * TaskRepository 用两个行为屏蔽底层来源：列出任务（TaskNotes 运行时公开 API）
@@ -8,12 +8,15 @@
 
 import type { StatusDefinition, TaskInfo } from "../types";
 
-/** 任务数据访问接口。 */
+/**
+ * 任务数据访问接口。
+ * `id` 是任务标识（见 `TaskInfo.id`）：调用方不得解释或拆解其内部结构。
+ */
 export interface TaskRepository {
 	/** 列出全部未归档任务；TaskNotes 运行时不可用时返回 null。 */
 	list(): Promise<TaskInfo[] | null>;
 	/** 读取任务笔记正文（已去掉 frontmatter）；笔记不存在时返回空串。 */
-	readBody(path: string): Promise<string>;
+	readBody(id: string): Promise<string>;
 	/** 读取任务状态目录（用于状态子集分类）；不可用时返回空数组。 */
 	statuses(): Promise<StatusDefinition[]>;
 }
@@ -22,7 +25,7 @@ export interface TaskRepository {
 export interface TaskRepositoryDeps {
 	/** 列出任务；不可用返回 null。 */
 	listTasks(): Promise<TaskInfo[] | null>;
-	/** 读取笔记原始内容；文件不存在返回 null。 */
+	/** 按笔记路径读取笔记原始内容；文件不存在返回 null。注意形参是笔记路径，不是任务标识。 */
 	readNote(path: string): Promise<string | null>;
 	/** 列出状态目录；不可用返回 null（缺省视为空目录）。 */
 	listStatuses?(): Promise<StatusDefinition[] | null>;
@@ -34,10 +37,11 @@ export function createTaskRepository(deps: TaskRepositoryDeps): TaskRepository {
 		async list(): Promise<TaskInfo[] | null> {
 			const tasks = await deps.listTasks();
 			if (tasks === null) return null;
-			return tasks.filter((task) => task && task.path && !task.archived);
+			return tasks.filter((task) => task && task.id && !task.archived);
 		},
-		async readBody(path: string): Promise<string> {
-			const raw = await deps.readNote(path);
+		async readBody(id: string): Promise<string> {
+			// 本包装假定「任务标识即笔记路径」（TaskNotes 形状）；其他来源的 adapter 自行实现 readBody。
+			const raw = await deps.readNote(id);
 			return raw === null ? "" : stripFrontmatter(raw);
 		},
 		async statuses(): Promise<StatusDefinition[]> {
@@ -72,9 +76,6 @@ export function applyHydratedDetails(task: TaskInfo, body: string): TaskInfo {
  * 越过 seam，读取任务正文并回填到 details。
  * 调用方无需自行组合 readBody 与 applyHydratedDetails。
  */
-export async function hydrateTask(
-	repository: TaskRepository,
-	task: TaskInfo
-): Promise<TaskInfo> {
-	return applyHydratedDetails(task, await repository.readBody(task.path));
+export async function hydrateTask(repository: TaskRepository, task: TaskInfo): Promise<TaskInfo> {
+	return applyHydratedDetails(task, await repository.readBody(task.id));
 }

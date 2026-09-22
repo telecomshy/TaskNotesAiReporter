@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 任务筛选：按日期范围自动筛选，以及「按标题」查询（关键字 / 标签 / 上下文）。
  * 纯函数，无 Obsidian 依赖，可单元测试。
  */
@@ -35,8 +35,8 @@ export function filterTasksByDateRange(
 	for (const task of tasks) {
 		if (task.archived) continue;
 		const matched = dateFields.some((field) => inRange(task[field], range));
-		if (matched && !seen.has(task.path)) {
-			seen.add(task.path);
+		if (matched && !seen.has(task.id)) {
+			seen.add(task.id);
 			result.push(task);
 		}
 	}

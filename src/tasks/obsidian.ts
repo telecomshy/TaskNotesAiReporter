@@ -23,12 +23,13 @@ function getTaskNotesApi(app: App): TaskNotesPublicApi | null {
 
 /** 用 Obsidian 应用构造生产用的 TaskRepository。 */
 export function obsidianTaskRepository(app: App): TaskRepository {
+	// 插件启用探测只此一处：listTasks / listStatuses 复用同一结果。
+	const probe = getTaskNotesApi(app);
 	return createTaskRepository({
 		listTasks: async () => {
-			const api = getTaskNotesApi(app);
-			if (!api) return null;
+			if (!probe) return null;
 			try {
-				return await api.tasks.list();
+				return await probe.tasks.list();
 			} catch {
 				return null;
 			}
@@ -43,10 +44,9 @@ export function obsidianTaskRepository(app: App): TaskRepository {
 			}
 		},
 		listStatuses: async (): Promise<StatusDefinition[] | null> => {
-			const api = getTaskNotesApi(app);
-			if (!api?.catalog) return null;
+			if (!probe?.catalog) return null;
 			try {
-				return api.catalog.statuses().map((status) => ({
+				return probe.catalog.statuses().map((status) => ({
 					value: status.value,
 					isCompleted: status.isCompleted,
 				}));

@@ -1,4 +1,4 @@
-import type { TaskRepository } from "../../src/tasks/repository";
+﻿import type { TaskRepository } from "../../src/tasks/repository";
 import type { StatusDefinition, TaskInfo } from "../../src/types";
 
 /** 测试用 in-process TaskRepository fake，供越 seam 的行为测试复用。 */
@@ -16,8 +16,8 @@ export function fakeTaskRepository(
 		async list(): Promise<TaskInfo[] | null> {
 			return tasks;
 		},
-		async readBody(path: string): Promise<string> {
-			return bodies[path] ?? "";
+		async readBody(id: string): Promise<string> {
+			return bodies[id] ?? "";
 		},
 		async statuses(): Promise<StatusDefinition[]> {
 			return statuses;

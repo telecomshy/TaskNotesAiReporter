@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 选择任务窗口（一次性任务选择器）。
  * 分 Tab：按时间 / 按标题。两个 Tab 都是「筛选 → 可勾选 → 加入列表」。
  * 只呈现尚未「已加入」的任务；排除由会话（pickerSession）据已加入集合自行完成。
@@ -51,14 +51,14 @@ export class TaskPickerModal extends Modal {
 		app: App,
 		allTasks: TaskInfo[],
 		dateFields: DateField[],
-		candidatePaths: Set<string>,
+		candidateIds: Set<string>,
 		private weekStartsOnMonday: boolean,
 		private t: Translator,
 		private lang: UiLanguage,
 		private onConfirm: (tasks: TaskInfo[]) => void
 	) {
 		super(app);
-		this.session = createSession(allTasks, dateFields, candidatePaths);
+		this.session = createSession(allTasks, dateFields, candidateIds);
 	}
 
 	onOpen(): void {
@@ -298,9 +298,9 @@ export class TaskPickerModal extends Modal {
 
 			const checkbox = item.createEl("input", { type: "checkbox" });
 			checkbox.addClass("tah-task-checkbox");
-			checkbox.checked = this.session.checked.has(task.path);
+			checkbox.checked = this.session.checked.has(task.id);
 			checkbox.addEventListener("change", () => {
-				this.session = toggle(this.session, task.path);
+				this.session = toggle(this.session, task.id);
 				this.updateConfirmState();
 			});
 
