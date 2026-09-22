@@ -11,8 +11,21 @@ import {
 	type TaskNotesAIHelperSettings,
 } from "../types";
 import type { PendingSecret } from "./secrets";
+import {
+	coerceDateFields,
+	coerceFiniteNumber,
+	coerceReportFolder,
+	coerceReportLanguage,
+	coerceSelectedTemplateId,
+	coerceTaskSource,
+	coerceTemplates,
+	coerceUiLanguage,
+	coerceWeekStartsOnMonday,
+	genId,
+} from "./values";
 
 export type { TaskNotesAIHelperSettings } from "../types";
+export { genId } from "./values";
 
 /** 归一化结果：设置本身 + 待导入 SecretStorage 的旧版明文密钥。 */
 export interface NormalizedSettings {
@@ -36,11 +49,6 @@ interface LegacySettings {
 	model?: string;
 }
 
-/** 生成唯一 ID */
-export function genId(): string {
-	return `tpl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
 /**
  * 从加载的原始数据生成最终设置：处理旧版单一模型配置的迁移。
  */
@@ -50,44 +58,32 @@ export function normalizeSettings(raw: unknown): NormalizedSettings {
 	const settings: TaskNotesAIHelperSettings = { ...DEFAULT_SETTINGS };
 	const pendingSecrets: PendingSecret[] = [];
 
-	// 常规字段
-	if (typeof data.temperature === "number") settings.temperature = data.temperature;
-	if (typeof data.maxTokens === "number") settings.maxTokens = data.maxTokens;
-	if (typeof data.timeoutSeconds === "number") settings.timeoutSeconds = data.timeoutSeconds;
-	if (typeof data.reportFolder === "string") settings.reportFolder = data.reportFolder;
-	if (Array.isArray(data.dateFields) && data.dateFields.length > 0) {
-		settings.dateFields = data.dateFields;
+	// 常规字段：与变更命令共用 ./values 的同一套值域规则（见 #46）。
+	const temperature = coerceFiniteNumber(data.temperature);
+	if (temperature !== null) settings.temperature = temperature;
+	const maxTokens = coerceFiniteNumber(data.maxTokens);
+	if (maxTokens !== null) settings.maxTokens = maxTokens;
+	const timeoutSeconds = coerceFiniteNumber(data.timeoutSeconds);
+	if (timeoutSeconds !== null) settings.timeoutSeconds = timeoutSeconds;
+	// 「缺省（非字符串）→ 保留默认」是载入侧的语义；「去空白」是共享的值域规则。
+	if (typeof data.reportFolder === "string") {
+		settings.reportFolder = coerceReportFolder(data.reportFolder);
 	}
-	if (typeof data.weekStartsOnMonday === "boolean") {
-		settings.weekStartsOnMonday = data.weekStartsOnMonday;
-	}
-	if (typeof data.language === "string") {
-		settings.language = data.language.trim() || "English";
-	}
-	if (data.uiLanguage === "auto" || data.uiLanguage === "zh" || data.uiLanguage === "en") {
-		settings.uiLanguage = data.uiLanguage;
-	}
-	if (Array.isArray(data.templates)) {
-		settings.templates = data.templates
-			.filter((t) => t && typeof t.name === "string" && typeof t.content === "string")
-			.map((t) => ({
-				id: typeof t.id === "string" ? t.id : genId(),
-				name: t.name,
-				content: t.content,
-			}));
-	}
+	// 日期口径：**空数组是合法值**（= 自动筛选关闭），不再被静默改回默认（#46 的用户可见修正）。
+	// 只有数据里根本没有这一项（非数组）才回退默认。
+	const dateFields = coerceDateFields(data.dateFields);
+	if (dateFields !== null) settings.dateFields = dateFields;
+	const weekStartsOnMonday = coerceWeekStartsOnMonday(data.weekStartsOnMonday);
+	if (weekStartsOnMonday !== null) settings.weekStartsOnMonday = weekStartsOnMonday;
+	settings.language = coerceReportLanguage(data.language);
+	settings.uiLanguage = coerceUiLanguage(data.uiLanguage);
+	settings.taskSource = coerceTaskSource(data.taskSource);
+	const templates = coerceTemplates(data.templates);
+	if (templates !== null) settings.templates = templates;
 	settings.templates = migrateExampleTemplate(settings.templates);
 
 	// 上次选择的模板 ID：仅在模板存在时保留，否则回退为不选模板
-	if (typeof data.selectedTemplateId === "string") {
-		settings.selectedTemplateId = data.selectedTemplateId;
-	}
-	if (
-		settings.selectedTemplateId !== "" &&
-		!settings.templates.some((t) => t.id === settings.selectedTemplateId)
-	) {
-		settings.selectedTemplateId = "";
-	}
+	settings.selectedTemplateId = coerceSelectedTemplateId(settings.templates, data.selectedTemplateId);
 
 	// 供应商：优先使用新结构；否则用预设（不含固定 custom）
 	if (Array.isArray(data.providers) && data.providers.length > 0) {

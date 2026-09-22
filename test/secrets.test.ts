@@ -22,6 +22,7 @@ function settingsWith(providers: TaskNotesAIHelperSettings["providers"]): TaskNo
 		weekStartsOnMonday: true,
 		language: "English",
 		uiLanguage: "auto",
+		taskSource: "tasknotes",
 		templates: [],
 		selectedTemplateId: "",
 	};

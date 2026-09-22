@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { normalizeSettings } from "../src/settings/logic";
-import { PRESET_PROVIDERS } from "../src/types";
+import { DEFAULT_SETTINGS, PRESET_PROVIDERS } from "../src/types";
 
 /** 只取归一化后的设置本身（迁移密钥由 pendingSecrets 单独测）。 */
 function load(raw: unknown) {
@@ -45,6 +45,39 @@ test("normalizeSettings 引用的模板不存在时重置 selectedTemplateId 为
 test("normalizeSettings 非字符串 selectedTemplateId 回退为空", () => {
 	const settings = load({ selectedTemplateId: 123 }) as any;
 	assert.equal(settings.selectedTemplateId, "");
+});
+
+// ===== #46：载入与变更共用同一套值域规则 =====
+
+test("normalizeSettings 日期口径空数组合法：不被改回默认（#46 用户可见修正）", () => {
+	const settings = load({ dateFields: [] });
+	assert.deepEqual(settings.dateFields, []);
+});
+
+test("normalizeSettings 日期口径缺省（无该字段）才回退默认", () => {
+	const settings = load({});
+	assert.deepEqual(settings.dateFields, DEFAULT_SETTINGS.dateFields);
+});
+
+test("normalizeSettings 日期口径过滤非法项并去重", () => {
+	const settings = load({ dateFields: ["due", "bogus", "due", "completedDate"] });
+	assert.deepEqual(settings.dateFields, ["due", "completedDate"]);
+});
+
+test("normalizeSettings taskSource：缺省 tasknotes、保留合法值、非法归一", () => {
+	assert.equal(load({}).taskSource, "tasknotes");
+	assert.equal(load({ taskSource: "obsidian-tasks" }).taskSource, "obsidian-tasks");
+	assert.equal(load({ taskSource: "nonsense" }).taskSource, "tasknotes");
+});
+
+test("normalizeSettings 报告语言空回退默认、界面语言非法归一 auto（与变更一致）", () => {
+	assert.equal(load({ language: "   " }).language, DEFAULT_SETTINGS.language);
+	assert.equal(load({ uiLanguage: "klingon" }).uiLanguage, "auto");
+});
+
+test("normalizeSettings 生成参数只接受有限数值", () => {
+	assert.equal(load({ maxTokens: Number.NaN }).maxTokens, DEFAULT_SETTINGS.maxTokens);
+	assert.equal(load({ timeoutSeconds: 30 }).timeoutSeconds, 30);
 });
 
 test("normalizeSettings 迁移旧版 DeepSeek 配置到预设供应商", () => {

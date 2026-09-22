@@ -15,6 +15,7 @@ import type {
 	ModelProvider,
 } from "../types";
 import { resolveSecretValue } from "./secrets";
+import type { SettingsOwner } from "./owner";
 
 /** 新自定义供应商的默认名称：作为持久化数据，保持语言无关。 */
 export const DEFAULT_CUSTOM_PROVIDER_NAME = "自定义供应商";
@@ -283,12 +284,9 @@ function findModel(
 
 // ===== 绑定门面 =====
 
-/** 门面依赖：读取可变切片、落盘、按名取密钥值。 */
+/** 门面依赖：设置 owner（自持状态与落盘）+ 按名取密钥值（见 ./owner）。 */
 export interface ProviderSettingsDeps {
-	getState(): ProviderState;
-	/** 把转移后的切片写回设置并持久化。 */
-	commit(state: ProviderState): void;
-	getSecret(id: string): string | null;
+	owner: SettingsOwner;
 }
 
 /** 供应商配置门面：视图只与它对话。 */
@@ -314,10 +312,13 @@ export interface ProviderSettings {
 	isSecretMissing(secretId: string): boolean;
 }
 
-/** 构造绑定门面。 */
+/** 构造绑定门面。命令落在设置 owner 上，由 owner 自持状态与落盘（接线层不再逐字段搬运）。 */
 export function createProviderSettings(deps: ProviderSettingsDeps): ProviderSettings {
+	const { owner } = deps;
 	const run = (command: (state: ProviderState) => ProviderState): void => {
-		deps.commit(command(deps.getState()));
+		owner.apply((state) => {
+			command(state);
+		});
 	};
 	return {
 		addProvider: () => run(addProvider),
@@ -338,8 +339,8 @@ export function createProviderSettings(deps: ProviderSettingsDeps): ProviderSett
 			run((s) => removeModel(s, providerId, modelConfigId)),
 		selectActiveModel: (providerId, model) =>
 			run((s) => selectActiveModel(s, providerId, model)),
-		resolveActive: () => resolveActive(deps.getState(), (id) => deps.getSecret(id)),
-		secretValue: (secretId) => resolveSecretValue(secretId, (id) => deps.getSecret(id)),
-		isSecretMissing: (secretId) => isSecretMissing(secretId, (id) => deps.getSecret(id)),
+		resolveActive: () => resolveActive(owner.get(), (id) => owner.readSecret(id)),
+		secretValue: (secretId) => resolveSecretValue(secretId, (id) => owner.readSecret(id)),
+		isSecretMissing: (secretId) => isSecretMissing(secretId, (id) => owner.readSecret(id)),
 	};
 }

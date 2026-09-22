@@ -100,6 +100,11 @@ export const en = {
 		tabTemplate: "Templates",
 		tabGeneral: "General",
 		generalHeading: "Report generation",
+		taskSourceName: "Task source",
+		taskSourceDesc:
+			"Which task plugin to read tasks from. Independent of the AI provider (the provider chooses the model).",
+		taskSourceTaskNotes: "TaskNotes",
+		taskSourceObsidianTasks: "Obsidian Tasks",
 		reportFolderName: "Report output folder",
 		reportFolderDesc: "Where generated report notes are saved, e.g. TaskNotes/Reports",
 		dateFieldsHeading: "Task auto-filter date fields (multi-select)",

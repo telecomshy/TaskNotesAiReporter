@@ -68,6 +68,9 @@ export interface DateRange {
 /** 报告类型（对应周/月/年） */
 export type ReportType = "week" | "month" | "year" | "custom";
 
+/** 任务来源：报告任务数据的提供方（一次只用一种，用户在设置中选择）。 */
+export type TaskSource = "tasknotes" | "obsidian-tasks";
+
 /** 报告模板 */
 export interface ReportTemplate {
 	id: string; // 唯一标识
@@ -157,7 +160,9 @@ export interface TaskNotesAIHelperSettings {
 	timeoutSeconds: number;
 	// 报告输出目录
 	reportFolder: string;
-	// 任务自动筛选的日期口径（可多选）
+	// 任务来源：从哪个任务插件读数据（与 AI「供应商」正交，见 #46 / #45）
+	taskSource: TaskSource;
+	// 任务自动筛选的日期口径（可多选；空数组合法 = 自动筛选关闭）
 	dateFields: DateField[];
 	// 周起始日
 	weekStartsOnMonday: boolean;
@@ -179,6 +184,7 @@ export const DEFAULT_SETTINGS: TaskNotesAIHelperSettings = {
 	maxTokens: 8192,
 	timeoutSeconds: 60,
 	reportFolder: "TaskNotes/Reports",
+	taskSource: "tasknotes",
 	dateFields: ["completedDate", "scheduled", "due"],
 	weekStartsOnMonday: true,
 	language: "English",

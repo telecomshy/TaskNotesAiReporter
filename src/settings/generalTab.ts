@@ -4,8 +4,9 @@
  */
 
 import { Setting } from "obsidian";
-import type { DateField } from "../types";
+import type { DateField, TaskSource } from "../types";
 import type { SettingsTabContext } from "./index";
+import { DATE_FIELD_VALUES } from "./values";
 
 const DATE_FIELD_KEYS: Array<{ value: DateField; key: string }> = [
 	{ value: "completedDate", key: "settings.dateFieldCompletedDate" },
@@ -14,10 +15,29 @@ const DATE_FIELD_KEYS: Array<{ value: DateField; key: string }> = [
 	{ value: "dateCreated", key: "settings.dateFieldCreated" },
 ];
 
+const TASK_SOURCE_OPTIONS: Array<{ value: TaskSource; key: string }> = [
+	{ value: "tasknotes", key: "settings.taskSourceTaskNotes" },
+	{ value: "obsidian-tasks", key: "settings.taskSourceObsidianTasks" },
+];
+
 /** 渲染「常规配置」Tab */
 export function renderGeneralTab(container: HTMLElement, ctx: SettingsTabContext): void {
 	const t = ctx.plugin.t;
 	container.createEl("h3", { text: t("settings.generalHeading") });
+
+	// 「来源」下拉置于顶部：它决定后面所有任务相关配置读的是哪份数据（见 #46）
+	new Setting(container)
+		.setName(t("settings.taskSourceName"))
+		.setDesc(t("settings.taskSourceDesc"))
+		.addDropdown((dropdown) => {
+			for (const option of TASK_SOURCE_OPTIONS) {
+				dropdown.addOption(option.value, t(option.key));
+			}
+			dropdown.setValue(ctx.plugin.settings.taskSource).onChange((value) => {
+				ctx.plugin.appSettings.setTaskSource(value as TaskSource);
+				ctx.refresh();
+			});
+		});
 
 	new Setting(container)
 		.setName(t("settings.reportFolderName"))
