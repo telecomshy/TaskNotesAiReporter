@@ -55,6 +55,9 @@ export function normalizeSettings(raw: unknown): NormalizedSettings {
 	if (typeof data.maxTokens === "number") settings.maxTokens = data.maxTokens;
 	if (typeof data.timeoutSeconds === "number") settings.timeoutSeconds = data.timeoutSeconds;
 	if (typeof data.reportFolder === "string") settings.reportFolder = data.reportFolder;
+	if (data.taskSource === "tasknotes" || data.taskSource === "obsidian-tasks") {
+		settings.taskSource = data.taskSource;
+	}
 	if (Array.isArray(data.dateFields) && data.dateFields.length > 0) {
 		settings.dateFields = data.dateFields;
 	}

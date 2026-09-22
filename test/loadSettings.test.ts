@@ -105,6 +105,7 @@ test("loadSettings 保留用户既有设置（非默认值不被覆盖）", asyn
 		weekStartsOnMonday: false,
 		language: "日本語",
 		uiLanguage: "zh",
+		taskSource: "obsidian-tasks",
 		templates: [{ id: "tpl_a", name: "周报", content: "x {{tasks}}" }],
 		selectedTemplateId: "tpl_a",
 	});
@@ -114,6 +115,7 @@ test("loadSettings 保留用户既有设置（非默认值不被覆盖）", asyn
 	assert.equal(settings.weekStartsOnMonday, false);
 	assert.equal(settings.language, "日本語");
 	assert.equal(settings.uiLanguage, "zh");
+	assert.equal(settings.taskSource, "obsidian-tasks");
 	assert.equal(settings.selectedTemplateId, "tpl_a");
 	assert.deepEqual(fake.events, ["loadRaw"]);
 });

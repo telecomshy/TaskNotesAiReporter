@@ -8,13 +8,14 @@
  * 与 `providerSettings` 同构：一个切片一个门面，命令在变更处维护不变式（见 ADR-0012）。
  */
 
-import { DEFAULT_SETTINGS, type DateField, type ReportTemplate } from "../types";
+import { DEFAULT_SETTINGS, type DateField, type ReportTemplate, type TaskSource } from "../types";
 import type { UiLanguageSetting } from "../i18n";
 import { genId } from "./logic";
 
 /** 非供应商设置的可变切片：命令只在这一片上做转移。 */
 export interface AppState {
 	reportFolder: string;
+	taskSource: TaskSource;
 	dateFields: DateField[];
 	weekStartsOnMonday: boolean;
 	language: string;
@@ -28,6 +29,12 @@ export interface AppState {
 /** 设置报告输出目录（去空白）。 */
 export function setReportFolder(state: AppState, folder: string): AppState {
 	state.reportFolder = folder.trim();
+	return state;
+}
+
+/** 设置任务来源；非法值归一为 TaskNotes（默认）。 */
+export function setTaskSource(state: AppState, value: string): AppState {
+	state.taskSource = value === "obsidian-tasks" ? "obsidian-tasks" : "tasknotes";
 	return state;
 }
 
@@ -99,6 +106,7 @@ export interface AppSettingsDeps {
 /** 非供应商设置门面：视图只与它对话。 */
 export interface AppSettings {
 	setReportFolder(folder: string): void;
+	setTaskSource(value: string): void;
 	toggleDateField(field: DateField, on: boolean): void;
 	setWeekStartsOnMonday(value: boolean): void;
 	setReportLanguage(language: string): void;
@@ -116,6 +124,7 @@ export function createAppSettings(deps: AppSettingsDeps): AppSettings {
 	};
 	return {
 		setReportFolder: (folder) => run((s) => setReportFolder(s, folder)),
+		setTaskSource: (value) => run((s) => setTaskSource(s, value)),
 		toggleDateField: (field, on) => run((s) => toggleDateField(s, field, on)),
 		setWeekStartsOnMonday: (value) => run((s) => setWeekStartsOnMonday(s, value)),
 		setReportLanguage: (language) => run((s) => setReportLanguage(s, language)),

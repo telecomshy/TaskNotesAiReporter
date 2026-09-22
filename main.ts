@@ -6,7 +6,7 @@
 import { getLanguage, Plugin } from "obsidian";
 import { TaskNotesAIHelperSettingTab } from "./src/settings";
 import { ReportModal } from "./src/ui/ReportModal";
-import { obsidianTaskRepository } from "./src/tasks/obsidian";
+import { createSourceRepository } from "./src/tasks/obsidianSource";
 import type { TaskNotesAIHelperSettings } from "./src/settings/logic";
 import { loadSettings as loadSettingsFromIO } from "./src/settings/loadSettings";
 import { createProviderSettings, type ProviderSettings } from "./src/settings/providerSettings";
@@ -88,6 +88,7 @@ export default class TaskNotesAIHelperPlugin extends Plugin {
 		this.appSettings = createAppSettings({
 			getState: () => ({
 				reportFolder: this.settings.reportFolder,
+				taskSource: this.settings.taskSource,
 				dateFields: this.settings.dateFields,
 				weekStartsOnMonday: this.settings.weekStartsOnMonday,
 				language: this.settings.language,
@@ -97,6 +98,7 @@ export default class TaskNotesAIHelperPlugin extends Plugin {
 			}),
 			commit: (state) => {
 				this.settings.reportFolder = state.reportFolder;
+				this.settings.taskSource = state.taskSource;
 				this.settings.dateFields = state.dateFields;
 				this.settings.weekStartsOnMonday = state.weekStartsOnMonday;
 				this.settings.language = state.language;
@@ -121,6 +123,10 @@ export default class TaskNotesAIHelperPlugin extends Plugin {
 	}
 
 	openReportModal(): void {
-		new ReportModal(this.app, this, obsidianTaskRepository(this.app)).open();
+		new ReportModal(
+			this.app,
+			this,
+			createSourceRepository(this.app, this.settings.taskSource)
+		).open();
 	}
 }

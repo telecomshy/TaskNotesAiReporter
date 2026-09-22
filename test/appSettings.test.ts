@@ -6,6 +6,7 @@ import {
 	setWeekStartsOnMonday,
 	setReportLanguage,
 	setUiLanguage,
+	setTaskSource,
 	addTemplate,
 	updateTemplate,
 	removeTemplate,
@@ -22,6 +23,7 @@ function state(over: Partial<AppState> = {}): AppState {
 		weekStartsOnMonday: true,
 		language: "English",
 		uiLanguage: "auto",
+		taskSource: "tasknotes",
 		templates: [],
 		selectedTemplateId: "",
 		...over,
@@ -72,6 +74,16 @@ test("setUiLanguage 只接受合法值，其余归一为 auto", () => {
 	assert.equal(s.uiLanguage, "en");
 	setUiLanguage(s, "fr");
 	assert.equal(s.uiLanguage, "auto");
+});
+
+test("setTaskSource 只接受合法值，其余归一为 tasknotes", () => {
+	const s = state({ taskSource: "tasknotes" });
+	setTaskSource(s, "obsidian-tasks");
+	assert.equal(s.taskSource, "obsidian-tasks");
+	setTaskSource(s, "tasknotes");
+	assert.equal(s.taskSource, "tasknotes");
+	setTaskSource(s, "jira");
+	assert.equal(s.taskSource, "tasknotes");
 });
 
 test("addTemplate 追加一个新模板（生成唯一 id）", () => {
@@ -163,6 +175,21 @@ test("门面：命令落盘一次，并保留引用", () => {
 	});
 	facade.setReportFolder("  X  ");
 	assert.equal(live.reportFolder, "X");
+	assert.equal(saves, 1);
+});
+
+test("门面：setTaskSource 落盘一次", () => {
+	const live = state();
+	let saves = 0;
+	const facade = createAppSettings({
+		getState: () => live,
+		commit: (next) => {
+			Object.assign(live, next);
+			saves++;
+		},
+	});
+	facade.setTaskSource("obsidian-tasks");
+	assert.equal(live.taskSource, "obsidian-tasks");
 	assert.equal(saves, 1);
 });
 

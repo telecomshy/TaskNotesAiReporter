@@ -58,6 +58,9 @@ export interface TaskNotesPublicApi {
 /** 日期字段口径（用于任务自动筛选） */
 export type DateField = "completedDate" | "due" | "scheduled" | "dateCreated";
 
+/** 任务来源：报告任务数据的提供方（见 CONTEXT.md「来源」）。 */
+export type TaskSource = "tasknotes" | "obsidian-tasks";
+
 /** 日期范围（闭区间，YYYY-MM-DD） */
 export interface DateRange {
 	start: string;
@@ -156,6 +159,8 @@ export interface TaskNotesAIHelperSettings {
 	timeoutSeconds: number;
 	// 报告输出目录
 	reportFolder: string;
+	// 任务来源（一次只用一个）
+	taskSource: TaskSource;
 	// 任务自动筛选的日期口径（可多选）
 	dateFields: DateField[];
 	// 周起始日
@@ -178,6 +183,7 @@ export const DEFAULT_SETTINGS: TaskNotesAIHelperSettings = {
 	maxTokens: 8192,
 	timeoutSeconds: 60,
 	reportFolder: "TaskNotes/Reports",
+	taskSource: "tasknotes",
 	dateFields: ["completedDate", "scheduled", "due"],
 	weekStartsOnMonday: true,
 	language: "English",

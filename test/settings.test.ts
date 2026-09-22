@@ -193,6 +193,20 @@ test("normalizeSettings 保留合法界面语言", () => {
 	assert.equal(load({ uiLanguage: "auto" }).uiLanguage, "auto");
 });
 
+test("normalizeSettings 默认任务来源为 tasknotes（旧数据补齐）", () => {
+	assert.equal(load({}).taskSource, "tasknotes");
+});
+
+test("normalizeSettings 保留合法任务来源", () => {
+	assert.equal(load({ taskSource: "tasknotes" }).taskSource, "tasknotes");
+	assert.equal(load({ taskSource: "obsidian-tasks" }).taskSource, "obsidian-tasks");
+});
+
+test("normalizeSettings 非法任务来源回退 tasknotes", () => {
+	assert.equal(load({ taskSource: "jira" }).taskSource, "tasknotes");
+	assert.equal(load({ taskSource: 123 }).taskSource, "tasknotes");
+});
+
 test("normalizeSettings 空或纯空白报告语言回退英文", () => {
 	assert.equal(load({ language: "" }).language, "English");
 	assert.equal(load({ language: "   " }).language, "English");
