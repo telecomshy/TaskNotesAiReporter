@@ -25,7 +25,9 @@ import {
 	type PickerTab,
 } from "./pickerSession";
 import { getMonthRange, getQuarterRange, getWeekRange, getYearRange } from "../core/dates";
+import { stripContextTokens } from "../core/filter";
 import type { DateField, DateRange, TaskInfo } from "../types";
+import type { SourceCapabilities } from "../source";
 import type { UiLanguage, Translator } from "../i18n";
 
 export class TaskPickerModal extends Modal {
@@ -52,6 +54,7 @@ export class TaskPickerModal extends Modal {
 		allTasks: TaskInfo[],
 		dateFields: DateField[],
 		candidateIds: Set<string>,
+		private capabilities: SourceCapabilities,
 		private weekStartsOnMonday: boolean,
 		private t: Translator,
 		private lang: UiLanguage,
@@ -184,9 +187,19 @@ export class TaskPickerModal extends Modal {
 		this.searchInput.addClass("tah-search-input");
 		this.searchInput.value = this.session.query;
 		this.searchInput.addEventListener("input", () => {
-			this.session = setQuery(this.session, this.searchInput.value);
+			const raw = this.searchInput.value;
+			// 来源不支持上下文时，在 **UI 层禁用** @维度：用户无法输入一个永不命中的条件。
+			// 刻意不改 parseTitleQuery（保持来源无关的纯函数），见 #45 修订第四节。
+			const value = this.capabilities.supportsContexts ? raw : stripContextTokens(raw);
+			if (value !== raw) this.searchInput.value = value;
+			this.session = setQuery(this.session, value);
 			this.refresh();
 		});
+
+		// 来源能力驱动的降级提示（界面据能力决定，不自行判断来源字符串）
+		if (!this.capabilities.supportsContexts) {
+			this.filterEl.createDiv({ text: this.t("taskPicker.contextsUnsupported"), cls: "tah-hint" });
+		}
 
 		// 操作行：左「全选」+ 计数，右「清空选择」
 		const actionRow = this.filterEl.createDiv({ cls: "tah-picker-actions" });

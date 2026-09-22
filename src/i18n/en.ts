@@ -52,6 +52,8 @@ export const en = {
 		loading: "Loading tasks…",
 		tasknotesMissing:
 			"TaskNotes plugin not detected. Enable TaskNotes in Obsidian first.",
+		obsidianTasksMissing:
+			"Obsidian Tasks plugin not detected. Enable Obsidian Tasks in Obsidian first.",
 		joinedTasks: "Joined tasks ({{count}})",
 		clear: "Clear",
 		empty: "No tasks yet. Click \"Select tasks\" below to filter and add tasks.",
@@ -84,6 +86,7 @@ export const en = {
 		allTasks: "All tasks ({{count}})",
 		searchResult: "Search \"{{query}}\" ({{count}} matches)",
 		searchPlaceholder: "keyword #tag @context (space-separated)…",
+		contextsUnsupported: "This task source has no contexts; @context is disabled here.",
 		selectAll: "Select all",
 		parseKeywords: "Keywords: {{value}}",
 		parseTags: "Tags: {{value}}",

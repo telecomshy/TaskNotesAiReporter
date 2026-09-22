@@ -7,6 +7,7 @@ import { getLanguage, Plugin } from "obsidian";
 import { TaskNotesAIHelperSettingTab } from "./src/settings";
 import { ReportModal } from "./src/ui/ReportModal";
 import { obsidianTaskRepository } from "./src/tasks/obsidian";
+import { openSource as openTaskSource } from "./src/source";
 import type { TaskNotesAIHelperSettings } from "./src/settings/logic";
 import { loadSettings as loadSettingsFromIO } from "./src/settings/loadSettings";
 import { createSettingsOwner, type SettingsOwner } from "./src/settings/owner";
@@ -99,6 +100,13 @@ export default class TaskNotesAIHelperPlugin extends Plugin {
 	}
 
 	openReportModal(): void {
-		new ReportModal(this.app, this, obsidianTaskRepository(this.app)).open();
+		// 打开来源：来源切换 / 检测的唯一入口（见 #45）。
+		// obsidian-tasks 在 #53 落地前走「来源缺失」降级：不崩、可单独合并。
+		const open = () =>
+			openTaskSource(this.settings.taskSource, {
+				tasknotes: () => obsidianTaskRepository(this.app),
+				"obsidian-tasks": () => null,
+			});
+		new ReportModal(this.app, this, open).open();
 	}
 }
