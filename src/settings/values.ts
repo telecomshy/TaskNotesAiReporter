@@ -13,14 +13,13 @@ import {
 	type TaskSource,
 } from "../types";
 import type { UiLanguageSetting } from "../i18n";
+import { DATE_FIELDS } from "../core/dateFields";
 
-/** 日期口径的合法取值（顺序即设置页展示顺序）。 */
-export const DATE_FIELD_VALUES: readonly DateField[] = [
-	"completedDate",
-	"due",
-	"scheduled",
-	"dateCreated",
-];
+/**
+ * 日期口径的合法取值：来自「日期口径」表（`../core/dateFields`），与自动筛选、
+ * 日期范围推导、设置页文案同源（见 #50）。
+ */
+export const DATE_FIELD_VALUES: readonly DateField[] = DATE_FIELDS;
 
 /** 界面语言的合法取值。 */
 export const UI_LANGUAGE_VALUES: readonly UiLanguageSetting[] = ["auto", "zh", "en"];

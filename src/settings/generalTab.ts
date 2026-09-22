@@ -4,16 +4,9 @@
  */
 
 import { Setting } from "obsidian";
-import type { DateField, TaskSource } from "../types";
+import type { TaskSource } from "../types";
 import type { SettingsTabContext } from "./index";
-import { DATE_FIELD_VALUES } from "./values";
-
-const DATE_FIELD_KEYS: Array<{ value: DateField; key: string }> = [
-	{ value: "completedDate", key: "settings.dateFieldCompletedDate" },
-	{ value: "due", key: "settings.dateFieldDue" },
-	{ value: "scheduled", key: "settings.dateFieldScheduled" },
-	{ value: "dateCreated", key: "settings.dateFieldCreated" },
-];
+import { DATE_FIELD_TABLE } from "../core/dateFields";
 
 const TASK_SOURCE_OPTIONS: Array<{ value: TaskSource; key: string }> = [
 	{ value: "tasknotes", key: "settings.taskSourceTaskNotes" },
@@ -57,14 +50,15 @@ export function renderGeneralTab(container: HTMLElement, ctx: SettingsTabContext
 		cls: "setting-item-description",
 	});
 
-	for (const option of DATE_FIELD_KEYS) {
+	// 日期口径逐项来自「日期口径」表（见 #50）：加一个口径只改那张表
+	for (const option of DATE_FIELD_TABLE) {
 		new Setting(container)
-			.setName(t(option.key))
+			.setName(t(option.labelKey))
 			.addToggle((toggle) =>
 				toggle
-					.setValue(ctx.plugin.settings.dateFields.includes(option.value))
+					.setValue(ctx.plugin.settings.dateFields.includes(option.field))
 					.onChange((value) => {
-						ctx.plugin.appSettings.toggleDateField(option.value, value);
+						ctx.plugin.appSettings.toggleDateField(option.field, value);
 					})
 			);
 	}
