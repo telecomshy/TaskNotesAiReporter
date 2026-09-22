@@ -11,6 +11,9 @@ import type { StatusDefinition, TaskInfo } from "../types";
 /** 约定：值名为此的状态视为「进行中」（TaskNotes 默认状态值）。 */
 export const IN_PROGRESS_STATUS_VALUE = "in-progress";
 
+/** 来源无关的「进行中」类型标记（Tasks 的 StatusType 口径）；优先于值名判定。 */
+export const IN_PROGRESS_STATUS_TYPE = "IN_PROGRESS";
+
 /** 任务子集口径。 */
 export type TaskSubset = "completed" | "in-progress" | "open";
 
@@ -19,9 +22,11 @@ export function isCompletedStatus(status: string, statuses: StatusDefinition[]):
 	return statuses.find((definition) => definition.value === status)?.isCompleted === true;
 }
 
-/** 状态是否属于「进行中」：值名匹配约定值且未被标记为已完成。 */
+/** 状态是否属于「进行中」：优先按 type 判定，回退到约定值名 `in-progress`。 */
 export function isInProgressStatus(status: string, statuses: StatusDefinition[]): boolean {
 	if (isCompletedStatus(status, statuses)) return false;
+	const definition = statuses.find((d) => d.value === status);
+	if (definition?.type === IN_PROGRESS_STATUS_TYPE) return true;
 	return status.trim().toLowerCase() === IN_PROGRESS_STATUS_VALUE;
 }
 

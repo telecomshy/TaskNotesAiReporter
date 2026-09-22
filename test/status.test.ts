@@ -22,6 +22,15 @@ test("isInProgressStatus 按状态值名 in-progress 且未完成", () => {
 	assert.equal(isInProgressStatus("open", statuses), false);
 });
 
+test("isInProgressStatus 优先按 type=IN_PROGRESS 判定（来源无关口径）", () => {
+	const defs: StatusDefinition[] = [
+		{ value: "In Progress", isCompleted: false, type: "IN_PROGRESS" },
+		{ value: "Done", isCompleted: true, type: "DONE" },
+	];
+	assert.equal(isInProgressStatus("In Progress", defs), true);
+	assert.equal(isInProgressStatus("Done", defs), false);
+});
+
 test("自定义状态名导致进行中为空（已知限制）", () => {
 	const custom: StatusDefinition[] = [
 		{ value: "doing", isCompleted: false },
