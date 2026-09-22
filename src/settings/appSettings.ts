@@ -19,10 +19,17 @@ import {
 	coerceSelectedTemplateId,
 	coerceTaskSource,
 	coerceUiLanguage,
-	genId,
 	isDateField,
+	makeId,
 } from "./values";
 import type { TaskSource } from "../types";
+
+/** 生成参数（temperature / maxTokens / timeoutSeconds）：三者恒结伴读写（见 #46）。 */
+export interface GenerationParams {
+	temperature?: number;
+	maxTokens?: number;
+	timeoutSeconds?: number;
+}
 
 /**
  * 非供应商设置的可变切片：命令只在这一片上做转移。
@@ -94,22 +101,18 @@ export function setUiLanguage(state: AppState, value: unknown): AppState {
  * 设置生成参数（temperature / maxTokens / timeoutSeconds）。
  * 只收有限数值，其余项保持原值；不提供 UI（见 #46）。
  */
-export function setGenerationParams(
-	state: AppState,
-	params: { temperature?: unknown; maxTokens?: unknown; timeoutSeconds?: unknown }
-): AppState {
-	const temperature = coerceFiniteNumber(params.temperature);
-	if (temperature !== null) state.temperature = temperature;
-	const maxTokens = coerceFiniteNumber(params.maxTokens);
-	if (maxTokens !== null) state.maxTokens = maxTokens;
-	const timeoutSeconds = coerceFiniteNumber(params.timeoutSeconds);
-	if (timeoutSeconds !== null) state.timeoutSeconds = timeoutSeconds;
+export function setGenerationParams(state: AppState, params: GenerationParams): AppState {
+	const entries = Object.entries(params) as Array<[keyof GenerationParams, unknown]>;
+	for (const [key, value] of entries) {
+		const next = coerceFiniteNumber(value);
+		if (next !== null) state[key] = next;
+	}
 	return state;
 }
 
 /** 追加一个报告模板（生成唯一 id）。 */
 export function addTemplate(state: AppState, name: string, content: string): AppState {
-	state.templates.push({ id: genId(), name, content });
+	state.templates.push({ id: makeId(), name, content });
 	return state;
 }
 
@@ -137,23 +140,19 @@ export function setSelectedTemplateId(state: AppState, id: string): AppState {
 
 // ===== 绑定门面 =====
 
-/** 非供应商设置门面：视图只与它对话。 */
+/** 非供应商设置门面：视图只与它对话。命令返回落盘的 Promise，失败可等待 / 传播。 */
 export interface AppSettings {
-	setTaskSource(source: TaskSource): void;
-	setReportFolder(folder: string): void;
-	toggleDateField(field: DateField, on: boolean): void;
-	setWeekStartsOnMonday(value: boolean): void;
-	setReportLanguage(language: string): void;
-	setUiLanguage(value: unknown): void;
-	setGenerationParams(params: {
-		temperature?: number;
-		maxTokens?: number;
-		timeoutSeconds?: number;
-	}): void;
-	addTemplate(name: string, content: string): void;
-	updateTemplate(id: string, name: string, content: string): void;
-	removeTemplate(id: string): void;
-	setSelectedTemplateId(id: string): void;
+	setTaskSource(source: unknown): Promise<void>;
+	setReportFolder(folder: string): Promise<void>;
+	toggleDateField(field: DateField, on: boolean): Promise<void>;
+	setWeekStartsOnMonday(value: boolean): Promise<void>;
+	setReportLanguage(language: string): Promise<void>;
+	setUiLanguage(value: unknown): Promise<void>;
+	setGenerationParams(params: GenerationParams): Promise<void>;
+	addTemplate(name: string, content: string): Promise<void>;
+	updateTemplate(id: string, name: string, content: string): Promise<void>;
+	removeTemplate(id: string): Promise<void>;
+	setSelectedTemplateId(id: string): Promise<void>;
 }
 
 /**
@@ -161,7 +160,8 @@ export interface AppSettings {
  * 接线层不再逐字段搬运设置切片（见 #46）。
  */
 export function createAppSettings(owner: SettingsOwner): AppSettings {
-	const run = (command: (state: TaskNotesAIHelperSettings) => void): void => owner.apply(command);
+	const run = (command: (state: TaskNotesAIHelperSettings) => void): Promise<void> =>
+		owner.apply(command);
 	return {
 		setTaskSource: (source) => run((s) => void setTaskSource(s, source)),
 		setReportFolder: (folder) => run((s) => void setReportFolder(s, folder)),

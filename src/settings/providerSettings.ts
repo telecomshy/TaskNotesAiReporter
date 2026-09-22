@@ -27,6 +27,16 @@ export interface ProviderState {
 	activeModel: string;
 }
 
+/**
+ * 供应商切片的只读视图：只读消费方（`resolveActive` 等）用它，
+ * 从而可直接读设置快照而无需把只读数组改窄。可变的 `ProviderState` 天然赋值兼容。
+ */
+export interface ProviderStateRead {
+	readonly providers: readonly ModelProvider[];
+	readonly activeProviderId: string;
+	readonly activeModel: string;
+}
+
 // ===== 判定谓词 =====
 
 /** 统一读取供应商的模型 ID：预设取已拉取的列表；自定义由 customModels 派生（去空白）。 */
@@ -217,7 +227,7 @@ export function selectActiveModel(
  * 无认证（authType === "none"）的供应商不要求密钥值。
  */
 export function resolveActive(
-	state: ProviderState,
+	state: ProviderStateRead,
 	getSecret: (id: string) => string | null
 ): ActiveModelResolution {
 	const provider = findProvider(state, state.activeProviderId);
@@ -270,7 +280,7 @@ function modelExists(provider: ModelProvider, model: string): boolean {
 	return model !== "" && modelsOf(provider).includes(model);
 }
 
-function findProvider(state: ProviderState, providerId: string): ModelProvider | undefined {
+function findProvider(state: ProviderStateRead, providerId: string): ModelProvider | undefined {
 	return state.providers.find((p) => p.id === providerId);
 }
 

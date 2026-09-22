@@ -1,4 +1,4 @@
-﻿import { test } from "node:test";
+import { test } from "node:test";
 import assert from "node:assert/strict";
 import { isCompletedStatus, isInProgressStatus, filterTasksBySubset } from "../src/core/status";
 import { makeTask } from "./fakes/task";

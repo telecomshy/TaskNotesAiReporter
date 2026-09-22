@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 「选择任务」窗口的会话状态：Tab / 时间区间 / 标题查询 / 勾选集合。
  *
  * 纯状态值 + 具名转移 + 选择器，无 DOM、无 obsidian，可在 Node 单元测试。
@@ -29,7 +29,7 @@ export interface PickerSession {
 	query: string;
 	checked: Set<string>;
 	addableTasks: TaskInfo[];
-	dateFields: DateField[];
+	dateFields: readonly DateField[];
 }
 
 export interface SelectAllState {
@@ -43,7 +43,7 @@ export interface SelectAllState {
  */
 export function createSession(
 	allTasks: TaskInfo[],
-	dateFields: DateField[],
+	dateFields: readonly DateField[],
 	candidateIds: Set<string>
 ): PickerSession {
 	const addableTasks = allTasks.filter((task) => !candidateIds.has(task.id));
@@ -106,11 +106,11 @@ export function setQuery(session: PickerSession, query: string): PickerSession {
 	return { ...session, query, checked: new Set() };
 }
 
-/** 勾选 / 取消单个任务。 */
-export function toggle(session: PickerSession, path: string): PickerSession {
+/** 勾选 / 取消单个任务（`id` 是任务标识，缝外不透明）。 */
+export function toggle(session: PickerSession, id: string): PickerSession {
 	const checked = new Set(session.checked);
-	if (checked.has(path)) checked.delete(path);
-	else checked.add(path);
+	if (checked.has(id)) checked.delete(id);
+	else checked.add(id);
 	return { ...session, checked };
 }
 

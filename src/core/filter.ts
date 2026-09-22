@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 任务筛选：按日期范围自动筛选，以及「按标题」查询（关键字 / 标签 / 上下文）。
  * 纯函数，无 Obsidian 依赖，可单元测试。
  */
@@ -27,9 +27,9 @@ function inRange(value: string | undefined, range: DateRange): boolean {
  * 可选字段来自「日期口径」表（见 ./dateFields），与日期范围推导同源（见 #50）。
  */
 export function filterTasksByDateRange(
-	tasks: TaskInfo[],
+	tasks: readonly TaskInfo[],
 	range: DateRange,
-	dateFields: DateField[]
+	dateFields: readonly DateField[]
 ): TaskInfo[] {
 	const result: TaskInfo[] = [];
 	const seen = new Set<string>();
@@ -103,7 +103,7 @@ function matchesTag(taskTag: string, queryTag: string): boolean {
  * - 同一维度内多个条件为 OR（关键字任一命中即可；标签带层级前缀匹配；上下文精确匹配）；
  * - 仅有关键字时退化为标题包含关键字（兼容原行为）。
  */
-export function filterTasksByTitleQuery(tasks: TaskInfo[], query: TitleQuery): TaskInfo[] {
+export function filterTasksByTitleQuery(tasks: readonly TaskInfo[], query: TitleQuery): TaskInfo[] {
 	const { keywords, tags, contexts } = query;
 	return tasks.filter((task) => {
 		if (task.archived) return false;

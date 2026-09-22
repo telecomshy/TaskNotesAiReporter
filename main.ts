@@ -10,7 +10,7 @@ import { obsidianTaskRepository } from "./src/tasks/obsidian";
 import { openSource as openTaskSource } from "./src/source";
 import type { TaskNotesAIHelperSettings } from "./src/settings/logic";
 import { loadSettings as loadSettingsFromIO } from "./src/settings/loadSettings";
-import { createSettingsOwner, type SettingsOwner } from "./src/settings/owner";
+import { createSettingsOwner, type SettingsOwner, type SettingsSnapshot } from "./src/settings/owner";
 import { createProviderSettings, type ProviderSettings } from "./src/settings/providerSettings";
 import { createAppSettings, type AppSettings } from "./src/settings/appSettings";
 import {
@@ -28,10 +28,10 @@ export default class TaskNotesAIHelperPlugin extends Plugin {
 	 */
 	private settingsOwner!: SettingsOwner;
 	/**
-	 * 设置查询：owner 自持的唯一副本，**调用方只读**。
-	 * 一切变更走 `appSettings` / `providers` 的命令，不再直接赋值（见 #46）。
+	 * 设置查询：owner 自持的唯一副本的**深只读快照**，调用方无法借共享引用改写状态。
+	 * 一切变更走 `appSettings` / `providers` 的命令（见 #46）。
 	 */
-	settings: TaskNotesAIHelperSettings;
+	settings: SettingsSnapshot;
 	/** 供应商配置门面：命令转移、当前模型解析与密钥读取（见 src/settings/providerSettings.ts）。 */
 	providers!: ProviderSettings;
 	/** 非供应商设置门面：报告/模板等设置的命令转移与不变式（见 src/settings/appSettings.ts）。 */
@@ -85,10 +85,6 @@ export default class TaskNotesAIHelperPlugin extends Plugin {
 		this.settings = this.settingsOwner.get();
 		this.providers = createProviderSettings({ owner: this.settingsOwner });
 		this.appSettings = createAppSettings(this.settingsOwner);
-	}
-
-	async saveSettings(): Promise<void> {
-		this.settingsOwner.persist();
 	}
 
 	/** 依据缓存的 Obsidian 语言与 `uiLanguage` 设置重新解析界面语言与翻译器。 */

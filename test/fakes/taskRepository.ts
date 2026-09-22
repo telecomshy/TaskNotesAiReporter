@@ -1,4 +1,4 @@
-﻿import type { TaskRepository } from "../../src/tasks/repository";
+import type { TaskRepository } from "../../src/tasks/repository";
 import type { StatusDefinition, TaskInfo } from "../../src/types";
 
 /** 测试用 in-process TaskRepository fake，供越 seam 的行为测试复用。 */

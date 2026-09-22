@@ -44,7 +44,13 @@ function ownerOver(
 
 // ===== 命令转移 =====
 
-test("setReportFolder 去空白写入", () => {
+test("toggleDateField 非法字段名无操作（变更侧值域规则）", () => {
+	const s = state({ dateFields: ["due"] });
+	toggleDateField(s, "bogus" as never, true);
+	assert.deepEqual(s.dateFields, ["due"]);
+});
+
+test("setReportFolder 去空白写入（变更侧规则；载入侧不 trim，见 test/settings.test.ts）", () => {
 	const s = state();
 	setReportFolder(s, "  我的/报告  ");
 	assert.equal(s.reportFolder, "我的/报告");

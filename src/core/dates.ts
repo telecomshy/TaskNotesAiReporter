@@ -55,7 +55,7 @@ export function getQuarterRange(anchor: Date): DateRange {
  * 字段清单来自 `DATE_FIELD_TABLE`：表内字段都参与推导，加字段不会漏算 `{{range}}`（见 #50）。
  */
 export function getReportRange(
-	tasks: TaskInfo[],
+	tasks: readonly TaskInfo[],
 	weekStartsOnMonday: boolean,
 	now: Date
 ): DateRange {

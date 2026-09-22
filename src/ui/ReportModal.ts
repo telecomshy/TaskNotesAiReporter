@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 生成报告主弹窗。
  * 只有一个任务列表区域：通过「选择任务」窗口追加任务，列表中的任务全部送模型生成报告。
  * 每项右侧的小 × 直接从列表移除；工具栏的「清空」清空整个列表。
@@ -64,11 +64,7 @@ export class ReportModal extends Modal {
 		// 打开来源：来源判定只在此处做一次（判别式：已打开 | 来源缺失，见 #45）
 		const opened = this.openSource();
 		if (!opened.ok) {
-			this.listWrapEl.empty();
-			this.listWrapEl.createEl("p", {
-				text: this.plugin.t(sourceMissingMessageKey(this.plugin.settings.taskSource)),
-				cls: "tah-error",
-			});
+			this.renderSourceMissing();
 			return;
 		}
 		this.repository = opened.repo;
@@ -79,11 +75,7 @@ export class ReportModal extends Modal {
 		this.listWrapEl.createDiv({ text: this.plugin.t("report.loading"), cls: "tah-loading" });
 		const tasks = await this.repository.list();
 		if (tasks === null) {
-			this.listWrapEl.empty();
-			this.listWrapEl.createEl("p", {
-				text: this.plugin.t(sourceMissingMessageKey(this.plugin.settings.taskSource)),
-				cls: "tah-error",
-			});
+			this.renderSourceMissing();
 			return;
 		}
 		this.allTasks = tasks;
@@ -95,6 +87,15 @@ export class ReportModal extends Modal {
 	}
 
 	// ===== 任务列表 =====
+
+	/** 来源缺失的降级提示（文案键由「来源」深 module 一处陈述，见 #45）。 */
+	private renderSourceMissing(): void {
+		this.listWrapEl.empty();
+		this.listWrapEl.createEl("p", {
+			text: this.plugin.t(sourceMissingMessageKey(this.plugin.settings.taskSource)),
+			cls: "tah-error",
+		});
+	}
 
 	/** 所有候选任务（按加入顺序），即报告任务集合 */
 	private getCandidateTasks(): TaskInfo[] {

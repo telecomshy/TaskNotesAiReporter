@@ -12,20 +12,16 @@ import {
 } from "../types";
 import type { PendingSecret } from "./secrets";
 import {
-	coerceDateFields,
-	coerceFiniteNumber,
-	coerceReportFolder,
 	coerceReportLanguage,
 	coerceSelectedTemplateId,
 	coerceTaskSource,
 	coerceTemplates,
 	coerceUiLanguage,
 	coerceWeekStartsOnMonday,
-	genId,
+	makeId,
 } from "./values";
 
 export type { TaskNotesAIHelperSettings } from "../types";
-export { genId } from "./values";
 
 /** 归一化结果：设置本身 + 待导入 SecretStorage 的旧版明文密钥。 */
 export interface NormalizedSettings {
@@ -58,21 +54,17 @@ export function normalizeSettings(raw: unknown): NormalizedSettings {
 	const settings: TaskNotesAIHelperSettings = { ...DEFAULT_SETTINGS };
 	const pendingSecrets: PendingSecret[] = [];
 
-	// 常规字段：与变更命令共用 ./values 的同一套值域规则（见 #46）。
-	const temperature = coerceFiniteNumber(data.temperature);
-	if (temperature !== null) settings.temperature = temperature;
-	const maxTokens = coerceFiniteNumber(data.maxTokens);
-	if (maxTokens !== null) settings.maxTokens = maxTokens;
-	const timeoutSeconds = coerceFiniteNumber(data.timeoutSeconds);
-	if (timeoutSeconds !== null) settings.timeoutSeconds = timeoutSeconds;
-	// 「缺省（非字符串）→ 保留默认」是载入侧的语义；「去空白」是共享的值域规则。
-	if (typeof data.reportFolder === "string") {
-		settings.reportFolder = coerceReportFolder(data.reportFolder);
-	}
+	// 常规字段：载入**不改写用户既有数据**，只在缺失 / 非法时按值域回退。
+	// #46 列举的「载入与变更共用」规则只有四项：报告语言空回退、界面语言归一、
+	// 所选模板必须存在、taskSource 归一。目录空白 / 日期口径过滤 / 生成参数校验属**变更侧**规则；
+	// 若在载入套用会改写用户 data.json，构成 #44 禁止的第三处用户可见变更。
+	if (typeof data.temperature === "number") settings.temperature = data.temperature;
+	if (typeof data.maxTokens === "number") settings.maxTokens = data.maxTokens;
+	if (typeof data.timeoutSeconds === "number") settings.timeoutSeconds = data.timeoutSeconds;
+	if (typeof data.reportFolder === "string") settings.reportFolder = data.reportFolder;
 	// 日期口径：**空数组是合法值**（= 自动筛选关闭），不再被静默改回默认（#46 的用户可见修正）。
-	// 只有数据里根本没有这一项（非数组）才回退默认。
-	const dateFields = coerceDateFields(data.dateFields);
-	if (dateFields !== null) settings.dateFields = dateFields;
+	// 数组内容原样保留——过滤非法项是变更侧规则，载入不做。
+	if (Array.isArray(data.dateFields)) settings.dateFields = data.dateFields.slice();
 	const weekStartsOnMonday = coerceWeekStartsOnMonday(data.weekStartsOnMonday);
 	if (weekStartsOnMonday !== null) settings.weekStartsOnMonday = weekStartsOnMonday;
 	settings.language = coerceReportLanguage(data.language);
@@ -126,7 +118,7 @@ export function normalizeSettings(raw: unknown): NormalizedSettings {
 				if (type === "custom" && !Array.isArray(provider.customModels)) {
 					const legacyModels = Array.isArray(providerRaw.models) ? (providerRaw.models as string[]) : [];
 					provider.customModels = legacyModels.map((modelId) => ({
-						id: genId(),
+						id: makeId(),
 						modelId,
 					}));
 				}

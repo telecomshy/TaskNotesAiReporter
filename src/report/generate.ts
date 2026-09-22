@@ -18,10 +18,10 @@ import { buildReportPrompt } from "../core/prompt";
 import { getReportRange } from "../core/dates";
 
 export interface GenerateReportInput {
-	tasks: TaskInfo[];
+	tasks: readonly TaskInfo[];
 	type: ReportType;
 	templateId: string;
-	templates: ReportTemplate[];
+	templates: readonly ReportTemplate[];
 	/** 本次生成追加在模板之后的额外指令；纯空白视为缺省。 */
 	extraRequirements?: string;
 	language: string;

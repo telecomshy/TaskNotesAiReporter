@@ -59,9 +59,9 @@ test("normalizeSettings 日期口径缺省（无该字段）才回退默认", ()
 	assert.deepEqual(settings.dateFields, DEFAULT_SETTINGS.dateFields);
 });
 
-test("normalizeSettings 日期口径过滤非法项并去重", () => {
+test("normalizeSettings 日期口径：载入原样保留（过滤非法项是变更侧规则）", () => {
 	const settings = load({ dateFields: ["due", "bogus", "due", "completedDate"] });
-	assert.deepEqual(settings.dateFields, ["due", "completedDate"]);
+	assert.deepEqual(settings.dateFields, ["due", "bogus", "due", "completedDate"]);
 });
 
 test("normalizeSettings taskSource：缺省 tasknotes、保留合法值、非法归一", () => {
@@ -75,9 +75,16 @@ test("normalizeSettings 报告语言空回退默认、界面语言非法归一 a
 	assert.equal(load({ uiLanguage: "klingon" }).uiLanguage, "auto");
 });
 
-test("normalizeSettings 生成参数只接受有限数值", () => {
-	assert.equal(load({ maxTokens: Number.NaN }).maxTokens, DEFAULT_SETTINGS.maxTokens);
-	assert.equal(load({ timeoutSeconds: 30 }).timeoutSeconds, 30);
+// ===== #44 双例外约束：载入不得改写用户既有数据 =====
+
+test("normalizeSettings 报告目录载入不 trim（去空白是变更侧规则，改写即第三处可见变更）", () => {
+	assert.equal(load({ reportFolder: "  我的/报告  " }).reportFolder, "  我的/报告  ");
+});
+
+test("normalizeSettings 生成参数载入不改写（有限数值校验是变更侧规则）", () => {
+	const settings = load({ maxTokens: Number.NaN, temperature: 5 });
+	assert.ok(Number.isNaN(settings.maxTokens));
+	assert.equal(settings.temperature, 5);
 });
 
 test("normalizeSettings 迁移旧版 DeepSeek 配置到预设供应商", () => {

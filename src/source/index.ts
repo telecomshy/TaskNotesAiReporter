@@ -5,7 +5,7 @@
  * 来源差异只在来源处陈述——调用方不再对来源字符串做能力判断，
  * 将来接入新任务插件只需写一个 adapter（#44 用户故事 22）。
  *
- * 本模块纯逻辑，不依赖 obsidian / DOM，可在 Node 单测；真实后端的挂接由边界注入。
+ * 本模块纯逻辑，不依赖 obsidian / DOM，可在 Node 单测；真实适配器的挂接由边界注入。
  */
 
 import type { TaskRepository } from "../tasks/repository";
@@ -25,10 +25,10 @@ export type OpenSourceResult =
 	| { ok: false; reason: "source-missing" };
 
 /**
- * 各来源的挂接点：给定来源名返回其后端，`null` 表示来源缺失（插件未启用）。
+ * 各来源的适配器挂接点：给定来源名返回其适配器，`null` 表示来源缺失（插件未启用）。
  * 由边界注入真实实现，测试注入假实现。
  */
-export type SourceBackends = Record<TaskSource, () => TaskRepository | null>;
+export type SourceAdapters = Record<TaskSource, () => TaskRepository | null>;
 
 /**
  * 来源能力：**一处陈述**。
@@ -44,8 +44,8 @@ export function capabilitiesOf(source: TaskSource): SourceCapabilities {
  * 恒返回判别式、不返回裸 `null`；「来源不可用」只经 `source-missing` 表达，
  * 成功分支里的 `repo` 永不为 `null`。
  */
-export function openSource(source: TaskSource, backends: SourceBackends): OpenSourceResult {
-	const open = backends[source];
+export function openSource(source: TaskSource, adapters: SourceAdapters): OpenSourceResult {
+	const open = adapters[source];
 	const repo = typeof open === "function" ? open() : null;
 	if (!repo) return { ok: false, reason: "source-missing" };
 	return { ok: true, capabilities: capabilitiesOf(source), repo };

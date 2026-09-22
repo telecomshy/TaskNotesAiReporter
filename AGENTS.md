@@ -8,6 +8,10 @@ Specs and issues live as GitHub issues (via `gh`). Read `docs/agents/issue-track
 
 Read `docs/agents/triage-labels.md` when triaging an issue or applying or removing a label; it maps the five triage roles to this repo's label strings.
 
+### Sub-agent models
+
+Read `docs/agents/subagent-models.md` before spawning a sub-agent. It pins which model each kind of sub-agent must use (e.g. `/code-review` runs on `deepseek/deepseek-v4-flash`) and how to resolve `providerID/modelID` without guessing.
+
 ### Domain docs
 
 Read `docs/agents/domain.md` before exploring the codebase or naming domain concepts, and when an ADR touches the area you are changing. The domain model is the root `CONTEXT.md` plus `docs/adr/`.

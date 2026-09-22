@@ -1,7 +1,11 @@
 /**
- * 设置的**值域规则**：「何为合法设置值」只此一处判定。
- * 载入（`logic.ts` 的 normalizeSettings）与变更（`appSettings.ts` 的命令）共用同一套规则，
- * 使不变式不会在两处漂移（见 #46）。
+ * 设置的**值域规则**：「何为合法设置值」的判定集中在这里。
+ *
+ * 其中四项由**载入与变更共用**（#46 明列）：报告语言空回退、界面语言归一、
+ * 所选模板必须存在、taskSource 归一。其余（目录去空白、日期口径合法性、生成参数有限数值）
+ * 是**变更侧**规则：载入刻意不套用，以免改写用户 data.json（#44 的双例外约束）。
+ *
+ * 附带提供不透明 id 的铸造（`makeId`）——它不是值域规则，住在这里只为避免单独建模块。
  *
  * 纯函数，无 obsidian、无 DOM。
  */
@@ -31,14 +35,17 @@ export function isDateField(value: unknown): value is DateField {
 	return DATE_FIELD_VALUES.includes(value as DateField);
 }
 
-/** 生成唯一 id（模板等）。 */
-export function genId(): string {
+/**
+ * 铸造一个不透明 id（模板、自定义模型配置用）。
+ * 不是值域规则，见模块头注释。
+ */
+export function makeId(): string {
 	return `tpl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 // ===== 标量 =====
 
-/** 报告输出目录：去空白。 */
+/** 报告输出目录：去空白（**变更侧**规则；载入保留用户既有值，含空白）。 */
 export function coerceReportFolder(value: unknown): string {
 	return typeof value === "string" ? value.trim() : "";
 }
@@ -55,7 +62,7 @@ export function coerceUiLanguage(value: unknown): UiLanguageSetting {
 		: "auto";
 }
 
-/** 任务来源：非法值归一为 `tasknotes`（既有用户的默认行为不变）。 */
+/** 任务来源：非法值归一为 `tasknotes`（载入与变更一致；既有用户的默认行为不变）。 */
 export function coerceTaskSource(value: unknown): TaskSource {
 	return TASK_SOURCE_VALUES.includes(value as TaskSource) ? (value as TaskSource) : "tasknotes";
 }
@@ -65,7 +72,7 @@ export function coerceWeekStartsOnMonday(value: unknown): boolean | null {
 	return typeof value === "boolean" ? value : null;
 }
 
-/** 生成参数：非有限数值视为缺省（返回 null）。 */
+/** 生成参数：非有限数值视为缺省（返回 null）。**变更侧**规则，载入不套用。 */
 export function coerceFiniteNumber(value: unknown): number | null {
 	return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
@@ -73,7 +80,7 @@ export function coerceFiniteNumber(value: unknown): number | null {
 // ===== 集合 =====
 
 /**
- * 日期口径：保留合法项并去重。
+ * 日期口径：保留合法项并去重（变更侧规则；载入原样保留）。
  * **空数组是合法值**（= 自动筛选关闭），不得被回退成默认——这是 #46 的用户可见修正。
  * 非数组返回 `null`，表示「数据里没有这一项」，由调用方回退默认。
  */
@@ -92,7 +99,7 @@ export function coerceTemplate(value: unknown): ReportTemplate | null {
 	const raw = value as { id?: unknown; name?: unknown; content?: unknown };
 	if (typeof raw.name !== "string" || typeof raw.content !== "string") return null;
 	return {
-		id: typeof raw.id === "string" ? raw.id : genId(),
+		id: typeof raw.id === "string" ? raw.id : makeId(),
 		name: raw.name,
 		content: raw.content,
 	};

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 选择任务窗口（一次性任务选择器）。
  * 分 Tab：按时间 / 按标题。两个 Tab 都是「筛选 → 可勾选 → 加入列表」。
  * 只呈现尚未「已加入」的任务；排除由会话（pickerSession）据已加入集合自行完成。
@@ -52,7 +52,7 @@ export class TaskPickerModal extends Modal {
 	constructor(
 		app: App,
 		allTasks: TaskInfo[],
-		dateFields: DateField[],
+		dateFields: readonly DateField[],
 		candidateIds: Set<string>,
 		private capabilities: SourceCapabilities,
 		private weekStartsOnMonday: boolean,

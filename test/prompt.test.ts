@@ -1,4 +1,4 @@
-﻿import { test } from "node:test";
+import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildReportPrompt, formatTaskLine } from "../src/core/prompt";
 import { makeTask } from "./fakes/task";
