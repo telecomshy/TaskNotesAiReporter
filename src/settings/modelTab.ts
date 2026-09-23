@@ -479,7 +479,7 @@ function renderCustomProviderCard(
 	const urlInput = urlRow.createEl("input", { type: "text" });
 	urlInput.addClass("tah-provider-input");
 	urlInput.value = provider.baseUrl;
-	urlInput.placeholder = "https://api.example.com/v1";
+	urlInput.placeholder = t("model.apiUrlPlaceholder");
 	urlInput.addEventListener("change", () => {
 		ctx.plugin.providers.setProviderBaseUrl(provider.id, urlInput.value);
 		urlInput.value = provider.baseUrl;
@@ -573,7 +573,7 @@ function renderCustomModelRow(
 	const idInput = idGroup.createEl("input", { type: "text" });
 	idInput.addClass("tah-provider-input");
 	idInput.value = mc.modelId;
-	idInput.placeholder = "deepseek-v4-pro";
+	idInput.placeholder = t("model.modelIdPlaceholder");
 	idInput.addEventListener("change", () => {
 		ctx.plugin.providers.renameModel(provider.id, mc.id, idInput.value);
 		idInput.value = mc.modelId;

@@ -10,10 +10,7 @@
 import type { App } from "obsidian";
 import type { TaskRepository } from "./repository";
 import type { RawTaskLine } from "./tasksLine";
-import {
-	createTasksSource,
-	type TasksSourceDeps,
-} from "./tasksSource";
+import { createTasksSource } from "./tasksSource";
 import { readVaultNote } from "./obsidian";
 
 /** Obsidian Tasks 的插件 id（未启用则来源缺失）。 */

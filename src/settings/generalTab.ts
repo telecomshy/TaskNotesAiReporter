@@ -4,7 +4,7 @@
  */
 
 import { Setting } from "obsidian";
-import type { TaskSource } from "../types";
+import { DEFAULT_SETTINGS, type TaskSource } from "../types";
 import type { SettingsTabContext } from "./index";
 import { DATE_FIELD_TABLE } from "../core/dateFields";
 
@@ -50,7 +50,7 @@ export function renderGeneralTab(container: HTMLElement, ctx: SettingsTabContext
 		.setDesc(t("settings.reportFolderDesc"))
 		.addText((text) =>
 			text
-				.setPlaceholder("TaskNotes/Reports")
+				.setPlaceholder(DEFAULT_SETTINGS.reportFolder)
 				.setValue(ctx.plugin.settings.reportFolder)
 				.onChange((value) => {
 					void ctx.plugin.appSettings.setReportFolder(value);
