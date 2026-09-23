@@ -1,5 +1,20 @@
 ## Agent skills
 
+### Shy 技能路由
+
+`implement` / `implement-spec` 等链路按名调用原版技能；本仓库一律改走对等的 **shy-** 技能（三跑 / 盲评协议见各 `shy-*` 的 SKILL.md）：
+
+| 链路点名 | 实际调用 |
+| --- | --- |
+| `implement` | `shy-implement`（流程副本，收尾审查走 `shy-code-review`） |
+| `implement-spec` | `shy-implement-spec`（同上） |
+| `code-review` | `shy-code-review` |
+| `to-spec` | `shy-to-spec` |
+| `to-tickets` | `shy-to-tickets` |
+| `improve-codebase-architecture` | `shy-improve-codebase-architecture` |
+
+用户点名要原版时才直调原版。
+
 ### Issue tracker
 
 Specs and issues live as GitHub issues (via `gh`). Read `docs/agents/issue-tracker.md` before you create, read, list, comment on, label, or close an issue — or when a change needs its originating spec.
