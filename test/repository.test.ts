@@ -14,7 +14,7 @@ const baseTask: TaskInfo = {
 	title: "写周报",
 	status: "todo",
 	priority: "medium",
-	path: "2026/09.md",
+	id: "2026/09.md",
 	archived: false,
 };
 
@@ -23,14 +23,14 @@ const baseTask: TaskInfo = {
 test("createTaskRepository.list 过滤归档与无路径任务", async () => {
 	const repo = createTaskRepository({
 		listTasks: async () => [
-			makeTask({ path: "a" }),
-			makeTask({ path: "b", archived: true }),
-			makeTask({ path: "" }),
+			makeTask({ id: "a" }),
+			makeTask({ id: "b", archived: true }),
+			makeTask({ id: "" }),
 		],
 		readNote: async () => null,
 	});
 	const result = await repo.list();
-	assert.deepEqual(result?.map((t) => t.path), ["a"]);
+	assert.deepEqual(result?.map((t) => t.id), ["a"]);
 });
 
 test("createTaskRepository.list 在底层不可用时返回 null", async () => {

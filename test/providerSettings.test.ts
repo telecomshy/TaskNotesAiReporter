@@ -22,7 +22,8 @@ import {
 	createProviderSettings,
 	type ProviderState,
 } from "../src/settings/providerSettings";
-import type { ModelProvider } from "../src/types";
+import { createSettingsOwner } from "../src/settings/owner";
+import { DEFAULT_SETTINGS, type ModelProvider } from "../src/types";
 
 function provider(over: Partial<ModelProvider> & { id: string }): ModelProvider {
 	return {
@@ -356,18 +357,17 @@ test("isSecretMissing：空名不算缺失；存储缺失才算", () => {
 
 test("门面：命令落盘一次，并保留引用", () => {
 	const p = provider({ id: "a", type: "preset", models: ["m"] });
-	const live = state({ providers: [p] });
+	// live 即 owner 自持的那一份（同一引用），故断言可观察到命令的就地改写
+	const live = { ...DEFAULT_SETTINGS, ...state({ providers: [p] }) };
 	let saves = 0;
-	const facade = createProviderSettings({
-		getState: () => live,
-		commit: (next) => {
-			live.providers = next.providers;
-			live.activeProviderId = next.activeProviderId;
-			live.activeModel = next.activeModel;
+	const owner = createSettingsOwner(live, {
+		save: () => {
 			saves++;
+			return Promise.resolve();
 		},
 		getSecret: () => null,
 	});
+	const facade = createProviderSettings({ owner });
 	facade.selectActiveModel("a", "m");
 	assert.equal(live.activeProviderId, "a");
 	assert.equal(live.activeModel, "m");
@@ -376,12 +376,12 @@ test("门面：命令落盘一次，并保留引用", () => {
 
 test("门面：resolveActive 与 isSecretMissing 用注入的密钥读取", () => {
 	const p = provider({ id: "p", type: "preset", apiKeySecretId: "k", models: ["m"] });
-	const live = state({ providers: [p], activeProviderId: "p", activeModel: "m" });
-	const facade = createProviderSettings({
-		getState: () => live,
-		commit: () => {},
-		getSecret: (id) => (id === "k" ? "sk" : null),
-	});
+	const live = { ...DEFAULT_SETTINGS, ...state({ providers: [p], activeProviderId: "p", activeModel: "m" }) };
+	const owner = createSettingsOwner(
+		live,
+		{ save: () => Promise.resolve(), getSecret: (id: string) => (id === "k" ? "sk" : null) }
+	);
+	const facade = createProviderSettings({ owner });
 	const result = facade.resolveActive();
 	assert.equal(result.ok && result.config.apiKey, "sk");
 	assert.equal(facade.isSecretMissing("k"), false);

@@ -32,24 +32,27 @@ export async function readVaultNote(app: App, path: string): Promise<string | nu
 	}
 }
 
-/** 用 Obsidian 应用构造生产用的 TaskRepository。 */
-export function obsidianTaskRepository(app: App): TaskRepository {
+/**
+ * 用 Obsidian 应用构造生产用的 TaskRepository。
+ * **插件未启用返回 `null`**（= 来源缺失），由「来源」深 module 的判别式承载（见 #45）。
+ */
+export function obsidianTaskRepository(app: App): TaskRepository | null {
+	// 插件启用探测只此一处：listTasks / listStatuses 复用同一结果。
+	const probe = getTaskNotesApi(app);
+	if (!probe) return null;
 	return createTaskRepository({
 		listTasks: async () => {
-			const api = getTaskNotesApi(app);
-			if (!api) return null;
 			try {
-				return await api.tasks.list();
+				return await probe.tasks.list();
 			} catch {
 				return null;
 			}
 		},
 		readNote: (path: string) => readVaultNote(app, path),
 		listStatuses: async (): Promise<StatusDefinition[] | null> => {
-			const api = getTaskNotesApi(app);
-			if (!api?.catalog) return null;
+			if (!probe.catalog) return null;
 			try {
-				return api.catalog.statuses().map((status) => ({
+				return probe.catalog.statuses().map((status) => ({
 					value: status.value,
 					isCompleted: status.isCompleted,
 				}));

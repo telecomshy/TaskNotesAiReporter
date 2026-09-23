@@ -116,7 +116,7 @@ export function parseTaskLine(raw: RawTaskLine): TaskInfo {
 		status: status.value,
 		priority,
 		...dates,
-		path: `${raw.path}#${raw.line}`,
+		id: `${raw.path}#${raw.line}`,
 		archived: false,
 		tags,
 		contexts: [],

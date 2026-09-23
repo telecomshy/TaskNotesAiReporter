@@ -62,14 +62,14 @@ export interface BuildPromptOptions {
 	/** 生成时刻，用于 {{today}}；缺省用当前时间。 */
 	now?: Date;
 	/** 状态目录，用于把任务归类为已完成 / 进行中 / 未完成；缺省视为空。 */
-	statuses?: StatusDefinition[];
+	statuses?: readonly StatusDefinition[];
 }
 
 /** 占位符书写形式：{{ 名字 }}（名字内部容许空格）。 */
 const PLACEHOLDER_PATTERN = /\{\{([^{}]*)\}\}/g;
 
 /** 汇总所选任务的总耗时（分钟）。 */
-function totalTrackedMinutes(tasks: TaskInfo[]): number {
+function totalTrackedMinutes(tasks: readonly TaskInfo[]): number {
 	return tasks.reduce((sum, task) => sum + computeTrackedMinutes(task), 0);
 }
 
@@ -78,7 +78,7 @@ function totalTrackedMinutes(tasks: TaskInfo[]): number {
  * 只列出「模型算不准或拿不到」的信息与状态子集，不做纯重述的项目 / 标签汇总。
  */
 function buildPlaceholderValues(
-	tasks: TaskInfo[],
+	tasks: readonly TaskInfo[],
 	options: BuildPromptOptions,
 	rangeText: string
 ): Record<string, string> {
@@ -89,7 +89,7 @@ function buildPlaceholderValues(
 	const completed = filterTasksBySubset(tasks, "completed", statuses);
 	const inProgress = filterTasksBySubset(tasks, "in-progress", statuses);
 	const open = filterTasksBySubset(tasks, "open", statuses);
-	const renderTasks = (list: TaskInfo[]) => list.map(formatTaskLine).join("\n");
+	const renderTasks = (list: readonly TaskInfo[]) => list.map(formatTaskLine).join("\n");
 
 	return {
 		tasks: renderTasks(tasks),
@@ -122,7 +122,7 @@ function renderPlaceholders(template: string, values: Record<string, string>): s
  * - 若提供模板内容：替换占位符后作为提示词。
  * - 否则（极简模式）：仅提供任务列表与时间范围，让模型自由生成报告。
  */
-export function buildReportPrompt(tasks: TaskInfo[], options: BuildPromptOptions): string {
+export function buildReportPrompt(tasks: readonly TaskInfo[], options: BuildPromptOptions): string {
 	const { range, type, language, templateContent, extraRequirements } = options;
 	const rangeText = `${range.start} 至 ${range.end}`;
 

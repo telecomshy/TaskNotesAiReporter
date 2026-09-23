@@ -11,6 +11,15 @@ import {
 	type TaskNotesAIHelperSettings,
 } from "../types";
 import type { PendingSecret } from "./secrets";
+import {
+	coerceReportLanguage,
+	coerceSelectedTemplateId,
+	coerceTaskSource,
+	coerceTemplates,
+	coerceUiLanguage,
+	coerceWeekStartsOnMonday,
+	makeId,
+} from "./values";
 
 export type { TaskNotesAIHelperSettings } from "../types";
 
@@ -36,11 +45,6 @@ interface LegacySettings {
 	model?: string;
 }
 
-/** 生成唯一 ID */
-export function genId(): string {
-	return `tpl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
 /**
  * 从加载的原始数据生成最终设置：处理旧版单一模型配置的迁移。
  */
@@ -50,47 +54,29 @@ export function normalizeSettings(raw: unknown): NormalizedSettings {
 	const settings: TaskNotesAIHelperSettings = { ...DEFAULT_SETTINGS };
 	const pendingSecrets: PendingSecret[] = [];
 
-	// 常规字段
+	// 常规字段：载入**不改写用户既有数据**，只在缺失 / 非法时按值域回退。
+	// #46 列举的「载入与变更共用」规则只有四项：报告语言空回退、界面语言归一、
+	// 所选模板必须存在、taskSource 归一。目录空白 / 日期口径过滤 / 生成参数校验属**变更侧**规则；
+	// 若在载入套用会改写用户 data.json，构成 #44 禁止的第三处用户可见变更。
 	if (typeof data.temperature === "number") settings.temperature = data.temperature;
 	if (typeof data.maxTokens === "number") settings.maxTokens = data.maxTokens;
 	if (typeof data.timeoutSeconds === "number") settings.timeoutSeconds = data.timeoutSeconds;
 	if (typeof data.reportFolder === "string") settings.reportFolder = data.reportFolder;
-	if (data.taskSource === "tasknotes" || data.taskSource === "obsidian-tasks") {
-		settings.taskSource = data.taskSource;
-	}
-	if (Array.isArray(data.dateFields) && data.dateFields.length > 0) {
-		settings.dateFields = data.dateFields;
-	}
-	if (typeof data.weekStartsOnMonday === "boolean") {
-		settings.weekStartsOnMonday = data.weekStartsOnMonday;
-	}
-	if (typeof data.language === "string") {
-		settings.language = data.language.trim() || "English";
-	}
-	if (data.uiLanguage === "auto" || data.uiLanguage === "zh" || data.uiLanguage === "en") {
-		settings.uiLanguage = data.uiLanguage;
-	}
-	if (Array.isArray(data.templates)) {
-		settings.templates = data.templates
-			.filter((t) => t && typeof t.name === "string" && typeof t.content === "string")
-			.map((t) => ({
-				id: typeof t.id === "string" ? t.id : genId(),
-				name: t.name,
-				content: t.content,
-			}));
-	}
+	// 日期口径：**空数组是合法值**（= 自动筛选关闭），不再被静默改回默认（#46 的用户可见修正）。
+	// 数组内容原样保留——过滤非法项是变更侧规则，载入不做。
+	if (Array.isArray(data.dateFields)) settings.dateFields = data.dateFields.slice();
+	const weekStartsOnMonday = coerceWeekStartsOnMonday(data.weekStartsOnMonday);
+	if (weekStartsOnMonday !== null) settings.weekStartsOnMonday = weekStartsOnMonday;
+	settings.language = coerceReportLanguage(data.language);
+	settings.uiLanguage = coerceUiLanguage(data.uiLanguage);
+	settings.taskSource = coerceTaskSource(data.taskSource);
+	const templates = coerceTemplates(data.templates);
+	if (templates !== null) settings.templates = templates;
+
 	settings.templates = migrateExampleTemplate(settings.templates);
 
 	// 上次选择的模板 ID：仅在模板存在时保留，否则回退为不选模板
-	if (typeof data.selectedTemplateId === "string") {
-		settings.selectedTemplateId = data.selectedTemplateId;
-	}
-	if (
-		settings.selectedTemplateId !== "" &&
-		!settings.templates.some((t) => t.id === settings.selectedTemplateId)
-	) {
-		settings.selectedTemplateId = "";
-	}
+	settings.selectedTemplateId = coerceSelectedTemplateId(settings.templates, data.selectedTemplateId);
 
 	// 供应商：优先使用新结构；否则用预设（不含固定 custom）
 	if (Array.isArray(data.providers) && data.providers.length > 0) {
@@ -133,7 +119,7 @@ export function normalizeSettings(raw: unknown): NormalizedSettings {
 				if (type === "custom" && !Array.isArray(provider.customModels)) {
 					const legacyModels = Array.isArray(providerRaw.models) ? (providerRaw.models as string[]) : [];
 					provider.customModels = legacyModels.map((modelId) => ({
-						id: genId(),
+						id: makeId(),
 						modelId,
 					}));
 				}

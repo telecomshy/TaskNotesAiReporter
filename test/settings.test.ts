@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { normalizeSettings } from "../src/settings/logic";
-import { PRESET_PROVIDERS } from "../src/types";
+import { DEFAULT_SETTINGS, PRESET_PROVIDERS } from "../src/types";
 
 /** 只取归一化后的设置本身（迁移密钥由 pendingSecrets 单独测）。 */
 function load(raw: unknown) {
@@ -45,6 +45,46 @@ test("normalizeSettings 引用的模板不存在时重置 selectedTemplateId 为
 test("normalizeSettings 非字符串 selectedTemplateId 回退为空", () => {
 	const settings = load({ selectedTemplateId: 123 }) as any;
 	assert.equal(settings.selectedTemplateId, "");
+});
+
+// ===== #46：载入与变更共用同一套值域规则 =====
+
+test("normalizeSettings 日期口径空数组合法：不被改回默认（#46 用户可见修正）", () => {
+	const settings = load({ dateFields: [] });
+	assert.deepEqual(settings.dateFields, []);
+});
+
+test("normalizeSettings 日期口径缺省（无该字段）才回退默认", () => {
+	const settings = load({});
+	assert.deepEqual(settings.dateFields, DEFAULT_SETTINGS.dateFields);
+});
+
+test("normalizeSettings 日期口径：载入原样保留（过滤非法项是变更侧规则）", () => {
+	const settings = load({ dateFields: ["due", "bogus", "due", "completedDate"] });
+	assert.deepEqual(settings.dateFields, ["due", "bogus", "due", "completedDate"]);
+});
+
+test("normalizeSettings taskSource：缺省 tasknotes、保留合法值、非法归一", () => {
+	assert.equal(load({}).taskSource, "tasknotes");
+	assert.equal(load({ taskSource: "obsidian-tasks" }).taskSource, "obsidian-tasks");
+	assert.equal(load({ taskSource: "nonsense" }).taskSource, "tasknotes");
+});
+
+test("normalizeSettings 报告语言空回退默认、界面语言非法归一 auto（与变更一致）", () => {
+	assert.equal(load({ language: "   " }).language, DEFAULT_SETTINGS.language);
+	assert.equal(load({ uiLanguage: "klingon" }).uiLanguage, "auto");
+});
+
+// ===== #44 双例外约束：载入不得改写用户既有数据 =====
+
+test("normalizeSettings 报告目录载入不 trim（去空白是变更侧规则，改写即第三处可见变更）", () => {
+	assert.equal(load({ reportFolder: "  我的/报告  " }).reportFolder, "  我的/报告  ");
+});
+
+test("normalizeSettings 生成参数载入不改写（有限数值校验是变更侧规则）", () => {
+	const settings = load({ maxTokens: Number.NaN, temperature: 5 });
+	assert.ok(Number.isNaN(settings.maxTokens));
+	assert.equal(settings.temperature, 5);
 });
 
 test("normalizeSettings 迁移旧版 DeepSeek 配置到预设供应商", () => {

@@ -6,9 +6,12 @@
 import { getLanguage, Plugin } from "obsidian";
 import { TaskNotesAIHelperSettingTab } from "./src/settings";
 import { ReportModal } from "./src/ui/ReportModal";
-import { createSourceRepository } from "./src/tasks/obsidianSource";
+import { obsidianTaskRepository } from "./src/tasks/obsidian";
+import { openSource as openTaskSource } from "./src/source";
+
 import type { TaskNotesAIHelperSettings } from "./src/settings/logic";
 import { loadSettings as loadSettingsFromIO } from "./src/settings/loadSettings";
+import { createSettingsOwner, type SettingsOwner, type SettingsSnapshot } from "./src/settings/owner";
 import { createProviderSettings, type ProviderSettings } from "./src/settings/providerSettings";
 import { createAppSettings, type AppSettings } from "./src/settings/appSettings";
 import {
@@ -20,7 +23,16 @@ import {
 } from "./src/i18n";
 
 export default class TaskNotesAIHelperPlugin extends Plugin {
-	settings: TaskNotesAIHelperSettings;
+	/**
+	 * 设置 owner：自持状态与落盘（见 src/settings/owner.ts）。
+	 * 下面的 `settings` 就是 owner 的唯一副本（同一对象，永不换引用），故读取恒为最新。
+	 */
+	private settingsOwner!: SettingsOwner;
+	/**
+	 * 设置查询：owner 自持的唯一副本的**深只读快照**，调用方无法借共享引用改写状态。
+	 * 一切变更走 `appSettings` / `providers` 的命令（见 #46）。
+	 */
+	settings: SettingsSnapshot;
 	/** 供应商配置门面：命令转移、当前模型解析与密钥读取（见 src/settings/providerSettings.ts）。 */
 	providers!: ProviderSettings;
 	/** 非供应商设置门面：报告/模板等设置的命令转移与不变式（见 src/settings/appSettings.ts）。 */
@@ -63,55 +75,18 @@ export default class TaskNotesAIHelperPlugin extends Plugin {
 	}
 
 	async loadSettings(): Promise<void> {
-		this.settings = await loadSettingsFromIO({
+		const io = {
 			loadRaw: () => this.loadData(),
-			save: (settings) => this.saveData(settings),
-			getSecret: (id) => this.app.secretStorage.getSecret(id),
-			setSecret: (id, value) => this.app.secretStorage.setSecret(id, value),
-		});
+			save: (settings: TaskNotesAIHelperSettings) => this.saveData(settings),
+			getSecret: (id: string) => this.app.secretStorage.getSecret(id),
+			setSecret: (id: string, value: string) => void this.app.secretStorage.setSecret(id, value),
+		};
+		// 设置 owner：自持状态与落盘（见 ADR-0012 推广 / #46）。接线层不再逐字段搬运设置切片。
+		this.settingsOwner = createSettingsOwner(await loadSettingsFromIO(io), io);
+		this.settings = this.settingsOwner.get();
+		this.providers = createProviderSettings({ owner: this.settingsOwner });
+		this.appSettings = createAppSettings(this.settingsOwner);
 
-		this.providers = createProviderSettings({
-			getState: () => ({
-				providers: this.settings.providers,
-				activeProviderId: this.settings.activeProviderId,
-				activeModel: this.settings.activeModel,
-			}),
-			commit: (state) => {
-				this.settings.providers = state.providers;
-				this.settings.activeProviderId = state.activeProviderId;
-				this.settings.activeModel = state.activeModel;
-				void this.saveSettings();
-			},
-			getSecret: (id) => this.app.secretStorage.getSecret(id),
-		});
-
-		this.appSettings = createAppSettings({
-			getState: () => ({
-				reportFolder: this.settings.reportFolder,
-				taskSource: this.settings.taskSource,
-				dateFields: this.settings.dateFields,
-				weekStartsOnMonday: this.settings.weekStartsOnMonday,
-				language: this.settings.language,
-				uiLanguage: this.settings.uiLanguage,
-				templates: this.settings.templates,
-				selectedTemplateId: this.settings.selectedTemplateId,
-			}),
-			commit: (state) => {
-				this.settings.reportFolder = state.reportFolder;
-				this.settings.taskSource = state.taskSource;
-				this.settings.dateFields = state.dateFields;
-				this.settings.weekStartsOnMonday = state.weekStartsOnMonday;
-				this.settings.language = state.language;
-				this.settings.uiLanguage = state.uiLanguage;
-				this.settings.templates = state.templates;
-				this.settings.selectedTemplateId = state.selectedTemplateId;
-				void this.saveSettings();
-			},
-		});
-	}
-
-	async saveSettings(): Promise<void> {
-		await this.saveData(this.settings);
 	}
 
 	/** 依据缓存的 Obsidian 语言与 `uiLanguage` 设置重新解析界面语言与翻译器。 */
@@ -123,10 +98,14 @@ export default class TaskNotesAIHelperPlugin extends Plugin {
 	}
 
 	openReportModal(): void {
-		new ReportModal(
-			this.app,
-			this,
-			createSourceRepository(this.app, this.settings.taskSource)
-		).open();
+		// 打开来源：来源切换 / 检测的唯一入口（见 #45）。
+		// obsidian-tasks 在 #53 落地前走「来源缺失」降级：不崩、可单独合并。
+		const open = () =>
+			openTaskSource(this.settings.taskSource, {
+				tasknotes: () => obsidianTaskRepository(this.app),
+				"obsidian-tasks": () => null,
+			});
+		new ReportModal(this.app, this, open).open();
+
 	}
 }

@@ -5,6 +5,7 @@
 
 import type { DateRange, TaskInfo } from "../types";
 import { normalizeDateValue } from "./filter";
+import { DATE_FIELD_TABLE } from "./dateFields";
 
 /** 将 Date 格式化为本地时区的 YYYY-MM-DD */
 export function toDateString(date: Date): string {
@@ -47,19 +48,21 @@ export function getQuarterRange(anchor: Date): DateRange {
 }
 
 /**
- * 计算报告的「日期范围」：取所选任务在 完成 / 到期 / 计划 / 创建 四个日期字段上的
+ * 计算报告的「日期范围」：取所选任务在**日期口径表内全部字段**上的
  * 最早到最晚（均规范化为 YYYY-MM-DD）。创建日期恒存在，故范围恒有定义；
- * 仅当四者全缺时才回退到 now 所在周。
+ * 仅当表内字段全缺时才回退到 now 所在周。
+ *
+ * 字段清单来自 `DATE_FIELD_TABLE`：表内字段都参与推导，加字段不会漏算 `{{range}}`（见 #50）。
  */
 export function getReportRange(
-	tasks: TaskInfo[],
+	tasks: readonly TaskInfo[],
 	weekStartsOnMonday: boolean,
 	now: Date
 ): DateRange {
 	const dates: string[] = [];
 	for (const task of tasks) {
-		for (const value of [task.completedDate, task.due, task.scheduled, task.dateCreated]) {
-			const normalized = normalizeDateValue(value);
+		for (const { field } of DATE_FIELD_TABLE) {
+			const normalized = normalizeDateValue(task[field]);
 			if (normalized) dates.push(normalized);
 		}
 	}

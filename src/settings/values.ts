@@ -1,0 +1,126 @@
+/**
+ * 设置的**值域规则**：「何为合法设置值」的判定集中在这里。
+ *
+ * 其中四项由**载入与变更共用**（#46 明列）：报告语言空回退、界面语言归一、
+ * 所选模板必须存在、taskSource 归一。其余（目录去空白、日期口径合法性、生成参数有限数值）
+ * 是**变更侧**规则：载入刻意不套用，以免改写用户 data.json（#44 的双例外约束）。
+ *
+ * 附带提供不透明 id 的铸造（`makeId`）——它不是值域规则，住在这里只为避免单独建模块。
+ *
+ * 纯函数，无 obsidian、无 DOM。
+ */
+
+import {
+	DEFAULT_SETTINGS,
+	type DateField,
+	type ReportTemplate,
+	type TaskSource,
+} from "../types";
+import type { UiLanguageSetting } from "../i18n";
+import { DATE_FIELDS } from "../core/dateFields";
+
+/**
+ * 日期口径的合法取值：来自「日期口径」表（`../core/dateFields`），与自动筛选、
+ * 日期范围推导、设置页文案同源（见 #50）。
+ */
+export const DATE_FIELD_VALUES: readonly DateField[] = DATE_FIELDS;
+
+/** 界面语言的合法取值。 */
+export const UI_LANGUAGE_VALUES: readonly UiLanguageSetting[] = ["auto", "zh", "en"];
+
+/** 任务来源的合法取值。 */
+export const TASK_SOURCE_VALUES: readonly TaskSource[] = ["tasknotes", "obsidian-tasks"];
+
+export function isDateField(value: unknown): value is DateField {
+	return DATE_FIELD_VALUES.includes(value as DateField);
+}
+
+/**
+ * 铸造一个不透明 id（模板、自定义模型配置用）。
+ * 不是值域规则，见模块头注释。
+ */
+export function makeId(): string {
+	return `tpl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+// ===== 标量 =====
+
+/** 报告输出目录：去空白（**变更侧**规则；载入保留用户既有值，含空白）。 */
+export function coerceReportFolder(value: unknown): string {
+	return typeof value === "string" ? value.trim() : "";
+}
+
+/** 报告语言：去空白；**空或纯空白回退默认语言**（载入与变更一致）。 */
+export function coerceReportLanguage(value: unknown): string {
+	return typeof value === "string" ? value.trim() || DEFAULT_SETTINGS.language : DEFAULT_SETTINGS.language;
+}
+
+/** 界面语言：非法值归一为 `auto`（载入与变更一致）。 */
+export function coerceUiLanguage(value: unknown): UiLanguageSetting {
+	return UI_LANGUAGE_VALUES.includes(value as UiLanguageSetting)
+		? (value as UiLanguageSetting)
+		: "auto";
+}
+
+/** 任务来源：非法值归一为 `tasknotes`（载入与变更一致；既有用户的默认行为不变）。 */
+export function coerceTaskSource(value: unknown): TaskSource {
+	return TASK_SOURCE_VALUES.includes(value as TaskSource) ? (value as TaskSource) : "tasknotes";
+}
+
+/** 周起始日：非布尔视为缺省（返回 null，由调用方决定是否回退默认）。 */
+export function coerceWeekStartsOnMonday(value: unknown): boolean | null {
+	return typeof value === "boolean" ? value : null;
+}
+
+/** 生成参数：非有限数值视为缺省（返回 null）。**变更侧**规则，载入不套用。 */
+export function coerceFiniteNumber(value: unknown): number | null {
+	return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+// ===== 集合 =====
+
+/**
+ * 日期口径：保留合法项并去重（变更侧规则；载入原样保留）。
+ * **空数组是合法值**（= 自动筛选关闭），不得被回退成默认——这是 #46 的用户可见修正。
+ * 非数组返回 `null`，表示「数据里没有这一项」，由调用方回退默认。
+ */
+export function coerceDateFields(value: unknown): DateField[] | null {
+	if (!Array.isArray(value)) return null;
+	const out: DateField[] = [];
+	for (const item of value) {
+		if (isDateField(item) && !out.includes(item)) out.push(item);
+	}
+	return out;
+}
+
+/** 单个模板的值域：必须有字符串 name 与 content。 */
+export function coerceTemplate(value: unknown): ReportTemplate | null {
+	if (!value || typeof value !== "object") return null;
+	const raw = value as { id?: unknown; name?: unknown; content?: unknown };
+	if (typeof raw.name !== "string" || typeof raw.content !== "string") return null;
+	return {
+		id: typeof raw.id === "string" ? raw.id : makeId(),
+		name: raw.name,
+		content: raw.content,
+	};
+}
+
+/** 模板列表：逐个按值域过滤。非数组返回 `null`（数据里没有这一项）。 */
+export function coerceTemplates(value: unknown): ReportTemplate[] | null {
+	if (!Array.isArray(value)) return null;
+	const out: ReportTemplate[] = [];
+	for (const item of value) {
+		const template = coerceTemplate(item);
+		if (template) out.push(template);
+	}
+	return out;
+}
+
+/**
+ * 所选模板 id：**仅当模板存在时保留**，否则回退为空串（= 不选模板，极简模式）。
+ * 载入与变更一致——这是「删除模板后 selectedTemplateId 悬空」的不变式归属（见 #33 / ADR-0012）。
+ */
+export function coerceSelectedTemplateId(templates: ReportTemplate[], value: unknown): string {
+	if (typeof value !== "string" || value === "") return "";
+	return templates.some((t) => t.id === value) ? value : "";
+}

@@ -8,7 +8,7 @@ const task: TaskInfo = {
 	title: "写周报",
 	status: "done",
 	priority: "high",
-	path: "a",
+	id: "a",
 	archived: false,
 	completedDate: "2026-09-01",
 	projects: ["项目A"],
@@ -153,9 +153,9 @@ test("占位符：{{today}} 取注入的 now", () => {
 
 test("占位符：{{count}} 与各子集计数", () => {
 	const tasks = [
-		makeTask({ path: "a", status: "done" }),
-		makeTask({ path: "b", status: "in-progress" }),
-		makeTask({ path: "c", status: "open" }),
+		makeTask({ id: "a", status: "done" }),
+		makeTask({ id: "b", status: "in-progress" }),
+		makeTask({ id: "c", status: "open" }),
 	];
 	const prompt = buildReportPrompt(tasks, {
 		range,
@@ -170,9 +170,9 @@ test("占位符：{{count}} 与各子集计数", () => {
 
 test("占位符：{{completedTasks}} 只注入已完成任务", () => {
 	const tasks = [
-		makeTask({ path: "a", status: "done" }),
-		makeTask({ path: "b", status: "in-progress" }),
-		makeTask({ path: "c", status: "open" }),
+		makeTask({ id: "a", status: "done" }),
+		makeTask({ id: "b", status: "in-progress" }),
+		makeTask({ id: "c", status: "open" }),
 	];
 	const prompt = buildReportPrompt(tasks, {
 		range,
@@ -188,9 +188,9 @@ test("占位符：{{completedTasks}} 只注入已完成任务", () => {
 
 test("占位符：{{openTasks}} 含进行中与未开始", () => {
 	const tasks = [
-		makeTask({ path: "a", status: "done" }),
-		makeTask({ path: "b", status: "in-progress" }),
-		makeTask({ path: "c", status: "open" }),
+		makeTask({ id: "a", status: "done" }),
+		makeTask({ id: "b", status: "in-progress" }),
+		makeTask({ id: "c", status: "open" }),
 	];
 	const prompt = buildReportPrompt(tasks, {
 		range,
@@ -205,7 +205,7 @@ test("占位符：{{openTasks}} 含进行中与未开始", () => {
 });
 
 test("占位符：{{totalTrackedTime}} 汇总耗时", () => {
-	const tasks = [makeTask({ path: "a", totalTrackedTime: 90 }), makeTask({ path: "b", totalTrackedTime: 30 })];
+	const tasks = [makeTask({ id: "a", totalTrackedTime: 90 }), makeTask({ id: "b", totalTrackedTime: 30 })];
 	const prompt = buildReportPrompt(tasks, {
 		range,
 		type: "week",

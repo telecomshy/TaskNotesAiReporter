@@ -68,7 +68,7 @@ function addTemplate(ctx: SettingsTabContext): void {
 		ctx.plugin.t,
 		{ name: NEW_TEMPLATE_NAME, content: "" },
 		(name, content) => {
-			ctx.plugin.appSettings.addTemplate(name, content);
+			void ctx.plugin.appSettings.addTemplate(name, content);
 			ctx.refresh();
 		}
 	);
@@ -76,7 +76,7 @@ function addTemplate(ctx: SettingsTabContext): void {
 }
 
 function deleteTemplate(id: string, ctx: SettingsTabContext): void {
-	ctx.plugin.appSettings.removeTemplate(id);
+	void ctx.plugin.appSettings.removeTemplate(id);
 	ctx.refresh();
 }
 
@@ -86,7 +86,7 @@ function editTemplate(template: ReportTemplate, ctx: SettingsTabContext): void {
 		ctx.plugin.t,
 		template,
 		(name, content) => {
-			ctx.plugin.appSettings.updateTemplate(template.id, name, content);
+			void ctx.plugin.appSettings.updateTemplate(template.id, name, content);
 			ctx.refresh();
 		}
 	);

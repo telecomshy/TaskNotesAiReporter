@@ -29,7 +29,7 @@ export interface PickerSession {
 	query: string;
 	checked: Set<string>;
 	addableTasks: TaskInfo[];
-	dateFields: DateField[];
+	dateFields: readonly DateField[];
 }
 
 export interface SelectAllState {
@@ -43,10 +43,10 @@ export interface SelectAllState {
  */
 export function createSession(
 	allTasks: TaskInfo[],
-	dateFields: DateField[],
-	candidatePaths: Set<string>
+	dateFields: readonly DateField[],
+	candidateIds: Set<string>
 ): PickerSession {
-	const addableTasks = allTasks.filter((task) => !candidatePaths.has(task.path));
+	const addableTasks = allTasks.filter((task) => !candidateIds.has(task.id));
 	return { tab: "time", range: null, query: "", checked: new Set(), addableTasks, dateFields };
 }
 
@@ -64,7 +64,7 @@ export function visibleTasks(session: PickerSession): TaskInfo[] {
 
 /** 当前可见且已勾选的任务（「加入」的实际结果）。 */
 export function selectedTasks(session: PickerSession): TaskInfo[] {
-	return visibleTasks(session).filter((task) => session.checked.has(task.path));
+	return visibleTasks(session).filter((task) => session.checked.has(task.id));
 }
 
 /** 标题查询的解析结果（关键字 / 标签 / 上下文）。 */
@@ -80,7 +80,7 @@ export function isQueryEmpty(session: PickerSession): boolean {
 /** 「全选」复选框三态：全部勾选为全选，部分勾选为半选。 */
 export function selectAllState(session: PickerSession): SelectAllState {
 	const displayed = visibleTasks(session);
-	const checkedCount = displayed.filter((task) => session.checked.has(task.path)).length;
+	const checkedCount = displayed.filter((task) => session.checked.has(task.id)).length;
 	return {
 		checked: displayed.length > 0 && checkedCount === displayed.length,
 		indeterminate: checkedCount > 0 && checkedCount < displayed.length,
@@ -106,11 +106,11 @@ export function setQuery(session: PickerSession, query: string): PickerSession {
 	return { ...session, query, checked: new Set() };
 }
 
-/** 勾选 / 取消单个任务。 */
-export function toggle(session: PickerSession, path: string): PickerSession {
+/** 勾选 / 取消单个任务（`id` 是任务标识，缝外不透明）。 */
+export function toggle(session: PickerSession, id: string): PickerSession {
 	const checked = new Set(session.checked);
-	if (checked.has(path)) checked.delete(path);
-	else checked.add(path);
+	if (checked.has(id)) checked.delete(id);
+	else checked.add(id);
 	return { ...session, checked };
 }
 
@@ -118,8 +118,8 @@ export function toggle(session: PickerSession, path: string): PickerSession {
 export function setAll(session: PickerSession, checked: boolean): PickerSession {
 	const next = new Set(session.checked);
 	for (const task of visibleTasks(session)) {
-		if (checked) next.add(task.path);
-		else next.delete(task.path);
+		if (checked) next.add(task.id);
+		else next.delete(task.id);
 	}
 	return { ...session, checked: next };
 }
@@ -127,7 +127,7 @@ export function setAll(session: PickerSession, checked: boolean): PickerSession 
 /** 清空当前可见任务的勾选。 */
 export function clearSelection(session: PickerSession): PickerSession {
 	const next = new Set(session.checked);
-	for (const task of visibleTasks(session)) next.delete(task.path);
+	for (const task of visibleTasks(session)) next.delete(task.id);
 	return { ...session, checked: next };
 }
 
@@ -139,5 +139,5 @@ function defaultSelection(session: PickerSession): Set<string> {
 }
 
 function selectAll(tasks: TaskInfo[]): Set<string> {
-	return new Set(tasks.map((task) => task.path));
+	return new Set(tasks.map((task) => task.id));
 }

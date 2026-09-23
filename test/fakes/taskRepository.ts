@@ -16,8 +16,8 @@ export function fakeTaskRepository(
 		async list(): Promise<TaskInfo[] | null> {
 			return tasks;
 		},
-		async readBody(path: string): Promise<string> {
-			return bodies[path] ?? "";
+		async readBody(id: string): Promise<string> {
+			return bodies[id] ?? "";
 		},
 		async statuses(): Promise<StatusDefinition[]> {
 			return statuses;

@@ -15,6 +15,7 @@ import type {
 	ModelProvider,
 } from "../types";
 import { resolveSecretValue } from "./secrets";
+import type { SettingsOwner } from "./owner";
 
 /** 新自定义供应商的默认名称：作为持久化数据，保持语言无关。 */
 export const DEFAULT_CUSTOM_PROVIDER_NAME = "自定义供应商";
@@ -24,6 +25,16 @@ export interface ProviderState {
 	providers: ModelProvider[];
 	activeProviderId: string;
 	activeModel: string;
+}
+
+/**
+ * 供应商切片的只读视图：只读消费方（`resolveActive` 等）用它，
+ * 从而可直接读设置快照而无需把只读数组改窄。可变的 `ProviderState` 天然赋值兼容。
+ */
+export interface ProviderStateRead {
+	readonly providers: readonly ModelProvider[];
+	readonly activeProviderId: string;
+	readonly activeModel: string;
 }
 
 // ===== 判定谓词 =====
@@ -216,7 +227,7 @@ export function selectActiveModel(
  * 无认证（authType === "none"）的供应商不要求密钥值。
  */
 export function resolveActive(
-	state: ProviderState,
+	state: ProviderStateRead,
 	getSecret: (id: string) => string | null
 ): ActiveModelResolution {
 	const provider = findProvider(state, state.activeProviderId);
@@ -269,7 +280,7 @@ function modelExists(provider: ModelProvider, model: string): boolean {
 	return model !== "" && modelsOf(provider).includes(model);
 }
 
-function findProvider(state: ProviderState, providerId: string): ModelProvider | undefined {
+function findProvider(state: ProviderStateRead, providerId: string): ModelProvider | undefined {
 	return state.providers.find((p) => p.id === providerId);
 }
 
@@ -283,12 +294,9 @@ function findModel(
 
 // ===== 绑定门面 =====
 
-/** 门面依赖：读取可变切片、落盘、按名取密钥值。 */
+/** 门面依赖：设置 owner（自持状态与落盘）+ 按名取密钥值（见 ./owner）。 */
 export interface ProviderSettingsDeps {
-	getState(): ProviderState;
-	/** 把转移后的切片写回设置并持久化。 */
-	commit(state: ProviderState): void;
-	getSecret(id: string): string | null;
+	owner: SettingsOwner;
 }
 
 /** 供应商配置门面：视图只与它对话。 */
@@ -314,10 +322,13 @@ export interface ProviderSettings {
 	isSecretMissing(secretId: string): boolean;
 }
 
-/** 构造绑定门面。 */
+/** 构造绑定门面。命令落在设置 owner 上，由 owner 自持状态与落盘（接线层不再逐字段搬运）。 */
 export function createProviderSettings(deps: ProviderSettingsDeps): ProviderSettings {
+	const { owner } = deps;
 	const run = (command: (state: ProviderState) => ProviderState): void => {
-		deps.commit(command(deps.getState()));
+		void owner.apply((state) => {
+			command(state);
+		});
 	};
 	return {
 		addProvider: () => run(addProvider),
@@ -338,8 +349,8 @@ export function createProviderSettings(deps: ProviderSettingsDeps): ProviderSett
 			run((s) => removeModel(s, providerId, modelConfigId)),
 		selectActiveModel: (providerId, model) =>
 			run((s) => selectActiveModel(s, providerId, model)),
-		resolveActive: () => resolveActive(deps.getState(), (id) => deps.getSecret(id)),
-		secretValue: (secretId) => resolveSecretValue(secretId, (id) => deps.getSecret(id)),
-		isSecretMissing: (secretId) => isSecretMissing(secretId, (id) => deps.getSecret(id)),
+		resolveActive: () => resolveActive(owner.get(), (id) => owner.readSecret(id)),
+		secretValue: (secretId) => resolveSecretValue(secretId, (id) => owner.readSecret(id)),
+		isSecretMissing: (secretId) => isSecretMissing(secretId, (id) => owner.readSecret(id)),
 	};
 }

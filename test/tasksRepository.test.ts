@@ -17,7 +17,7 @@ test("list 自扫并映射为统一任务模型，跨笔记多任务互不覆盖
 	const tasks = await repo.list();
 	assert.equal(tasks?.length, 3);
 	assert.deepEqual(
-		tasks!.map((t) => t.path),
+		tasks!.map((t) => t.id),
 		["a.md#0", "a.md#4", "b.md#1"],
 		"同一笔记里的多条任务以 笔记#行号 区分"
 	);

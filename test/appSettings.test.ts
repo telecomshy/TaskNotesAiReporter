@@ -11,28 +11,47 @@ import {
 	updateTemplate,
 	removeTemplate,
 	setSelectedTemplateId,
+	setGenerationParams,
 	createAppSettings,
 	type AppState,
 } from "../src/settings/appSettings";
-import { DEFAULT_SETTINGS } from "../src/types";
+import { createSettingsOwner } from "../src/settings/owner";
+import { DEFAULT_SETTINGS, type TaskNotesAIHelperSettings } from "../src/types";
 
-function state(over: Partial<AppState> = {}): AppState {
+/** 构造测试用设置（整份，含供应商切片），可被命令直接作用。 */
+function state(over: Partial<TaskNotesAIHelperSettings> = {}): TaskNotesAIHelperSettings {
 	return {
-		reportFolder: "TaskNotes/Reports",
-		dateFields: ["completedDate", "scheduled", "due"],
-		weekStartsOnMonday: true,
-		language: "English",
-		uiLanguage: "auto",
-		taskSource: "tasknotes",
+		...DEFAULT_SETTINGS,
+
 		templates: [],
 		selectedTemplateId: "",
 		...over,
 	};
 }
 
+/** 构造测试用 owner：落盘计数 + 可读密钥。 */
+function ownerOver(
+	live: TaskNotesAIHelperSettings,
+	opts: { onSave?: () => void; getSecret?: (id: string) => string | null } = {}
+) {
+	return createSettingsOwner(live, {
+		save: () => {
+			opts.onSave?.();
+			return Promise.resolve();
+		},
+		getSecret: (id) => opts.getSecret?.(id) ?? null,
+	});
+}
+
 // ===== 命令转移 =====
 
-test("setReportFolder 去空白写入", () => {
+test("toggleDateField 非法字段名无操作（变更侧值域规则）", () => {
+	const s = state({ dateFields: ["due"] });
+	toggleDateField(s, "bogus" as never, true);
+	assert.deepEqual(s.dateFields, ["due"]);
+});
+
+test("setReportFolder 去空白写入（变更侧规则；载入侧不 trim，见 test/settings.test.ts）", () => {
 	const s = state();
 	setReportFolder(s, "  我的/报告  ");
 	assert.equal(s.reportFolder, "我的/报告");
@@ -166,13 +185,7 @@ test("setSelectedTemplateId 空串：不选模板", () => {
 test("门面：命令落盘一次，并保留引用", () => {
 	const live = state();
 	let saves = 0;
-	const facade = createAppSettings({
-		getState: () => live,
-		commit: (next) => {
-			Object.assign(live, next);
-			saves++;
-		},
-	});
+	const facade = createAppSettings(ownerOver(live, { onSave: () => saves++ }));
 	facade.setReportFolder("  X  ");
 	assert.equal(live.reportFolder, "X");
 	assert.equal(saves, 1);
@@ -181,13 +194,7 @@ test("门面：命令落盘一次，并保留引用", () => {
 test("门面：setTaskSource 落盘一次", () => {
 	const live = state();
 	let saves = 0;
-	const facade = createAppSettings({
-		getState: () => live,
-		commit: (next) => {
-			Object.assign(live, next);
-			saves++;
-		},
-	});
+	const facade = createAppSettings(ownerOver(live, { onSave: () => saves++ }));
 	facade.setTaskSource("obsidian-tasks");
 	assert.equal(live.taskSource, "obsidian-tasks");
 	assert.equal(saves, 1);
@@ -199,15 +206,39 @@ test("门面：删除当前模板清空选择并落盘一次", () => {
 		selectedTemplateId: "tpl_a",
 	});
 	let saves = 0;
-	const facade = createAppSettings({
-		getState: () => live,
-		commit: (next) => {
-			Object.assign(live, next);
-			saves++;
-		},
-	});
+	const facade = createAppSettings(ownerOver(live, { onSave: () => saves++ }));
 	facade.removeTemplate("tpl_a");
 	assert.deepEqual(live.templates, []);
 	assert.equal(live.selectedTemplateId, "");
 	assert.equal(saves, 1);
+});
+
+// ===== #46：值域不变式在变更处成立 =====
+
+test("setTaskSource 非法值归一为 tasknotes", () => {
+	const s = state();
+	setTaskSource(s, "obsidian-tasks");
+	assert.equal(s.taskSource, "obsidian-tasks");
+	setTaskSource(s, "nonsense");
+	assert.equal(s.taskSource, "tasknotes");
+});
+
+test("toggleDateField 全部取消是合法状态，不回填默认", () => {
+	const s = state({ dateFields: ["due"] });
+	toggleDateField(s, "due", false);
+	assert.deepEqual(s.dateFields, []);
+});
+
+test("setGenerationParams 只收有限数值，其余项保持原值", () => {
+	const s = state();
+	setGenerationParams(s, { temperature: 0.2, maxTokens: Number.NaN, timeoutSeconds: 30 });
+	assert.equal(s.temperature, 0.2);
+	assert.equal(s.maxTokens, DEFAULT_SETTINGS.maxTokens);
+	assert.equal(s.timeoutSeconds, 30);
+});
+
+test("setSelectedTemplateId 模板不存在：回退为空（极简模式）", () => {
+	const s = state({ templates: [{ id: "tpl_a", name: "A", content: "a" }] });
+	setSelectedTemplateId(s, "tpl_gone");
+	assert.equal(s.selectedTemplateId, "");
 });

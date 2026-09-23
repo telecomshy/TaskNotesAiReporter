@@ -18,7 +18,7 @@ test("parseTaskLine 映射完整字段（状态/优先级/日期/标签/唯一�
 	assert.equal(task.scheduled, "2026-09-28");
 	assert.equal(task.dateCreated, "2026-09-01");
 	assert.deepEqual(task.tags, ["work", "a/b"]);
-	assert.equal(task.path, "notes/2026-09.md#12", "path 承载「笔记#行号」唯一性");
+	assert.equal(task.id, "notes/2026-09.md#12", "id 承载「笔记#行号」唯一性");
 	assert.equal(task.archived, false);
 	assert.deepEqual(task.contexts, []);
 	assert.deepEqual(task.projects, []);
@@ -72,9 +72,9 @@ test("parseTaskLine 支持有序列表标记（1. [x] 亦被 metadataCache 视�
 test("parseTaskLine 同一笔记不同行得到互不覆盖的唯一路径", () => {
 	const first = parseTaskLine({ path: "a.md", line: 3, text: "- [ ] 甲" });
 	const second = parseTaskLine({ path: "a.md", line: 7, text: "- [ ] 乙" });
-	assert.notEqual(first.path, second.path);
-	assert.equal(first.path, "a.md#3");
-	assert.equal(second.path, "a.md#7");
+	assert.notEqual(first.id, second.id);
+	assert.equal(first.id, "a.md#3");
+	assert.equal(second.id, "a.md#7");
 });
 
 test("TASKS_STATUS_DEFINITIONS 内置表带 type 且按 isDone 口径计算 isCompleted", () => {
@@ -97,15 +97,15 @@ test("内置表 type 驱动进行中判定：`/` 任务命中 in-progress 子集
 		parseTaskLine({ path: "a.md", line: 2, text: "- [x] 完成的事" }),
 	];
 	assert.deepEqual(
-		filterTasksBySubset(tasks, "in-progress", TASKS_STATUS_DEFINITIONS).map((t) => t.path),
+		filterTasksBySubset(tasks, "in-progress", TASKS_STATUS_DEFINITIONS).map((t) => t.id),
 		["a.md#0"]
 	);
 	assert.deepEqual(
-		filterTasksBySubset(tasks, "completed", TASKS_STATUS_DEFINITIONS).map((t) => t.path),
+		filterTasksBySubset(tasks, "completed", TASKS_STATUS_DEFINITIONS).map((t) => t.id),
 		["a.md#2"]
 	);
 	assert.deepEqual(
-		filterTasksBySubset(tasks, "open", TASKS_STATUS_DEFINITIONS).map((t) => t.path),
+		filterTasksBySubset(tasks, "open", TASKS_STATUS_DEFINITIONS).map((t) => t.id),
 		["a.md#0", "a.md#1"]
 	);
 });

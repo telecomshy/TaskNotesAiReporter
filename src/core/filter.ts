@@ -23,20 +23,21 @@ function inRange(value: string | undefined, range: DateRange): boolean {
 }
 
 /**
- * 按日期范围自动筛选任务：任一选定的日期字段落在范围内即命中，按 path 去重，排除已归档任务。
+ * 按日期范围自动筛选任务：任一选定的日期字段落在范围内即命中，按 id 去重，排除已归档任务。
+ * 可选字段来自「日期口径」表（见 ./dateFields），与日期范围推导同源（见 #50）。
  */
 export function filterTasksByDateRange(
-	tasks: TaskInfo[],
+	tasks: readonly TaskInfo[],
 	range: DateRange,
-	dateFields: DateField[]
+	dateFields: readonly DateField[]
 ): TaskInfo[] {
 	const result: TaskInfo[] = [];
 	const seen = new Set<string>();
 	for (const task of tasks) {
 		if (task.archived) continue;
 		const matched = dateFields.some((field) => inRange(task[field], range));
-		if (matched && !seen.has(task.path)) {
-			seen.add(task.path);
+		if (matched && !seen.has(task.id)) {
+			seen.add(task.id);
 			result.push(task);
 		}
 	}
@@ -82,15 +83,14 @@ export function isTitleQueryEmpty(query: TitleQuery): boolean {
 }
 
 /**
- * 去掉输入中的 `@上下文` token，保留关键字与 `#标签`。
- * 供不支持上下文的来源（Obsidian Tasks）在 UI 层禁用 `@` 输入；解析器本身保持来源无关。
+ * 去掉输入里的 `@上下文` 令牌（其余令牌与空白结构原样保留）。
+ *
+ * 供界面在「来源不支持上下文」时于 **UI 层禁用** 该维度：用户无法输入一个永远不会命中的条件。
+ * 刻意不改 `parseTitleQuery`——它保持来源无关的纯函数（见 #45 修订第四节）。
  */
 export function stripContextTokens(input: string): string {
-	return input
-		.trim()
-		.split(/\s+/)
-		.filter((token) => token !== "" && !token.startsWith("@"))
-		.join(" ");
+	return input.replace(/(^|\s)@\S+/g, "$1");
+
 }
 
 /** 标签是否命中查询：支持层级前缀匹配（#work 命中 work 及 work/xxx 子级）。 */
@@ -104,7 +104,7 @@ function matchesTag(taskTag: string, queryTag: string): boolean {
  * - 同一维度内多个条件为 OR（关键字任一命中即可；标签带层级前缀匹配；上下文精确匹配）；
  * - 仅有关键字时退化为标题包含关键字（兼容原行为）。
  */
-export function filterTasksByTitleQuery(tasks: TaskInfo[], query: TitleQuery): TaskInfo[] {
+export function filterTasksByTitleQuery(tasks: readonly TaskInfo[], query: TitleQuery): TaskInfo[] {
 	const { keywords, tags, contexts } = query;
 	return tasks.filter((task) => {
 		if (task.archived) return false;

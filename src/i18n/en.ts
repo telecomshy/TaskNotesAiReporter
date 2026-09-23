@@ -53,7 +53,8 @@ export const en = {
 		tasknotesMissing:
 			"TaskNotes plugin not detected. Enable TaskNotes in Obsidian first.",
 		obsidianTasksMissing:
-			"Obsidian Tasks plugin not detected. Enable the Tasks plugin in Obsidian first.",
+			"Obsidian Tasks plugin not detected. Enable Obsidian Tasks in Obsidian first.",
+
 		joinedTasks: "Joined tasks ({{count}})",
 		clear: "Clear",
 		empty: "No tasks yet. Click \"Select tasks\" below to filter and add tasks.",
@@ -86,8 +87,8 @@ export const en = {
 		allTasks: "All tasks ({{count}})",
 		searchResult: "Search \"{{query}}\" ({{count}} matches)",
 		searchPlaceholder: "keyword #tag @context (space-separated)…",
-		searchPlaceholderNoContext: "keyword #tag (space-separated)…",
-		contextUnsupported: "The current task source does not support contexts.",
+		contextsUnsupported: "This task source has no contexts; @context is disabled here.",
+
 		selectAll: "Select all",
 		parseKeywords: "Keywords: {{value}}",
 		parseTags: "Tags: {{value}}",
@@ -105,7 +106,9 @@ export const en = {
 		tabGeneral: "General",
 		generalHeading: "Report generation",
 		taskSourceName: "Task source",
-		taskSourceDesc: "Which task plugin reports read tasks from.",
+		taskSourceDesc:
+			"Which task plugin to read tasks from. Independent of the AI provider (the provider chooses the model).",
+
 		taskSourceTaskNotes: "TaskNotes",
 		taskSourceObsidianTasks: "Obsidian Tasks",
 		reportFolderName: "Report output folder",

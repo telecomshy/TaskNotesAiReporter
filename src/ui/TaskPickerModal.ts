@@ -27,6 +27,7 @@ import {
 import { getMonthRange, getQuarterRange, getWeekRange, getYearRange } from "../core/dates";
 import { stripContextTokens } from "../core/filter";
 import type { DateField, DateRange, TaskInfo } from "../types";
+import type { SourceCapabilities } from "../source";
 import type { UiLanguage, Translator } from "../i18n";
 
 export class TaskPickerModal extends Modal {
@@ -51,17 +52,16 @@ export class TaskPickerModal extends Modal {
 	constructor(
 		app: App,
 		allTasks: TaskInfo[],
-		dateFields: DateField[],
-		candidatePaths: Set<string>,
+		dateFields: readonly DateField[],
+		candidateIds: Set<string>,
+		private capabilities: SourceCapabilities,
 		private weekStartsOnMonday: boolean,
 		private t: Translator,
 		private lang: UiLanguage,
-		/** 当前来源是否支持「上下文（@）」；不支持时禁用 @ 输入。 */
-		private contextSupported: boolean,
 		private onConfirm: (tasks: TaskInfo[]) => void
 	) {
 		super(app);
-		this.session = createSession(allTasks, dateFields, candidatePaths);
+		this.session = createSession(allTasks, dateFields, candidateIds);
 	}
 
 	onOpen(): void {
@@ -185,23 +185,25 @@ export class TaskPickerModal extends Modal {
 		const searchRow = this.filterEl.createDiv({ cls: "tah-search-row" });
 		this.searchInput = searchRow.createEl("input", {
 			type: "text",
-			placeholder: this.t(
-				this.contextSupported
-					? "taskPicker.searchPlaceholder"
-					: "taskPicker.searchPlaceholderNoContext"
-			),
+			placeholder: this.t("taskPicker.searchPlaceholder"),
 		});
 		this.searchInput.addClass("tah-search-input");
 		this.searchInput.value = this.session.query;
 		this.searchInput.addEventListener("input", () => {
-			// 来源不支持上下文时，在 UI 层去掉 @token（解析器保持来源无关）
-			const value = this.contextSupported
-				? this.searchInput.value
-				: stripContextTokens(this.searchInput.value);
-			if (value !== this.searchInput.value) this.searchInput.value = value;
+			const raw = this.searchInput.value;
+			// 来源不支持上下文时，在 **UI 层禁用** @维度：用户无法输入一个永不命中的条件。
+			// 刻意不改 parseTitleQuery（保持来源无关的纯函数），见 #45 修订第四节。
+			const value = this.capabilities.supportsContexts ? raw : stripContextTokens(raw);
+			if (value !== raw) this.searchInput.value = value;
+
 			this.session = setQuery(this.session, value);
 			this.refresh();
 		});
+
+		// 来源能力驱动的降级提示（界面据能力决定，不自行判断来源字符串）
+		if (!this.capabilities.supportsContexts) {
+			this.filterEl.createDiv({ text: this.t("taskPicker.contextsUnsupported"), cls: "tah-hint" });
+		}
 
 		// 操作行：左「全选」+ 计数，右「清空选择」
 		const actionRow = this.filterEl.createDiv({ cls: "tah-picker-actions" });
@@ -218,14 +220,6 @@ export class TaskPickerModal extends Modal {
 		this.createClearButton(actionRow);
 
 		this.parseLabelEl = this.filterEl.createDiv({ cls: "tah-parse-label tah-range-label" });
-
-		// 来源不支持上下文时给出说明（@ 输入已被禁用/去除）
-		if (!this.contextSupported) {
-			this.filterEl.createDiv({
-				text: this.t("taskPicker.contextUnsupported"),
-				cls: "tah-parse-label tah-range-label",
-			});
-		}
 	}
 
 	// ===== 底部 =====
@@ -321,9 +315,9 @@ export class TaskPickerModal extends Modal {
 
 			const checkbox = item.createEl("input", { type: "checkbox" });
 			checkbox.addClass("tah-task-checkbox");
-			checkbox.checked = this.session.checked.has(task.path);
+			checkbox.checked = this.session.checked.has(task.id);
 			checkbox.addEventListener("change", () => {
-				this.session = toggle(this.session, task.path);
+				this.session = toggle(this.session, task.id);
 				this.updateConfirmState();
 			});
 

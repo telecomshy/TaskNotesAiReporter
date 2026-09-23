@@ -18,12 +18,12 @@ export const IN_PROGRESS_STATUS_TYPE = "IN_PROGRESS";
 export type TaskSubset = "completed" | "in-progress" | "open";
 
 /** 状态是否被标记为已完成；未知状态视为未完成。 */
-export function isCompletedStatus(status: string, statuses: StatusDefinition[]): boolean {
+export function isCompletedStatus(status: string, statuses: readonly StatusDefinition[]): boolean {
 	return statuses.find((definition) => definition.value === status)?.isCompleted === true;
 }
 
 /** 状态是否属于「进行中」：优先按 type 判定，回退到约定值名 `in-progress`。 */
-export function isInProgressStatus(status: string, statuses: StatusDefinition[]): boolean {
+export function isInProgressStatus(status: string, statuses: readonly StatusDefinition[]): boolean {
 	if (isCompletedStatus(status, statuses)) return false;
 	const definition = statuses.find((d) => d.value === status);
 	if (definition?.type === IN_PROGRESS_STATUS_TYPE) return true;
@@ -37,9 +37,9 @@ export function isInProgressStatus(status: string, statuses: StatusDefinition[])
  * - open：未完成（进行中 + 未开始）。
  */
 export function filterTasksBySubset(
-	tasks: TaskInfo[],
+	tasks: readonly TaskInfo[],
 	subset: TaskSubset,
-	statuses: StatusDefinition[]
+	statuses: readonly StatusDefinition[]
 ): TaskInfo[] {
 	switch (subset) {
 		case "completed":

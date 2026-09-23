@@ -7,15 +7,17 @@
 
 import type { UiLanguageSetting } from "./i18n";
 
-/** TaskNotes 任务（精简字段，与本插件相关） */
+/**
+ * TaskNotes 任务（精简字段，与本插件相关）。
+ * `id` 是任务标识：缝外一律不透明，不解释也不拆解其内部结构（TaskNotes 下即笔记路径）。
+ */
 export interface TaskInfo {
-	id?: string;
+	id: string;
 	title: string;
 	status: string;
 	priority: string;
 	due?: string;
 	scheduled?: string;
-	path: string;
 	archived: boolean;
 	tags?: string[];
 	contexts?: string[];
@@ -49,7 +51,6 @@ export interface StatusDefinition {
 export interface TaskNotesPublicApi {
 	tasks: {
 		list(query?: unknown): Promise<TaskInfo[]>;
-		get(path: string): Promise<TaskInfo | null>;
 	};
 	catalog?: {
 		statuses(): Array<{ value: string; label: string; isCompleted?: boolean; color?: string }>;
@@ -161,9 +162,10 @@ export interface TaskNotesAIHelperSettings {
 	timeoutSeconds: number;
 	// 报告输出目录
 	reportFolder: string;
-	// 任务来源（一次只用一个）
+	// 任务来源：从哪个任务插件读数据（与 AI「供应商」正交，见 #46 / #45）
 	taskSource: TaskSource;
-	// 任务自动筛选的日期口径（可多选）
+	// 任务自动筛选的日期口径（可多选；空数组合法 = 自动筛选关闭）
+
 	dateFields: DateField[];
 	// 周起始日
 	weekStartsOnMonday: boolean;
