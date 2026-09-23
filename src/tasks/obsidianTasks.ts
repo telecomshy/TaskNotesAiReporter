@@ -10,10 +10,13 @@
 import type { App } from "obsidian";
 import type { TaskRepository } from "./repository";
 import type { RawTaskLine } from "./tasksLine";
-import { createTasksRepository } from "./tasksRepository";
+import {
+	createTasksSource,
+	type TasksSourceDeps,
+} from "./tasksRepository";
 import { readVaultNote } from "./obsidian";
 
-/** Obsidian Tasks 的插件 id（未启用则来源不可用，list() 返回 null）。 */
+/** Obsidian Tasks 的插件 id（未启用则来源缺失）。 */
 const TASKS_PLUGIN_ID = "obsidian-tasks-plugin";
 
 /** Obsidian Tasks 插件是否启用。 */
@@ -51,9 +54,10 @@ async function listTaskLines(app: App): Promise<RawTaskLine[] | null> {
 	return result;
 }
 
-/** 用 Obsidian 应用构造生产用的 Tasks 后端。 */
-export function obsidianTasksRepository(app: App): TaskRepository {
-	return createTasksRepository({
+/** 用 Obsidian 应用构造 Tasks 来源的适配器挂接点（生产接线）。 */
+export function obsidianTasksSource(app: App): () => TaskRepository | null {
+	return createTasksSource({
+		enabled: () => isTasksPluginEnabled(app),
 		listLines: () => listTaskLines(app),
 		readNote: (path) => readVaultNote(app, path),
 	});

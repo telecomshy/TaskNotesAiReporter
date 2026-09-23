@@ -55,6 +55,21 @@ export function createTasksRepository(deps: TasksRepositoryDeps): TaskRepository
 	};
 }
 
+/** Tasks 来源的接线依赖：一个同步探针 + 两个 Obsidian 触碰点（测试注入 fake）。 */
+export interface TasksSourceDeps extends TasksRepositoryDeps {
+	/** 同步探针：来源插件是否启用。false → 适配器缺席 → openSource 判「来源缺失」（#45 判别式）。 */
+	enabled(): boolean;
+}
+
+/**
+ * 构造 Tasks 来源的适配器挂接点（openSource 的一个取值，#53）。
+ * 纯逻辑（探针与触碰点都注入），可在 Node 用假 deps 验证「插件未启用 → 来源缺失」；
+ * 生产接线见 ./obsidianTasks。
+ */
+export function createTasksSource(deps: TasksSourceDeps): () => TaskRepository | null {
+	return () => (deps.enabled() ? createTasksRepository(deps) : null);
+}
+
 /** 拆分「笔记路径#行号」；无合法行号时返回 null。编码与拆分只在 Tasks adapter 内部（ADR-0014）。 */
 export function splitTaskPath(path: string): { notePath: string; line: number } | null {
 	const index = path.lastIndexOf("#");

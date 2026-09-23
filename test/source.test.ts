@@ -7,6 +7,7 @@ import {
 	type SourceAdapters,
 } from "../src/source";
 import { fakeTaskRepository } from "./fakes/taskRepository";
+import { createTasksSource } from "../src/tasks/tasksRepository";
 import { stripContextTokens } from "../src/core/filter";
 import { TASK_SOURCE_VALUES } from "../src/settings/values";
 import { BUNDLES, createTranslator } from "../src/i18n";
@@ -36,14 +37,34 @@ test("打开来源：适配器为 null → 来源缺失（不返回裸 null）",
 	}
 });
 
-test("打开来源：obsidian-tasks 在 #53 落地前的中间态走来源缺失降级", () => {
-	// 这就是 main.ts 当前的中间态挂接：不崩、可单独合并（#45 修订第五节）
+test("Tasks 来源适配器（假 deps）：插件未启用 → 来源缺失（#53）", () => {
 	const adapters: SourceAdapters = {
 		tasknotes: () => fakeTaskRepository(),
-		"obsidian-tasks": () => null,
+		"obsidian-tasks": createTasksSource({
+			enabled: () => false,
+			listLines: async () => null,
+			readNote: async () => null,
+		}),
 	};
-	assert.equal(openSource("obsidian-tasks", adapters).ok, false);
-	assert.equal(openSource("tasknotes", adapters).ok, true);
+	assert.deepEqual(openSource("obsidian-tasks", adapters), {
+		ok: false,
+		reason: "source-missing",
+	});
+});
+
+test("Tasks 来源适配器（假 deps）：启用但 listLines 为 null → 列表为 null（界面按来源缺失提示，#53）", async () => {
+	const adapters: SourceAdapters = {
+		tasknotes: () => fakeTaskRepository(),
+		"obsidian-tasks": createTasksSource({
+			enabled: () => true,
+			listLines: async () => null,
+			readNote: async () => null,
+		}),
+	};
+	const opened = openSource("obsidian-tasks", adapters);
+	assert.equal(opened.ok, true, "探针为正时打开成功（中途读不到数据不重判来源缺失）");
+	if (!opened.ok) throw new Error("unreachable");
+	assert.equal(await opened.repo.list(), null);
 });
 
 test("打开来源：未知来源值也判为来源缺失，不抛异常", () => {
