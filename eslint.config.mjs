@@ -6,6 +6,10 @@ export default defineConfig([
 		ignores: [
 			"main.js",
 			"node_modules/**",
+			// 这两条镜像 .gitignore：ESLint 9 flat config 不读 .gitignore，
+			// 漏掉会让 `eslint .` 爬 1787 个外部文件（单文件约 60s，跑不完）。
+			"tasknotes-main/**",
+			".temp/**",
 			"docs/**",
 			"test/**",
 			"scripts/**",

@@ -1,0 +1,2 @@
+# A `git commit -m "中文"` mangled by codepage 936 fails here (CODING_STANDARDS.md).
+node scripts/check-encoding.mjs commit-msg "$1"

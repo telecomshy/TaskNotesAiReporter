@@ -4,7 +4,7 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 
 ## Conventions
 
-- **Create an issue**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies.
+- **Create an issue**: `gh issue create --title "..." --body "..."`. For a multi-line body, write it to a temp file with the `write` tool and pass `--body-file <path>`. PowerShell has no heredoc — do not improvise one.
 - **Read an issue**: `gh issue view <number> --comments`, filtering comments by `jq` and also fetching labels.
 - **List issues**: `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'` with appropriate `--label` and `--state` filters.
 - **Comment on an issue**: `gh issue comment <number> --body "..."`
@@ -12,6 +12,23 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 - **Close**: `gh issue close <number> --comment "..."`
 
 Infer the repo from `git remote -v`; `gh` does this automatically when run inside a clone.
+
+## Windows encoding (zh-CN machine)
+
+Every command here runs under Windows PowerShell 5.1 with codepage 936 (GBK). Two ways to corrupt a Chinese body — both observed in the wild:
+
+- **Never pipe a body.** `... | gh issue create --body-file -` travels as GB2312 bytes and arrives mangled. Use `--body-file <path>` on a file the `write` tool created (UTF-8, no BOM), or pass inline `--body "..."` — argv goes through UTF-16 `CreateProcess` and survives intact.
+- **Never `Set-Content -Encoding UTF8` / `Out-File -Encoding UTF8`.** On 5.1 these write an `EF BB BF` BOM, which lands at the top of the issue body. `[IO.File]::WriteAllText` and the `write` tool both write UTF-8 without a BOM.
+
+Switching to PowerShell 7 does **not** fix this: pwsh 7.6.5 is installed but not on PATH, and its `[Console]::OutputEncoding` is `gb2312` too — it emits byte-for-byte the same output as 5.1. It only drops the BOM.
+
+To read `gh` output back without mojibake, prefix the command:
+
+```powershell
+chcp 65001 > $null; [Console]::OutputEncoding=[Text.Encoding]::UTF8; [Console]::InputEncoding=[Text.Encoding]::UTF8; $OutputEncoding=[Text.Encoding]::UTF8
+```
+
+This qualifies every `--body` / `--comment` on this page: `issue create`, `issue comment`, `issue close`, `pr comment`, `pr close`.
 
 ## Pull requests as a triage surface
 

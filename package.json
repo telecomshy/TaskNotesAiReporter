@@ -4,11 +4,13 @@
 	"description": "Standalone helper plugin that generates reports from TaskNotes tasks using custom templates and any OpenAI-compatible model.",
 	"main": "main.js",
 	"scripts": {
-		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"build": "npm run typecheck && node esbuild.config.mjs production",
 		"deploy": "npm run build && node scripts/deploy.mjs",
 		"lint": "eslint .",
 		"dev": "node esbuild.config.mjs",
-		"test": "node --import tsx --experimental-test-module-mocks --test \"test/*.test.ts\""
+		"test": "node --import tsx --experimental-test-module-mocks --test \"test/*.test.ts\"",
+		"typecheck": "tsc -noEmit -skipLibCheck",
+		"prepare": "husky"
 	},
 	"keywords": [],
 	"author": "telecomshy",
@@ -18,6 +20,7 @@
 		"esbuild": "^0.25.9",
 		"eslint": "^9.39.5",
 		"eslint-plugin-obsidianmd": "^0.4.2",
+		"husky": "^9.1.7",
 		"obsidian": "^1.13.1",
 		"tsx": "^4.23.13",
 		"typescript": "^5.9.2"

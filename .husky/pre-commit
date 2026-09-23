@@ -1,0 +1,2 @@
+# Encoding gate: the index must be UTF-8 without BOM (CODING_STANDARDS.md).
+node scripts/check-encoding.mjs staged
