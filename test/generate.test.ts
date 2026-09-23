@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import {
 	createGeneration,
 	type GenerateDeps,
+	type GenerateFailure,
 	type GenerateIntent,
-	type GenerateReportFailure,
 	type GenerateResult,
 	type GenerateSettings,
 } from "../src/report/generate";
@@ -15,7 +15,6 @@ import type { DateRange, ReportType } from "../src/types";
 
 function baseSettings(over: Partial<GenerateSettings> = {}): GenerateSettings {
 	return {
-		reportType: "custom",
 		language: "中文",
 		weekStartsOnMonday: true,
 		reportFolder: "TaskNotes/Reports",
@@ -27,10 +26,16 @@ function baseSettings(over: Partial<GenerateSettings> = {}): GenerateSettings {
 	};
 }
 
+/** 模板测试共用的设置查询（含一个 t1 模板），消掉逐字重复的 thunk。 */
+function settingsWithTemplate(content = "请生成：{{tasks}}"): () => GenerateSettings {
+	return () => baseSettings({ templates: [{ id: "t1", name: "周报", content }] });
+}
+
 function baseIntent(over: Partial<GenerateIntent> = {}): GenerateIntent {
 	return {
 		tasks: [makeTask({ id: "a", title: "A", completedDate: "2026-09-03" })],
 		templateId: "",
+		reportType: "custom",
 		...over,
 	};
 }
@@ -67,9 +72,9 @@ function setup(
 	return { deps, captured };
 }
 
-function failure(result: GenerateResult): GenerateReportFailure {
+function failure(result: GenerateResult): GenerateFailure {
 	assert.equal(result.ok, false);
-	return result as GenerateReportFailure;
+	return result as GenerateFailure;
 }
 
 test("成功：返回 path，并保存生成的正文", async () => {
@@ -159,20 +164,19 @@ test("模型参数回退：无自带上限用全局（设置查询）", async ()
 	assert.equal(captured.chatConfig?.maxTokens, 8192);
 });
 
-test("装配在 module 内：报告语言 / 报告类型 / 生成参数取自设置查询（界面不拼参数）", async () => {
+test("装配在 module 内：报告语言与生成参数取自设置查询，报告类型取自用户意图（#49 修订四）", async () => {
 	const { deps, captured } = setup({
 		settings: () =>
 			baseSettings({
 				language: "English",
-				reportType: "week",
 				temperature: 0.2,
 				maxTokens: 1111,
 				timeoutSeconds: 7,
 			}),
 	});
-	await createGeneration(deps)(baseIntent());
+	await createGeneration(deps)(baseIntent({ reportType: "week" }));
 	assert.ok(captured.prompt?.trimEnd().endsWith("输出语言：English。"));
-	assert.equal(captured.saved?.type, "week");
+	assert.equal(captured.saved?.type, "week", "报告类型来自意图对象");
 	assert.equal(captured.chatConfig?.temperature, 0.2);
 	assert.equal(captured.chatConfig?.maxTokens, 1111);
 	assert.equal(captured.chatConfig?.timeoutSeconds, 7);
@@ -224,8 +228,7 @@ test("占位符：入口把状态目录与 now 传给提示词", async () => {
 			bodies: {},
 			statuses: [{ value: "done", statusClass: "completed" }],
 		}),
-		settings: () =>
-			baseSettings({ templates: [{ id: "t1", name: "周报", content: "{{completedTasks}}\n{{today}}" }] }),
+		settings: settingsWithTemplate("{{completedTasks}}\n{{today}}"),
 	});
 	await createGeneration(deps)(
 		baseIntent({
@@ -242,25 +245,17 @@ test("占位符：入口把状态目录与 now 传给提示词", async () => {
 });
 
 test("模板命中与未命中：命中含模板内容，未命中走极简模式", async () => {
-	const hit = setup({
-		settings: () => baseSettings({ templates: [{ id: "t1", name: "周报", content: "请生成：{{tasks}}" }] }),
-	});
+	const hit = setup({ settings: settingsWithTemplate() });
 	await createGeneration(hit.deps)(baseIntent({ templateId: "t1" }));
 	assert.ok(hit.captured.prompt?.includes("请生成："));
 
-	const miss = setup({
-		settings: () => baseSettings({ templates: [{ id: "t1", name: "周报", content: "请生成：{{tasks}}" }] }),
-	});
+	const miss = setup({ settings: settingsWithTemplate() });
 	await createGeneration(miss.deps)(baseIntent({ templateId: "missing" }));
 	assert.ok(!miss.captured.prompt?.includes("请生成："));
 });
 
 test("附加要求：透传到被捕获的提示词", async () => {
-	const { deps, captured } = setup({
-		settings: () => baseSettings({ templates: [{ id: "t1", name: "周报", content: "请生成：{{tasks}}" }] }),
-	});
-	await createGeneration(deps)(
-		baseIntent({ templateId: "t1", extraRequirements: "请用轻松的语气。" })
-	);
+	const { deps, captured } = setup({ settings: settingsWithTemplate() });
+	await createGeneration(deps)(baseIntent({ templateId: "t1", extraRequirements: "请用轻松的语气。" }));
 	assert.ok(captured.prompt?.includes("请用轻松的语气。"));
 });

@@ -8,9 +8,9 @@
 
 import { describeAIError } from "../ai/errorMessage";
 import type { Translator } from "../i18n";
-import type { GenerateReportFailure } from "./generate";
+import type { GenerateFailure } from "./generate";
 
-export function describeReportFailure(failure: GenerateReportFailure, t: Translator): string {
+export function describeReportFailure(failure: GenerateFailure, t: Translator): string {
 	switch (failure.reason) {
 		case "no-tasks":
 			return t("report.failureNoTasks");

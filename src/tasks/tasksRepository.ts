@@ -9,7 +9,7 @@
  */
 
 import type { StatusDefinition, TaskInfo } from "../types";
-import type { TaskRepository } from "./repository";
+import { collectDetails, type TaskRepository } from "./repository";
 import { parseTaskLine, TASKS_STATUS_DEFINITIONS, type RawTaskLine } from "./tasksLine";
 
 /** Tasks 后端的底层来源（由 adapter 注入；测试用 fake）。 */
@@ -18,6 +18,20 @@ export interface TasksRepositoryDeps {
 	listLines(): Promise<RawTaskLine[] | null>;
 	/** 读取笔记原始内容；文件不存在返回 null。 */
 	readNote(path: string): Promise<string | null>;
+}
+
+/**
+ * 构造 Tasks 来源的适配器挂接点（openSource 的一个取值，#53）。
+ * 纯逻辑（探针与触碰点都注入），可在 Node 用假 deps 验证「插件未启用 → 来源缺失」；
+ * 生产接线见 ./obsidianTasks。
+ */
+export interface TasksSourceDeps extends TasksRepositoryDeps {
+	/** 同步探针：来源插件是否启用。false → 适配器缺席 → openSource 判「来源缺失」（#45 判别式）。 */
+	enabled(): boolean;
+}
+
+export function createTasksSource(deps: TasksSourceDeps): () => TaskRepository | null {
+	return () => (deps.enabled() ? createTasksRepository(deps) : null);
 }
 
 /** 由底层来源构造 Tasks 后端的 TaskRepository。 */
@@ -29,45 +43,29 @@ export function createTasksRepository(deps: TasksRepositoryDeps): TaskRepository
 			return lines.map(parseTaskLine);
 		},
 		async details(ids: readonly string[]): Promise<Record<string, string>> {
-			// 一批补详情：同一笔记只读一次文件，逐条取行原文；缺详情为空串（#48 的一种缺失约定）。
-			const out: Record<string, string> = {};
-			const byNote = new Map<string, Array<{ id: string; line: number }>>();
-			for (const id of ids) {
-				if (id in out) continue;
-				out[id] = "";
+			// 一批补详情：同一笔记只读一次文件（缓存读取 Promise），逐条取行原文；
+			// 缺详情为空串（#48 的一种缺失约定）。
+			const noteReads = new Map<string, Promise<string | null>>();
+			const readNoteOnce = (notePath: string): Promise<string | null> => {
+				let pending = noteReads.get(notePath);
+				if (!pending) {
+					pending = deps.readNote(notePath);
+					noteReads.set(notePath, pending);
+				}
+				return pending;
+			};
+			return collectDetails(ids, async (id) => {
 				const parsed = splitTaskPath(id);
-				if (!parsed) continue;
-				const entries = byNote.get(parsed.notePath) ?? [];
-				entries.push({ id, line: parsed.line });
-				byNote.set(parsed.notePath, entries);
-			}
-			for (const [notePath, entries] of byNote) {
-				const content = await deps.readNote(notePath);
-				if (content === null) continue;
-				const lines = content.split(/\r?\n/);
-				for (const entry of entries) out[entry.id] = lines[entry.line] ?? "";
-			}
-			return out;
+				if (!parsed) return "";
+				const content = await readNoteOnce(parsed.notePath);
+				if (content === null) return "";
+				return content.split(/\r?\n/)[parsed.line] ?? "";
+			});
 		},
 		async statuses(): Promise<StatusDefinition[]> {
 			return TASKS_STATUS_DEFINITIONS;
 		},
 	};
-}
-
-/** Tasks 来源的接线依赖：一个同步探针 + 两个 Obsidian 触碰点（测试注入 fake）。 */
-export interface TasksSourceDeps extends TasksRepositoryDeps {
-	/** 同步探针：来源插件是否启用。false → 适配器缺席 → openSource 判「来源缺失」（#45 判别式）。 */
-	enabled(): boolean;
-}
-
-/**
- * 构造 Tasks 来源的适配器挂接点（openSource 的一个取值，#53）。
- * 纯逻辑（探针与触碰点都注入），可在 Node 用假 deps 验证「插件未启用 → 来源缺失」；
- * 生产接线见 ./obsidianTasks。
- */
-export function createTasksSource(deps: TasksSourceDeps): () => TaskRepository | null {
-	return () => (deps.enabled() ? createTasksRepository(deps) : null);
 }
 
 /** 拆分「笔记路径#行号」；无合法行号时返回 null。编码与拆分只在 Tasks adapter 内部（ADR-0014）。 */

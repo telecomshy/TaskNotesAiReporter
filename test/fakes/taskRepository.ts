@@ -1,4 +1,4 @@
-import type { TaskRepository } from "../../src/tasks/repository";
+import { collectDetails, type TaskRepository } from "../../src/tasks/repository";
 import type { StatusDefinition, TaskInfo } from "../../src/types";
 
 /** 测试用 in-process TaskRepository fake，供跨 seam 的行为测试复用。 */
@@ -17,9 +17,7 @@ export function fakeTaskRepository(
 			return tasks;
 		},
 		async details(ids: readonly string[]): Promise<Record<string, string>> {
-			const out: Record<string, string> = {};
-			for (const id of ids) out[id] = bodies[id] ?? "";
-			return out;
+			return collectDetails(ids, async (id) => bodies[id] ?? "");
 		},
 		async statuses(): Promise<StatusDefinition[]> {
 			return statuses;

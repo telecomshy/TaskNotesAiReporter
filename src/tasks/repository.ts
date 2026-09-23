@@ -36,6 +36,23 @@ export interface TaskRepositoryDeps {
 	listStatuses?(): Promise<StatusDefinition[] | null>;
 }
 
+/**
+ * 批补「详情」的共享骨架（#48）：逐标识解析详情，同一标识只解析一次，
+ * 请求的每个标识都有返回项（解析为空即缺详情 → 空串）。
+ * 各来源只提供「标识 → 详情」的解析函数；批补形状不再在各 adapter 里重复。
+ */
+export async function collectDetails(
+	ids: readonly string[],
+	resolve: (id: string) => Promise<string>
+): Promise<Record<string, string>> {
+	const out: Record<string, string> = {};
+	for (const id of ids) {
+		if (id in out) continue;
+		out[id] = (await resolve(id)) ?? "";
+	}
+	return out;
+}
+
 /** 由底层来源构造 TaskRepository。 */
 export function createTaskRepository(deps: TaskRepositoryDeps): TaskRepository {
 	return {
@@ -46,13 +63,10 @@ export function createTaskRepository(deps: TaskRepositoryDeps): TaskRepository {
 		},
 		async details(ids: readonly string[]): Promise<Record<string, string>> {
 			// 本包装假定「任务标识即笔记路径」（TaskNotes 形状）；其他来源的 adapter 自行实现 details。
-			const out: Record<string, string> = {};
-			for (const id of ids) {
-				if (id in out) continue; // 同一标识只读一次
+			return collectDetails(ids, async (id) => {
 				const raw = await deps.readNote(id);
-				out[id] = raw === null ? "" : stripFrontmatter(raw);
-			}
-			return out;
+				return raw === null ? "" : stripFrontmatter(raw);
+			});
 		},
 		async statuses(): Promise<StatusDefinition[]> {
 			return (await deps.listStatuses?.()) ?? [];

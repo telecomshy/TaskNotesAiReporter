@@ -74,6 +74,15 @@ test("parseTaskLine 同一笔记不同行得到互不覆盖的唯一标识（不
 	assert.equal(new Set([first.id, second.id, other.id]).size, 3, "跨笔记与同笔记多行的标识都互不相同");
 });
 
+test("同笔记多任务按 id 移除互不牵连（#53 验收：移除单项不牵连同文件任务）", () => {
+	const first = parseTaskLine({ path: "a.md", line: 3, text: "- [ ] 甲" });
+	const second = parseTaskLine({ path: "a.md", line: 7, text: "- [ ] 乙" });
+	// 「已加入」列表以标识为键（ReportModal 的候选 Map 同此语义）：删一键只去一项
+	const joined = new Map([[first.id, first], [second.id, second]]);
+	joined.delete(first.id);
+	assert.deepEqual([...joined.keys()], [second.id], "同文件另一任务不受牵连");
+});
+
 test("TASKS_STATUS_DEFINITIONS 内置表产出状态归类四档（isDone 口径）", () => {
 	const classOf = (value: string) => statusClassOf(value, TASKS_STATUS_DEFINITIONS);
 	assert.equal(classOf("Todo"), "todo");

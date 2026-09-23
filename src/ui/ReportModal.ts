@@ -30,8 +30,8 @@ export class ReportModal extends Modal {
 	private generateBtn: HTMLButtonElement | null = null;
 	private extraRequirementsInput: HTMLTextAreaElement | null = null;
 	private generating = false;
-	/** 「生成」入口（module 自持重入守卫，#49）：首次生成时装配一次。 */
-	private generation: ReturnType<typeof createGeneration> | null = null;
+	/** 按钮壳状态（生成中禁用按钮）；行为权威是 module 入口的重入守卫（其测试钉住「双击只出一份」）。 */
+	private generateEntry: ReturnType<typeof createGeneration> | null = null;
 	/** 界面打开时打开的仓库；生成期间沿用它，不重判来源缺失（见 #45 / #49 修订）。 */
 	private repository: TaskRepository | null = null;
 	/** 来源能力（由来源自述，界面据此决定行为）。 */
@@ -244,12 +244,11 @@ export class ReportModal extends Modal {
 
 			// 装配层接线：用户意图之外的一切（设置查询、当前模型、chat / save、时间源）在此注入，
 			// 界面不拼参数（#49 修订三）。入口只建一次：重入守卫在 module 内，双击只产出一份报告。
-			const generate = (this.generation ??= createGeneration({
+			const generate = (this.generateEntry ??= createGeneration({
 				repository,
 				settings: (): GenerateSettings => {
 					const s = this.plugin.settings;
 					return {
-						reportType: this.reportType,
 						language: s.language,
 						weekStartsOnMonday: s.weekStartsOnMonday,
 						reportFolder: s.reportFolder,
@@ -269,6 +268,7 @@ export class ReportModal extends Modal {
 			const result = await generate({
 				tasks: this.getCandidateTasks(),
 				templateId: this.selectedTemplateId,
+				reportType: this.reportType,
 				extraRequirements: this.extraRequirementsInput?.value,
 			});
 

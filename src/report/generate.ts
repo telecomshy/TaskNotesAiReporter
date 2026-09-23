@@ -1,9 +1,10 @@
 /**
  * 「生成」深 module（#49）：一次生成一个入口。
  *
- * 入口收**用户意图**（已加入 任务集合 + 所选 报告模板 + 附加要求）与**注入依赖**
- * （设置查询、当前模型 解析、chat / save、时间源）；输入校验、报告语言与生成参数的读取、
- * 任务水合（按 #48 批补）、提示词组装、调模型、写入都在 module 内——界面只收集输入与反馈，不拼参数。
+ * 入口收**用户意图**（已加入 任务集合 + 所选 报告模板 + 报告类型 + 附加要求，#49 修订四）
+ * 与**注入依赖**（设置查询、当前模型 解析、chat / save、时间源）；输入校验、报告语言与
+ * 生成参数的读取、任务水合（按 #48 批补）、提示词组装、调模型、写入都在 module 内——
+ * 界面只收集输入与反馈，不拼参数。
  *
  * 失败归因是单一判别式结果（#51）：四类六值，当前模型 的子原因不塌缩；由一个描述器消费。
  * 一次生成 一份、不可取消；进行中重入直接返回「生成中」，不排队。
@@ -21,19 +22,20 @@ import { hydrateTasks, type TaskRepository } from "../tasks/repository";
 import { buildReportPrompt } from "../core/prompt";
 import { getReportRange } from "../core/dates";
 
-/** 用户意图：界面只收集这三样（#49 修订三）。 */
+/** 用户意图：界面只收集这四样（#49 修订四：三样 + 报告类型）。 */
 export interface GenerateIntent {
 	/** 已加入 的任务集合（即 报告任务集合）。 */
 	tasks: readonly TaskInfo[];
 	/** 所选 报告模板 id（空串 = 不选模板，极简模式）。 */
 	templateId: string;
+	/** 报告类型：用户在界面选定，是本次生成的意图而非持久化设置。 */
+	reportType: ReportType;
 	/** 附加要求；纯空白视为缺省。 */
 	extraRequirements?: string;
 }
 
-/** 设置查询的形状：报告语言与生成参数在生成时读取（#49 修订三）。 */
+/** 设置查询的形状（仅持久化设置）：报告语言与生成参数在生成时读取（#49 修订三）。 */
 export interface GenerateSettings {
-	reportType: ReportType;
 	language: string;
 	weekStartsOnMonday: boolean;
 	reportFolder: string;
@@ -80,7 +82,7 @@ export type GenerateResult =
 	| { ok: false; reason: GenerateFailureReason; error?: unknown };
 
 /** 生成失败结果（判别式失败分支）。 */
-export type GenerateReportFailure = Extract<GenerateResult, { ok: false }>;
+export type GenerateFailure = Extract<GenerateResult, { ok: false }>;
 
 /**
  * 一次生成 一个入口（#49）：进行中重入直接返回「生成中」，不排队——双击只产出一份 报告。
@@ -113,7 +115,7 @@ async function runGeneration(intent: GenerateIntent, deps: GenerateDeps): Promis
 	}
 	const config = active.config;
 
-	// 报告语言、生成参数与模板都在 module 内从设置查询读取——界面不拼参数（#49 修订三）。
+	// 报告语言与生成参数在 module 内从设置查询读取——界面不拼参数（#49 修订三）。
 	const s = deps.settings();
 	const now = deps.now();
 	const range = getReportRange(intent.tasks, s.weekStartsOnMonday, now);
@@ -126,7 +128,7 @@ async function runGeneration(intent: GenerateIntent, deps: GenerateDeps): Promis
 		const statuses = await deps.repository.statuses();
 		const prompt = buildReportPrompt(tasksWithDetails, {
 			range,
-			type: s.reportType,
+			type: intent.reportType,
 			language: s.language,
 			templateContent: template?.content,
 			extraRequirements: intent.extraRequirements,
@@ -146,7 +148,7 @@ async function runGeneration(intent: GenerateIntent, deps: GenerateDeps): Promis
 	}
 
 	try {
-		const path = await deps.save(s.reportFolder, s.reportType, range, content, template?.name);
+		const path = await deps.save(s.reportFolder, intent.reportType, range, content, template?.name);
 		return { ok: true, path };
 	} catch (error) {
 		return { ok: false, reason: "save-error", error };
