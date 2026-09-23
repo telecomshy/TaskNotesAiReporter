@@ -13,7 +13,7 @@ import type { RawTaskLine } from "./tasksLine";
 import {
 	createTasksSource,
 	type TasksSourceDeps,
-} from "./tasksRepository";
+} from "./tasksSource";
 import { readVaultNote } from "./obsidian";
 
 /** Obsidian Tasks 的插件 id（未启用则来源缺失）。 */

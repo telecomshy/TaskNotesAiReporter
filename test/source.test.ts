@@ -7,7 +7,7 @@ import {
 	type SourceAdapters,
 } from "../src/source";
 import { fakeTaskRepository } from "./fakes/taskRepository";
-import { createTasksSource } from "../src/tasks/tasksRepository";
+import { createTasksSource } from "../src/tasks/tasksSource";
 import { stripContextTokens } from "../src/core/filter";
 import { TASK_SOURCE_VALUES } from "../src/settings/values";
 import { BUNDLES, createTranslator } from "../src/i18n";
