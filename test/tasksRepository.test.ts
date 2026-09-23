@@ -54,11 +54,11 @@ test("readBody 笔记不存在或行号越界时返回空串", async () => {
 	assert.equal(await short.readBody("a.md#99"), "");
 });
 
-test("statuses 返回含 type 的内置状态表", async () => {
+test("statuses 返回内置状态表（值名 + 状态归类）", async () => {
 	const repo = createTasksRepository({ listLines: async () => [], readNote: async () => null });
 	const statuses = await repo.statuses();
 	assert.deepEqual(statuses, TASKS_STATUS_DEFINITIONS);
-	assert.ok(statuses.every((s) => typeof s.type === "string"));
+	assert.ok(statuses.every((s) => typeof s.statusClass === "string"));
 });
 
 test("splitTaskPath 解析合法路径，非法行号返回 null", () => {

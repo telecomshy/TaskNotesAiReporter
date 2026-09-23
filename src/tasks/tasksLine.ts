@@ -7,6 +7,7 @@
  */
 
 import type { DateField, StatusDefinition, TaskInfo } from "../types";
+import { tasksStatusClass } from "../core/status";
 
 /** 一条待解析的 Tasks 行：所属笔记路径、0 基行号、原始行文本。 */
 export interface RawTaskLine {
@@ -17,18 +18,20 @@ export interface RawTaskLine {
 
 interface StatusInfo {
 	value: string;
-	isCompleted: boolean;
-	type: string;
+	/** Obsidian Tasks 的 StatusType 口径；只在本文件内部使用（见 #47 / ADR-0015），不出缝。 */
+	type?: string;
 }
 
-const TODO: StatusInfo = { value: "Todo", isCompleted: false, type: "TODO" };
-const DONE: StatusInfo = { value: "Done", isCompleted: true, type: "DONE" };
-const IN_PROGRESS: StatusInfo = { value: "In Progress", isCompleted: false, type: "IN_PROGRESS" };
-const CANCELLED: StatusInfo = { value: "Cancelled", isCompleted: true, type: "CANCELLED" };
+const TODO: StatusInfo = { value: "Todo", type: "TODO" };
+const DONE: StatusInfo = { value: "Done", type: "DONE" };
+const IN_PROGRESS: StatusInfo = { value: "In Progress", type: "IN_PROGRESS" };
+const CANCELLED: StatusInfo = { value: "Cancelled", type: "CANCELLED" };
+/** 未知符号（自定义 / 认不出）→「未知」档（isDone 口径：不在 DONE ∪ CANCELLED ∪ NON_TASK 内）。 */
+const UNKNOWN: StatusInfo = { value: "Unknown" };
 
 /**
- * 内置复选框符号 → 状态。`isCompleted` 取 Tasks 的 isDone 口径
- * （DONE ∪ CANCELLED ∪ NON_TASK 皆视为已结束），未知符号按 TODO 兜底。
+ * 内置复选框符号 → 状态。归类取 Tasks 的 isDone 口径
+ * （DONE ∪ CANCELLED ∪ NON_TASK 皆视为已结束），未知符号归入「未知」档。
  */
 const STATUS_BY_SYMBOL: Record<string, StatusInfo> = {
 	" ": TODO,
@@ -38,13 +41,10 @@ const STATUS_BY_SYMBOL: Record<string, StatusInfo> = {
 	"-": CANCELLED,
 };
 
-/** 内置状态目录（含 type）：供「进行中」等来源无关判定使用。 */
-export const TASKS_STATUS_DEFINITIONS: StatusDefinition[] = [
-	{ value: TODO.value, isCompleted: TODO.isCompleted, type: TODO.type },
-	{ value: DONE.value, isCompleted: DONE.isCompleted, type: DONE.type },
-	{ value: IN_PROGRESS.value, isCompleted: IN_PROGRESS.isCompleted, type: IN_PROGRESS.type },
-	{ value: CANCELLED.value, isCompleted: CANCELLED.isCompleted, type: CANCELLED.type },
-];
+/** 内置状态目录：值名 + 状态归类四档（缝外只见四档，StatusType 不出缝，见 #47）。 */
+export const TASKS_STATUS_DEFINITIONS: StatusDefinition[] = [TODO, DONE, IN_PROGRESS, CANCELLED, UNKNOWN].map(
+	(info) => ({ value: info.value, statusClass: tasksStatusClass(info.type) })
+);
 
 /** 优先级箭号（高→低）；缺省 Normal。 */
 const PRIORITIES: ReadonlyArray<readonly [string, string]> = [
@@ -71,7 +71,7 @@ const CHECKBOX_RE = /^\s*(?:[-*+]|\d+[.)])\s*\[(.)\]\s?(.*)$/;
  *
  * - `title`：去字段（状态 / 优先级 / 映射的日期）与去标签后的描述；
  * - `tags`：行内 `#tag`，去 `#` 前缀存储；
- * - `status`：复选框符号 → 可读名（Todo / Done / In Progress / Cancelled）；
+ * - `status`：复选框符号 → 可读名（Todo / Done / In Progress / Cancelled；未知符号 → Unknown）；
  * - `priority`：箭号 → Highest…Lowest，缺省 Normal；
  * - 日期：`✅`→completedDate、`📅`→due、`⏳`→scheduled、`➕`→dateCreated（`YYYY-MM-DD`）；
  * - `path`：`笔记路径#行号`（0 基），承载全库唯一性；
@@ -82,7 +82,7 @@ const CHECKBOX_RE = /^\s*(?:[-*+]|\d+[.)])\s*\[(.)\]\s?(.*)$/;
 export function parseTaskLine(raw: RawTaskLine): TaskInfo {
 	const match = raw.text.match(CHECKBOX_RE);
 	const symbol = match ? match[1] : " ";
-	const status = STATUS_BY_SYMBOL[symbol] ?? TODO;
+	const status = STATUS_BY_SYMBOL[symbol] ?? UNKNOWN;
 	let text = match ? match[2] : raw.text.trim();
 
 	// 标签：行内 #tag（去 # 前缀存储），并从描述文本中剥掉。

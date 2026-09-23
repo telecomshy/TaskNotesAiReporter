@@ -39,12 +39,18 @@ export interface TimeEntry {
 	duration?: number;
 }
 
-/** 任务状态定义（用于把状态归类为已完成 / 进行中 / 未完成） */
+/**
+ * 「状态归类」四档（见 CONTEXT.md「状态归类」）：待办 / 进行中 / 已结束 / 未知。
+ */
+export type StatusClass = "todo" | "in-progress" | "completed" | "unknown";
+
+/**
+ * 任务状态定义：状态值名 + 状态归类四档。
+ * 来源词汇（TaskNotes 的 isCompleted、Tasks 的 StatusType）不出缝，见 ADR-0015 / #47。
+ */
 export interface StatusDefinition {
 	value: string;
-	isCompleted?: boolean;
-	/** 来源无关的状态类型（Tasks 的 StatusType 口径）；用于「进行中」判定（见 ADR-0009）。 */
-	type?: string;
+	statusClass: StatusClass;
 }
 
 /** TaskNotes 插件实例对外暴露的公开 API（通过 app.plugins.plugins["tasknotes"].api 访问） */

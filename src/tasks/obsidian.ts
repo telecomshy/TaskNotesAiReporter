@@ -7,6 +7,7 @@
 import { TFile, type App } from "obsidian";
 import type { StatusDefinition, TaskNotesPublicApi } from "../types";
 import { createTaskRepository, type TaskRepository } from "./repository";
+import { taskNotesStatusClass } from "../core/status";
 
 /** 获取 TaskNotes 插件暴露的公开 API；未启用或不可用则返回 null。 */
 function getTaskNotesApi(app: App): TaskNotesPublicApi | null {
@@ -54,7 +55,7 @@ export function obsidianTaskRepository(app: App): TaskRepository | null {
 			try {
 				return probe.catalog.statuses().map((status) => ({
 					value: status.value,
-					isCompleted: status.isCompleted,
+					statusClass: taskNotesStatusClass(status.value, status.isCompleted),
 				}));
 			} catch {
 				return null;

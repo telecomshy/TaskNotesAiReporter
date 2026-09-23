@@ -167,7 +167,7 @@ test("模型参数回退：无自带上限用全局", async () => {
 test("占位符：generate 把状态目录与 now 传给提示词", async () => {
 	const { deps, captured } = setup({
 		repository: fakeTaskRepository({
-			statuses: [{ value: "done", isCompleted: true }],
+			statuses: [{ value: "done", statusClass: "completed" }],
 		}),
 	});
 	await generateReport(

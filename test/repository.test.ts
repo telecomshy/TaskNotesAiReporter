@@ -42,9 +42,9 @@ test("createTaskRepository.statuses 返回状态目录", async () => {
 	const repo = createTaskRepository({
 		listTasks: async () => [],
 		readNote: async () => null,
-		listStatuses: async () => [{ value: "done", isCompleted: true }],
+		listStatuses: async () => [{ value: "done", statusClass: "completed" }],
 	});
-	assert.deepEqual(await repo.statuses(), [{ value: "done", isCompleted: true }]);
+	assert.deepEqual(await repo.statuses(), [{ value: "done", statusClass: "completed" }]);
 });
 
 test("createTaskRepository.statuses 底层不可用时返回空数组", async () => {

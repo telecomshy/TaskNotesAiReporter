@@ -125,9 +125,9 @@ test("附加要求：纯空白不追加，与无该字段完全一致", () => {
 });
 
 const statuses: StatusDefinition[] = [
-	{ value: "open" },
-	{ value: "in-progress" },
-	{ value: "done", isCompleted: true },
+	{ value: "open", statusClass: "todo" },
+	{ value: "in-progress", statusClass: "in-progress" },
+	{ value: "done", statusClass: "completed" },
 ];
 
 test("占位符：{{range.start}} / {{range.end}} 引用起止日期", () => {
