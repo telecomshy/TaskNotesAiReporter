@@ -67,6 +67,7 @@ export const zh: Strings = {
 		saved: "报告已保存：{{path}}",
 		failureNoTasks: "请先添加要生成报告的任务",
 		failureNoModel: "请先在插件设置中选择模型并配置 API 密钥",
+	failureSave: "报告保存失败：请检查报告输出目录与写入权限",
 		failureMissingCredentials: "请先在插件设置中填写所选供应商的 Base URL 和 API 密钥",
 		failureGeneric: "生成失败：{{message}}",
 	},

@@ -69,6 +69,7 @@ export const en = {
 		saved: "Report saved: {{path}}",
 		failureNoTasks: "Add tasks before generating a report",
 		failureNoModel: "Select a model and configure its API key in the plugin settings first",
+	failureSave: "Failed to save the report: check the report output folder and write permissions",
 		failureMissingCredentials:
 			"Fill in the Base URL and API key of the selected provider in the plugin settings first",
 		failureGeneric: "Generation failed: {{message}}",
