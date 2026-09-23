@@ -11,7 +11,7 @@ import type { TaskRepository } from "../tasks/repository";
 import { sourceMissingMessageKey, type OpenSourceResult, type SourceCapabilities } from "../source";
 import { chatCompletion } from "../ai/client";
 import { saveReport } from "../report/writer";
-import { generateReport } from "../report/generate";
+import { createGeneration, type GenerateSettings } from "../report/generate";
 import { describeReportFailure } from "../report/errorMessage";
 import { TaskPickerModal } from "./TaskPickerModal";
 import { renderTaskMeta } from "./taskMeta";
@@ -30,6 +30,8 @@ export class ReportModal extends Modal {
 	private generateBtn: HTMLButtonElement | null = null;
 	private extraRequirementsInput: HTMLTextAreaElement | null = null;
 	private generating = false;
+	/** 「生成」入口（module 自持重入守卫，#49）：首次生成时装配一次。 */
+	private generation: ReturnType<typeof createGeneration> | null = null;
 	/** 界面打开时打开的仓库；生成期间沿用它，不重判来源缺失（见 #45 / #49 修订）。 */
 	private repository: TaskRepository | null = null;
 	/** 来源能力（由来源自述，界面据此决定行为）。 */
@@ -236,44 +238,51 @@ export class ReportModal extends Modal {
 		}
 
 		try {
-			// 界面打开时已打开仓库；生成期间沿用它，中途读不到数据按缺详情约定处理（见 #49 修订）
+			// 界面打开时已打开仓库；生成期间沿用它，中途读不到数据按缺详情约定处理（#49 修订一）
 			const repository = this.repository;
 			if (!repository) return;
-			const s = this.plugin.settings;
-			const result = await generateReport(
-				{
-					tasks: this.getCandidateTasks(),
-					type: this.reportType,
-					templateId: this.selectedTemplateId,
-					templates: s.templates,
-					extraRequirements: this.extraRequirementsInput?.value,
-					language: s.language,
-					weekStartsOnMonday: s.weekStartsOnMonday,
-					reportFolder: s.reportFolder,
-					activeModel: this.plugin.providers.resolveActive(),
-					temperature: s.temperature,
-					maxTokens: s.maxTokens,
-					timeoutSeconds: s.timeoutSeconds,
-				},
-				{
-					repository,
-					chat: (prompt, config) => chatCompletion(config, [{ role: "user", content: prompt }]),
-					save: (folder, type, range, content, templateName) =>
-						saveReport(this.app, folder, type, range, content, templateName),
-					now: () => new Date(),
-				}
-			);
 
-			if (result.ok) {
+			// 装配层接线：用户意图之外的一切（设置查询、当前模型、chat / save、时间源）在此注入，
+			// 界面不拼参数（#49 修订三）。入口只建一次：重入守卫在 module 内，双击只产出一份报告。
+			const generate = (this.generation ??= createGeneration({
+				repository,
+				settings: (): GenerateSettings => {
+					const s = this.plugin.settings;
+					return {
+						reportType: this.reportType,
+						language: s.language,
+						weekStartsOnMonday: s.weekStartsOnMonday,
+						reportFolder: s.reportFolder,
+						temperature: s.temperature,
+						maxTokens: s.maxTokens,
+						timeoutSeconds: s.timeoutSeconds,
+						templates: s.templates,
+					};
+				},
+				resolveModel: () => this.plugin.providers.resolveActive(),
+				chat: (prompt, config) => chatCompletion(config, [{ role: "user", content: prompt }]),
+				save: (folder, type, range, content, templateName) =>
+					saveReport(this.app, folder, type, range, content, templateName),
+				now: () => new Date(),
+			}));
+
+			const result = await generate({
+				tasks: this.getCandidateTasks(),
+				templateId: this.selectedTemplateId,
+				extraRequirements: this.extraRequirementsInput?.value,
+			});
+
+			if (result.ok === true) {
 				new Notice(this.plugin.t("report.saved", { path: result.path }));
 				const file = this.app.vault.getAbstractFileByPath(result.path);
 				if (file instanceof TFile) {
 					await this.app.workspace.getLeaf(false).openFile(file);
 				}
 				this.close();
-			} else {
+			} else if (result.ok === false) {
 				new Notice(describeReportFailure(result, this.plugin.t));
 			}
+			// ok === "generating"：module 的重入守卫接住的并发点击，界面静默（按钮此时已禁用）
 		} finally {
 			this.generating = false;
 			if (this.generateBtn) {
