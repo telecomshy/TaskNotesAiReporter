@@ -2,22 +2,27 @@
  * 任务数据访问的 seam。
  *
  * TaskRepository 用两个行为屏蔽底层来源：列出任务（TaskNotes 运行时公开 API）
- * 与读取任务正文（Obsidian vault）。生产 adapter 见 ./obsidian；测试用 in-process fake。
+ * 与一次一批补「详情」（TaskNotes 为笔记正文、Obsidian Tasks 为任务行原文，见 CONTEXT.md「详情」）。
+ * 生产 adapter 见 ./obsidian 与 ./obsidianTasks；测试用 in-process fake。
  * 遵守 ADR-0001：仅通过 TaskNotes 运行时公开 API 读取任务，不改其源码。
  */
 
 import type { StatusDefinition, TaskInfo } from "../types";
 
 /**
- * 任务数据访问接口。
+ * 任务数据访问接口（#48：「详情」一批补 + 一种缺失约定）。
  * `id` 是任务标识（见 `TaskInfo.id`）：调用方不得解释或拆解其内部结构。
  */
 export interface TaskRepository {
 	/** 列出全部未归档任务；TaskNotes 运行时不可用时返回 null。 */
 	list(): Promise<TaskInfo[] | null>;
-	/** 读取任务笔记正文（已去掉 frontmatter）；笔记不存在时返回空串。 */
-	readBody(id: string): Promise<string>;
-	/** 读取任务状态目录（用于状态子集分类）；不可用时返回空数组。 */
+	/**
+	 * 一次一批补「详情」（喂给模型的补充材料）：返回 标识 → 详情文本。
+	 * 缺详情（如笔记已删 / 行号越界）为空串——一种缺失约定，不另设缺失形状。
+	 * interface 只表达「详情」：正文裁剪、任务行原文都是来源内部细节。
+	 */
+	details(ids: readonly string[]): Promise<Record<string, string>>;
+	/** 读取任务状态目录（值名 → 状态归类，用于状态子集分类）；不可用时返回空数组。 */
 	statuses(): Promise<StatusDefinition[]>;
 }
 
@@ -39,10 +44,15 @@ export function createTaskRepository(deps: TaskRepositoryDeps): TaskRepository {
 			if (tasks === null) return null;
 			return tasks.filter((task) => task && task.id && !task.archived);
 		},
-		async readBody(id: string): Promise<string> {
-			// 本包装假定「任务标识即笔记路径」（TaskNotes 形状）；其他来源的 adapter 自行实现 readBody。
-			const raw = await deps.readNote(id);
-			return raw === null ? "" : stripFrontmatter(raw);
+		async details(ids: readonly string[]): Promise<Record<string, string>> {
+			// 本包装假定「任务标识即笔记路径」（TaskNotes 形状）；其他来源的 adapter 自行实现 details。
+			const out: Record<string, string> = {};
+			for (const id of ids) {
+				if (id in out) continue; // 同一标识只读一次
+				const raw = await deps.readNote(id);
+				out[id] = raw === null ? "" : stripFrontmatter(raw);
+			}
+			return out;
 		},
 		async statuses(): Promise<StatusDefinition[]> {
 			return (await deps.listStatuses?.()) ?? [];
@@ -63,19 +73,23 @@ export function stripFrontmatter(content: string): string {
 }
 
 /**
- * 将读取到的正文回填到 task.details（纯逻辑，可单元测试）。
- * body 为空时保留原 details 不变。
+ * 把一批「详情」回填到任务上（纯逻辑，可单元测试）：
+ * 详情为空的保留原 details 不变——缺详情不抹掉已有内容（行为与旧逐条水合一致）。
  */
-export function applyHydratedDetails(task: TaskInfo, body: string): TaskInfo {
-	const detail = body.trim();
-	if (!detail) return task;
-	return { ...task, details: detail };
+export function applyDetails(
+	tasks: readonly TaskInfo[],
+	details: Record<string, string>
+): TaskInfo[] {
+	return tasks.map((task) => {
+		const detail = (details[task.id] ?? "").trim();
+		return detail ? { ...task, details: detail } : task;
+	});
 }
 
-/**
- * 越过 seam，读取任务正文并回填到 details。
- * 调用方无需自行组合 readBody 与 applyHydratedDetails。
- */
-export async function hydrateTask(repository: TaskRepository, task: TaskInfo): Promise<TaskInfo> {
-	return applyHydratedDetails(task, await repository.readBody(task.id));
+/** 越过 seam 一次一批补「详情」（#48 的批补协议）。 */
+export async function hydrateTasks(
+	repository: TaskRepository,
+	tasks: readonly TaskInfo[]
+): Promise<TaskInfo[]> {
+	return applyDetails(tasks, await repository.details(tasks.map((task) => task.id)));
 }

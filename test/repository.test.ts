@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import {
 	createTaskRepository,
 	stripFrontmatter,
-	applyHydratedDetails,
-	hydrateTask,
+	applyDetails,
+	hydrateTasks,
 } from "../src/tasks/repository";
 import { fakeTaskRepository } from "./fakes/taskRepository";
 import { makeTask } from "./fakes/task";
@@ -20,13 +20,9 @@ const baseTask: TaskInfo = {
 
 // ===== createTaskRepository（底层来源策略） =====
 
-test("createTaskRepository.list 过滤归档与无路径任务", async () => {
+test("createTaskRepository.list 过滤归档与无标识任务", async () => {
 	const repo = createTaskRepository({
-		listTasks: async () => [
-			makeTask({ id: "a" }),
-			makeTask({ id: "b", archived: true }),
-			makeTask({ id: "" }),
-		],
+		listTasks: async () => [makeTask({ id: "a" }), makeTask({ id: "b", archived: true }), makeTask({ id: "" })],
 		readNote: async () => null,
 	});
 	const result = await repo.list();
@@ -56,44 +52,64 @@ test("createTaskRepository.statuses 底层不可用时返回空数组", async ()
 	assert.deepEqual(await repo.statuses(), []);
 });
 
-test("createTaskRepository.readBody 去掉 frontmatter", async () => {
+// ===== details（#48：一批补 + 一种缺失约定） =====
+
+test("createTaskRepository.details 一批返回去 frontmatter 的正文", async () => {
 	const repo = createTaskRepository({
 		listTasks: async () => [],
-		readNote: async () => "---\ntitle: x\nstatus: todo\n---\n\n正文内容",
+		readNote: async (path) =>
+			path === "a" ? "---\ntitle: x\n---\n\n正文内容" : "直接是正文内容",
 	});
-	assert.equal(await repo.readBody("a"), "正文内容");
+	assert.deepEqual(await repo.details(["a", "b"]), { a: "正文内容", b: "直接是正文内容" });
 });
 
-test("createTaskRepository.readBody 无 frontmatter 时原样返回", async () => {
+test("createTaskRepository.details 同一标识只读一次，缺详情为空串", async () => {
+	let reads = 0;
 	const repo = createTaskRepository({
 		listTasks: async () => [],
-		readNote: async () => "直接是正文内容",
+		readNote: async (path) => {
+			if (path !== "a") return null;
+			reads += 1;
+			return "正文";
+		},
 	});
-	assert.equal(await repo.readBody("a"), "直接是正文内容");
+	assert.deepEqual(await repo.details(["a", "a", "missing"]), { a: "正文", missing: "" });
+	assert.equal(reads, 1);
 });
 
-test("createTaskRepository.readBody 笔记不存在时返回空串", async () => {
-	const repo = createTaskRepository({
-		listTasks: async () => [],
-		readNote: async () => null,
-	});
-	assert.equal(await repo.readBody("missing"), "");
+test("createTaskRepository.details 请求的每个标识都有返回项（缺失即空串）", async () => {
+	const repo = createTaskRepository({ listTasks: async () => [], readNote: async () => null });
+	const details = await repo.details(["x", "y"]);
+	assert.deepEqual(Object.keys(details).sort(), ["x", "y"]);
+	assert.ok(Object.values(details).every((v) => v === ""));
 });
 
-// ===== hydrateTask（越过 seam 的消费行为） =====
+// ===== applyDetails / hydrateTasks（越过 seam 的消费行为） =====
 
-test("hydrateTask 越过 seam 用 readBody 回填 details", async () => {
+test("applyDetails 非空详情回填 details，保留其它字段", () => {
+	const result = applyDetails([baseTask], { "2026/09.md": "详细描述了本周进展" });
+	assert.equal(result[0].details, "详细描述了本周进展");
+	assert.equal(result[0].title, "写周报");
+});
+
+test("applyDetails 空详情保留原 details（缺详情不抹掉已有内容）", () => {
+	const withDetails = { ...baseTask, details: "原始详情" };
+	assert.equal(applyDetails([withDetails], { "2026/09.md": "   " })[0].details, "原始详情");
+	assert.equal(applyDetails([withDetails], {})[0].details, "原始详情");
+});
+
+test("hydrateTasks 一次一批越过 seam 补详情", async () => {
 	const repo = fakeTaskRepository({ bodies: { "2026/09.md": "本周完成了报告初稿" } });
-	const result = await hydrateTask(repo, baseTask);
-	assert.equal(result.details, "本周完成了报告初稿");
-	assert.equal(result.title, "写周报");
+	const result = await hydrateTasks(repo, [baseTask]);
+	assert.equal(result[0].details, "本周完成了报告初稿");
+	assert.equal(result[0].title, "写周报");
 });
 
-test("hydrateTask 正文为空时保留原 task", async () => {
+test("hydrateTasks 缺详情时保留原 task 不变", async () => {
 	const repo = fakeTaskRepository({ bodies: {} });
 	const withDetails = { ...baseTask, details: "原始详情" };
-	const result = await hydrateTask(repo, withDetails);
-	assert.equal(result.details, "原始详情");
+	const result = await hydrateTasks(repo, [withDetails]);
+	assert.equal(result[0].details, "原始详情");
 });
 
 // ===== 纯逻辑 =====
@@ -104,21 +120,10 @@ test("stripFrontmatter 去掉开头的 YAML frontmatter 返回正文", () => {
 });
 
 test("stripFrontmatter 无 frontmatter 时原样返回（去尾部空白）", () => {
-	assert.equal(stripFrontmatter("直接是正文内容  \n"), "直接是正文内容");
+	assert.equal(stripFrontmatter("直接是正文内容 \n"), "直接是正文内容");
 });
 
 test("stripFrontmatter 空内容返回空", () => {
 	assert.equal(stripFrontmatter(""), "");
 	assert.equal(stripFrontmatter("   \n"), "");
-});
-
-test("applyHydratedDetails 正文非空时回填 details", () => {
-	const result = applyHydratedDetails(baseTask, "详细描述了本周进展");
-	assert.equal(result.details, "详细描述了本周进展");
-	assert.equal(result.title, "写周报");
-});
-
-test("applyHydratedDetails 正文为空时保留原 details", () => {
-	const withDetails = { ...baseTask, details: "原始详情" };
-	assert.equal(applyHydratedDetails(withDetails, "   ").details, "原始详情");
 });

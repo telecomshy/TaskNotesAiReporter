@@ -13,7 +13,7 @@ import type {
 	TaskInfo,
 } from "../types";
 import type { AIClientConfig } from "../ai/client";
-import { hydrateTask, type TaskRepository } from "../tasks/repository";
+import { hydrateTasks, type TaskRepository } from "../tasks/repository";
 import { buildReportPrompt } from "../core/prompt";
 import { getReportRange } from "../core/dates";
 
@@ -87,9 +87,7 @@ export async function generateReport(
 
 	let content: string;
 	try {
-		const tasksWithDetails = await Promise.all(
-			input.tasks.map((task) => hydrateTask(deps.repository, task))
-		);
+		const tasksWithDetails = await hydrateTasks(deps.repository, input.tasks);
 		const statuses = await deps.repository.statuses();
 		const prompt = buildReportPrompt(tasksWithDetails, {
 			range,
