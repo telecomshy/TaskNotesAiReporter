@@ -6,7 +6,7 @@
 	"scripts": {
 		"build": "npm run typecheck && node esbuild.config.mjs production",
 		"deploy": "npm run build && node scripts/deploy.mjs",
-		"lint": "eslint .",
+		"lint": "eslint . --max-warnings 0",
 		"dev": "node esbuild.config.mjs",
 		"test": "node --import tsx --experimental-test-module-mocks --test \"test/*.test.ts\"",
 		"typecheck": "tsc -noEmit -skipLibCheck",
