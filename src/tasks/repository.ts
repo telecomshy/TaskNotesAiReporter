@@ -1,9 +1,9 @@
 /**
  * 任务数据访问的 seam。
  *
- * TaskRepository 用两个行为屏蔽底层来源：列出任务（TaskNotes 运行时公开 API）
- * 与一次一批补「详情」（TaskNotes 为笔记正文、Obsidian Tasks 为任务行原文，见 CONTEXT.md「详情」）。
- * 生产 adapter 见 ./obsidian 与 ./obsidianTasks；测试用 in-process fake。
+ * TaskRepository 用两个行为屏蔽底层实现：列出任务（TaskNotes 运行时公开 API）
+ * 与一次一批补「详情」（笔记正文，见 CONTEXT.md「详情」）。
+ * 生产 adapter 见 ./obsidian；测试用 in-process fake。
  * 遵守 ADR-0001：仅通过 TaskNotes 运行时公开 API 读取任务，不改其源码。
  */
 
@@ -18,8 +18,8 @@ export interface TaskRepository {
 	list(): Promise<TaskInfo[] | null>;
 	/**
 	 * 一次一批补「详情」（喂给模型的补充材料）：返回 标识 → 详情文本。
-	 * 缺详情（如笔记已删 / 行号越界）为空串——一种缺失约定，不另设缺失形状。
-	 * interface 只表达「详情」：正文裁剪、任务行原文都是来源内部细节。
+	 * 缺详情（如笔记已删）为空串——一种缺失约定，不另设缺失形状。
+	 * interface 只表达「详情」：正文裁剪是实现内部细节。
 	 */
 	details(ids: readonly string[]): Promise<Record<string, string>>;
 	/** 读取任务状态目录（值名 → 状态归类，用于状态子集分类）；不可用时返回空数组。 */
@@ -62,7 +62,7 @@ export function createTaskRepository(deps: TaskRepositoryDeps): TaskRepository {
 			return tasks.filter((task) => task && task.id && !task.archived);
 		},
 		async details(ids: readonly string[]): Promise<Record<string, string>> {
-			// 本包装假定「任务标识即笔记路径」（TaskNotes 形状）；其他来源的 adapter 自行实现 details。
+			// 本包装假定「任务标识即笔记路径」（TaskNotes 形状）。
 			return collectDetails(ids, async (id) => {
 				const raw = await deps.readNote(id);
 				return raw === null ? "" : stripFrontmatter(raw);

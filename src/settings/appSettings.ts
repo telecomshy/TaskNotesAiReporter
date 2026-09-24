@@ -18,12 +18,10 @@ import {
 	coerceReportFolder,
 	coerceReportLanguage,
 	coerceSelectedTemplateId,
-	coerceTaskSource,
 	coerceUiLanguage,
 	isDateField,
 	makeId,
 } from "./values";
-import type { TaskSource } from "../types";
 
 /** 生成参数（temperature / maxTokens / timeoutSeconds）：三者恒结伴读写（见 #46）。 */
 export interface GenerationParams {
@@ -37,7 +35,6 @@ export interface GenerationParams {
  * 它是 `TaskNotesAIHelperSettings` 的结构化子集，命令可直接作用于 owner 的整份设置。
  */
 export interface AppState {
-	taskSource: TaskSource;
 	reportFolder: string;
 	dateFields: DateField[];
 	weekStartsOnMonday: boolean;
@@ -51,12 +48,6 @@ export interface AppState {
 }
 
 // ===== 命令转移（就地维护值域不变式） =====
-
-/** 设置任务来源；非法值归一为 `tasknotes`。 */
-export function setTaskSource(state: AppState, source: unknown): AppState {
-	state.taskSource = coerceTaskSource(source);
-	return state;
-}
 
 /** 设置报告输出目录（去空白）。 */
 export function setReportFolder(state: AppState, folder: string): AppState {
@@ -144,7 +135,6 @@ export function setSelectedTemplateId(state: AppState, id: string): AppState {
 
 /** 非供应商设置门面：视图只与它对话。命令返回落盘的 Promise，失败可等待 / 传播。 */
 export interface AppSettings {
-	setTaskSource(source: unknown): Promise<void>;
 	setReportFolder(folder: string): Promise<void>;
 	toggleDateField(field: DateField, on: boolean): Promise<void>;
 	setWeekStartsOnMonday(value: boolean): Promise<void>;
@@ -166,7 +156,6 @@ export function createAppSettings(owner: SettingsOwner): AppSettings {
 	const run = (command: (state: TaskNotesAIHelperSettings) => void): Promise<void> =>
 		owner.apply(command);
 	return {
-		setTaskSource: (source) => run((s) => void setTaskSource(s, source)),
 		setReportFolder: (folder) => run((s) => void setReportFolder(s, folder)),
 		toggleDateField: (field, on) => run((s) => void toggleDateField(s, field, on)),
 		setWeekStartsOnMonday: (value) => run((s) => void setWeekStartsOnMonday(s, value)),

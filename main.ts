@@ -7,8 +7,6 @@ import { getLanguage, Plugin } from "obsidian";
 import { TaskNotesAIHelperSettingTab } from "./src/settings";
 import { ReportModal } from "./src/ui/ReportModal";
 import { obsidianTaskRepository } from "./src/tasks/obsidian";
-import { obsidianTasksSource } from "./src/tasks/obsidianTasks";
-import { openSource as openTaskSource } from "./src/source";
 
 import type { TaskNotesAIHelperSettings } from "./src/settings/logic";
 import { loadSettings as loadSettingsFromIO } from "./src/settings/loadSettings";
@@ -99,12 +97,8 @@ export default class TaskNotesAIHelperPlugin extends Plugin {
 	}
 
 	openReportModal(): void {
-		// 打开来源：来源切换 / 检测的唯一入口（见 #45）；两个 adapter 各自探针缺席即「来源缺失」。
-		const open = () =>
-			openTaskSource(this.settings.taskSource, {
-				tasknotes: () => obsidianTaskRepository(this.app),
-				"obsidian-tasks": obsidianTasksSource(this.app),
-			});
-		new ReportModal(this.app, this, open).open();
+		// 打开任务仓库：TaskNotes 运行时不可用时返回 null（= 来源缺失，见 CONTEXT.md「来源缺失」）。
+		const openRepository = () => obsidianTaskRepository(this.app);
+		new ReportModal(this.app, this, openRepository).open();
 	}
 }

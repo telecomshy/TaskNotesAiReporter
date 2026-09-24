@@ -6,7 +6,6 @@ import {
 	setWeekStartsOnMonday,
 	setReportLanguage,
 	setUiLanguage,
-	setTaskSource,
 	addTemplate,
 	updateTemplate,
 	removeTemplate,
@@ -95,16 +94,6 @@ test("setUiLanguage 只接受合法值，其余归一为 auto", () => {
 	assert.equal(s.uiLanguage, "auto");
 });
 
-test("setTaskSource 只接受合法值，其余归一为 tasknotes", () => {
-	const s = state({ taskSource: "tasknotes" });
-	setTaskSource(s, "obsidian-tasks");
-	assert.equal(s.taskSource, "obsidian-tasks");
-	setTaskSource(s, "tasknotes");
-	assert.equal(s.taskSource, "tasknotes");
-	setTaskSource(s, "jira");
-	assert.equal(s.taskSource, "tasknotes");
-});
-
 test("addTemplate 追加一个新模板（生成唯一 id）", () => {
 	const s = state();
 	addTemplate(s, "周报", "内容 {{tasks}}");
@@ -191,15 +180,6 @@ test("门面：命令落盘一次，并保留引用", () => {
 	assert.equal(saves, 1);
 });
 
-test("门面：setTaskSource 落盘一次", () => {
-	const live = state();
-	let saves = 0;
-	const facade = createAppSettings(ownerOver(live, { onSave: () => saves++ }));
-	facade.setTaskSource("obsidian-tasks");
-	assert.equal(live.taskSource, "obsidian-tasks");
-	assert.equal(saves, 1);
-});
-
 test("门面：删除当前模板清空选择并落盘一次", () => {
 	const live = state({
 		templates: [{ id: "tpl_a", name: "A", content: "a" }],
@@ -214,14 +194,6 @@ test("门面：删除当前模板清空选择并落盘一次", () => {
 });
 
 // ===== #46：值域不变式在变更处成立 =====
-
-test("setTaskSource 非法值归一为 tasknotes", () => {
-	const s = state();
-	setTaskSource(s, "obsidian-tasks");
-	assert.equal(s.taskSource, "obsidian-tasks");
-	setTaskSource(s, "nonsense");
-	assert.equal(s.taskSource, "tasknotes");
-});
 
 test("toggleDateField 全部取消是合法状态，不回填默认", () => {
 	const s = state({ dateFields: ["due"] });

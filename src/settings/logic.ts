@@ -14,7 +14,6 @@ import type { PendingSecret } from "./secrets";
 import {
 	coerceReportLanguage,
 	coerceSelectedTemplateId,
-	coerceTaskSource,
 	coerceTemplates,
 	coerceUiLanguage,
 	coerceWeekStartsOnMonday,
@@ -55,8 +54,8 @@ export function normalizeSettings(raw: unknown): NormalizedSettings {
 	const pendingSecrets: PendingSecret[] = [];
 
 	// 常规字段：载入**不改写用户既有数据**，只在缺失 / 非法时按值域回退。
-	// #46 列举的「载入与变更共用」规则只有四项：报告语言空回退、界面语言归一、
-	// 所选模板必须存在、taskSource 归一。目录空白 / 日期口径过滤 / 生成参数校验属**变更侧**规则；
+	// #46 列举的「载入与变更共用」规则只有三项：报告语言空回退、界面语言归一、
+	// 所选模板必须存在。目录空白 / 日期口径过滤 / 生成参数校验属**变更侧**规则；
 	// 若在载入套用会改写用户 data.json，构成 #44 禁止的第三处用户可见变更。
 	if (typeof data.temperature === "number") settings.temperature = data.temperature;
 	if (typeof data.maxTokens === "number") settings.maxTokens = data.maxTokens;
@@ -69,7 +68,6 @@ export function normalizeSettings(raw: unknown): NormalizedSettings {
 	if (weekStartsOnMonday !== null) settings.weekStartsOnMonday = weekStartsOnMonday;
 	settings.language = coerceReportLanguage(data.language);
 	settings.uiLanguage = coerceUiLanguage(data.uiLanguage);
-	settings.taskSource = coerceTaskSource(data.taskSource);
 	const templates = coerceTemplates(data.templates);
 	if (templates !== null) settings.templates = templates;
 

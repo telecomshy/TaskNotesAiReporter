@@ -52,8 +52,6 @@ export const en = {
 		loading: "Loading tasks…",
 		tasknotesMissing:
 			"TaskNotes plugin not detected. Enable TaskNotes in Obsidian first.",
-		obsidianTasksMissing:
-			"Obsidian Tasks plugin not detected. Enable Obsidian Tasks in Obsidian first.",
 
 		joinedTasks: "Joined tasks ({{count}})",
 		clear: "Clear",
@@ -88,7 +86,6 @@ export const en = {
 		allTasks: "All tasks ({{count}})",
 		searchResult: "Search \"{{query}}\" ({{count}} matches)",
 		searchPlaceholder: "keyword #tag @context (space-separated)…",
-		contextsUnsupported: "This task source has no contexts; @context is disabled here.",
 
 		selectAll: "Select all",
 		parseKeywords: "Keywords: {{value}}",
@@ -106,11 +103,6 @@ export const en = {
 		tabTemplate: "Templates",
 		tabGeneral: "General",
 		generalHeading: "Report generation",
-		taskSourceName: "Task source",
-		taskSourceDesc: "Which task plugin to read tasks from.",
-
-		taskSourceTaskNotes: "TaskNotes",
-		taskSourceObsidianTasks: "Obsidian Tasks",
 		reportFolderName: "Report output folder",
 		reportFolderDesc: "Where generated report notes are saved, e.g. TaskNotes/Reports",
 		dateFieldsHeading: "Task auto-filter date fields (multi-select)",

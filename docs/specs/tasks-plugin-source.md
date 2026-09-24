@@ -1,5 +1,11 @@
 # 规格：支持 Obsidian Tasks 插件作为任务来源
 
+> **状态：已撤回（2026-09-24）**——功能已整体移除，本规格仅作历史记录保留。
+> 撤回理由：行内清单能稳定提供的只有「标题 + 勾选状态」，日期 / 优先级是**可选的书写约定**，
+> 「详情」也只有行原文（约等于标题本身），喂给模型的材料不足以产出本插件承诺的报告质量；
+> 且其「创建时间」是手写的 `➕` 而非系统创建时刻，与 TaskNotes 的同名口径语义分裂，会让用户误读时间筛选。
+> 另注：本规格与实现本就有一处偏离——`ReportModal.reportType` 恒为 `custom`、界面无报告类型选择器。
+
 > 权威出处：GitHub issue [#27](https://github.com/telecomshy/TaskNotesAiReporter/issues/27)（`ready-for-agent`）。本文件是仓库内可被 `/code-review` 直接发现的副本。
 >
 > _来源：`/grill-with-docs` 逼问定形。本规格**取代** #27 早先的「Deferred」版本——旧版本采用「改 `TaskRepository` seam + `key` 字段重构 + 借 `getTasks()` + 富详情」的重方案，本版本改为更轻的「新增来源工厂 seam + `path` 承载唯一性 + metadataCache 自扫 + 行描述详情」，同时吸收旧版本优秀的字段映射语义。_

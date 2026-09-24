@@ -18,7 +18,6 @@ function settingsWith(providers: TaskNotesAIHelperSettings["providers"]): TaskNo
 		maxTokens: 8192,
 		timeoutSeconds: 60,
 		reportFolder: "TaskNotes/Reports",
-		taskSource: "tasknotes",
 		dateFields: ["completedDate"],
 		weekStartsOnMonday: true,
 		language: "English",

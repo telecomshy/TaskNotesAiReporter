@@ -37,7 +37,7 @@ export type SettingsSnapshot = Readonly<
 
 /** owner 的外部 IO：落盘与按名读取密钥。 */
 export interface SettingsOwnerIO {
-	/** 持久化整个设置（`data.json` 形状除 `taskSource` 外不变）。 */
+	/** 持久化整个设置（`data.json` 形状不变）。 */
 	save(settings: TaskNotesAIHelperSettings): Promise<void>;
 	/** 按名读取密钥值；缺失返回 null。 */
 	getSecret(id: string): string | null;

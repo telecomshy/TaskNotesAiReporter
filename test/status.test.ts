@@ -2,7 +2,6 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
 	taskNotesStatusClass,
-	tasksStatusClass,
 	statusClassOf,
 	filterTasksBySubset,
 } from "../src/core/status";
@@ -15,7 +14,7 @@ const statuses: StatusDefinition[] = [
 	{ value: "done", statusClass: "completed" },
 ];
 
-// ===== TaskNotes 规则（#47 修订二；ADR-0015 的值名限制如实保留） =====
+// ===== 状态归类（#47 修订二；ADR-0015 的值名限制如实保留） =====
 
 test("taskNotesStatusClass：isCompleted → 已结束；其余未完成 → 待办（不产生「未知」）", () => {
 	assert.equal(taskNotesStatusClass("done", true), "completed");
@@ -35,26 +34,6 @@ test("自定义状态名导致进行中为空（已知限制，ADR-0015）", () 
 
 test("已完成优先于进行中命名冲突", () => {
 	assert.equal(taskNotesStatusClass("in-progress", true), "completed");
-});
-
-// ===== Obsidian Tasks 规则（#47 修订二；isDone 口径继承 #41） =====
-
-test("tasksStatusClass：DONE / CANCELLED / NON_TASK → 已结束（isDone 口径）", () => {
-	assert.equal(tasksStatusClass("DONE"), "completed");
-	assert.equal(tasksStatusClass("CANCELLED"), "completed");
-	assert.equal(tasksStatusClass("NON_TASK"), "completed");
-});
-
-test("tasksStatusClass：IN_PROGRESS → 进行中，TODO → 待办", () => {
-	assert.equal(tasksStatusClass("IN_PROGRESS"), "in-progress");
-	assert.equal(tasksStatusClass("TODO"), "todo");
-});
-
-test("tasksStatusClass：ON_HOLD / EMPTY / 类型缺失 / 不认识 → 未知", () => {
-	assert.equal(tasksStatusClass("ON_HOLD"), "unknown");
-	assert.equal(tasksStatusClass("EMPTY"), "unknown");
-	assert.equal(tasksStatusClass(undefined), "unknown");
-	assert.equal(tasksStatusClass("WEIRD"), "unknown");
 });
 
 // ===== 四档查询与三子集（#47 修订一） =====

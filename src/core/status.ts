@@ -1,9 +1,8 @@
 /**
- * 「状态归类」四档（待办 / 进行中 / 已结束 / 未知）与两个来源的判定规则（见 #47 / ADR-0015）。
+ * 「状态归类」四档（待办 / 进行中 / 已结束 / 未知）与来源的判定规则（见 #47 / ADR-0015）。
  * 纯函数，无 Obsidian 依赖，可单元测试。
  *
- * 来源词汇不出缝：TaskNotes 的 isCompleted 与状态值名、Obsidian Tasks 的 StatusType
- * 只在本文件各自的纯映射函数里陈述一次；缝外只见四档。
+ * 来源词汇不出缝：TaskNotes 的 isCompleted 与状态值名只在本文件的纯映射函数里陈述一次；缝外只见四档。
  */
 
 import type { StatusClass, StatusDefinition, TaskInfo } from "../types";
@@ -19,26 +18,6 @@ export type TaskSubset = "completed" | "in-progress" | "open";
 export function taskNotesStatusClass(value: string, isCompleted: boolean | undefined): StatusClass {
 	if (isCompleted === true) return "completed";
 	return value.trim().toLowerCase() === "in-progress" ? "in-progress" : "todo";
-}
-
-/**
- * Obsidian Tasks 规则（其 StatusType 口径，isDone 继承 #41）：
- * `DONE` / `CANCELLED` / `NON_TASK` → 已结束；`IN_PROGRESS` → 进行中；`TODO` → 待办；
- * `ON_HOLD` / `EMPTY` / 类型缺失 / 不认识 → 未知。
- */
-export function tasksStatusClass(statusType: string | undefined): StatusClass {
-	switch (statusType) {
-		case "DONE":
-		case "CANCELLED":
-		case "NON_TASK":
-			return "completed";
-		case "IN_PROGRESS":
-			return "in-progress";
-		case "TODO":
-			return "todo";
-		default:
-			return "unknown";
-	}
 }
 
 /**

@@ -1,8 +1,8 @@
 /**
  * 设置的**值域规则**：「何为合法设置值」的判定集中在这里。
  *
- * 其中四项由**载入与变更共用**（#46 明列）：报告语言空回退、界面语言归一、
- * 所选模板必须存在、taskSource 归一。其余（目录去空白、日期口径合法性、生成参数有限数值）
+ * 其中三项由**载入与变更共用**（#46 明列）：报告语言空回退、界面语言归一、
+ * 所选模板必须存在。其余（目录去空白、日期口径合法性、生成参数有限数值）
  * 是**变更侧**规则：载入刻意不套用，以免改写用户 data.json（#44 的双例外约束）。
  *
  * 附带提供不透明 id 的铸造（`makeId`）——它不是值域规则，住在这里只为避免单独建模块。
@@ -14,7 +14,6 @@ import {
 	DEFAULT_SETTINGS,
 	type DateField,
 	type ReportTemplate,
-	type TaskSource,
 } from "../types";
 import type { UiLanguageSetting } from "../i18n";
 import { DATE_FIELDS } from "../core/dateFields";
@@ -27,9 +26,6 @@ export const DATE_FIELD_VALUES: readonly DateField[] = DATE_FIELDS;
 
 /** 界面语言的合法取值。 */
 export const UI_LANGUAGE_VALUES: readonly UiLanguageSetting[] = ["auto", "zh", "en"];
-
-/** 任务来源的合法取值。 */
-export const TASK_SOURCE_VALUES: readonly TaskSource[] = ["tasknotes", "obsidian-tasks"];
 
 export function isDateField(value: unknown): value is DateField {
 	return DATE_FIELD_VALUES.includes(value as DateField);
@@ -60,11 +56,6 @@ export function coerceUiLanguage(value: unknown): UiLanguageSetting {
 	return UI_LANGUAGE_VALUES.includes(value as UiLanguageSetting)
 		? (value as UiLanguageSetting)
 		: "auto";
-}
-
-/** 任务来源：非法值归一为 `tasknotes`（载入与变更一致；既有用户的默认行为不变）。 */
-export function coerceTaskSource(value: unknown): TaskSource {
-	return TASK_SOURCE_VALUES.includes(value as TaskSource) ? (value as TaskSource) : "tasknotes";
 }
 
 /** 周起始日：非布尔视为缺省（返回 null，由调用方决定是否回退默认）。 */

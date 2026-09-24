@@ -52,7 +52,6 @@ export const zh: Strings = {
 		title: "生成任务报告",
 		loading: "正在加载任务…",
 		tasknotesMissing: "未检测到 TaskNotes 插件，请先在 Obsidian 中启用 TaskNotes。",
-		obsidianTasksMissing: "未检测到 Obsidian Tasks 插件，请先在 Obsidian 中启用 Obsidian Tasks。",
 
 		joinedTasks: "已加入任务（{{count}}）",
 		clear: "清空",
@@ -85,7 +84,6 @@ export const zh: Strings = {
 		allTasks: "全部任务（共 {{count}} 个）",
 		searchResult: "搜索「{{query}}」（匹配 {{count}} 个）",
 		searchPlaceholder: "关键字 #标签 @上下文（空格分隔）…",
-		contextsUnsupported: "当前来源不支持上下文，@上下文 在此禁用。",
 
 		selectAll: "全选",
 		parseKeywords: "关键字：{{value}}",
@@ -103,11 +101,6 @@ export const zh: Strings = {
 		tabTemplate: "模板配置",
 		tabGeneral: "常规配置",
 		generalHeading: "报告生成",
-		taskSourceName: "来源",
-		taskSourceDesc: "从哪个任务插件读取任务。",
-
-		taskSourceTaskNotes: "TaskNotes",
-		taskSourceObsidianTasks: "Obsidian Tasks",
 		reportFolderName: "报告输出目录",
 		reportFolderDesc: "生成的报告笔记保存位置，如 TaskNotes/Reports",
 		dateFieldsHeading: "任务自动筛选的日期口径（可多选）",

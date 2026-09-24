@@ -8,7 +8,6 @@ import { App, Modal, Notice, TFile } from "obsidian";
 import type TaskNotesAIHelperPlugin from "../../main";
 import type { ReportType, TaskInfo } from "../types";
 import type { TaskRepository } from "../tasks/repository";
-import { sourceMissingMessageKey, type OpenSourceResult, type SourceCapabilities } from "../source";
 import { chatCompletion } from "../ai/client";
 import { saveReport } from "../report/writer";
 import { createGeneration, type GenerateSettings } from "../report/generate";
@@ -34,15 +33,13 @@ export class ReportModal extends Modal {
 	private generateEntry: ReturnType<typeof createGeneration> | null = null;
 	/** 界面打开时打开的仓库；生成期间沿用它，不重判来源缺失（见 #45 / #49 修订）。 */
 	private repository: TaskRepository | null = null;
-	/** 来源能力（由来源自述，界面据此决定行为）。 */
-	private capabilities: SourceCapabilities = { supportsContexts: true };
 	// 记录并记住上次选择的模板（空字符串表示不选模板，极简模式）
 	private selectedTemplateId = "";
 
 	constructor(
 		app: App,
 		private plugin: TaskNotesAIHelperPlugin,
-		private openSource: () => OpenSourceResult
+		private openRepository: () => TaskRepository | null
 	) {
 		super(app);
 		// 打开弹窗时恢复上次选择的模板
@@ -63,14 +60,13 @@ export class ReportModal extends Modal {
 		this.renderTaskList();
 		this.renderFooter();
 
-		// 打开来源：来源判定只在此处做一次（判别式：已打开 | 来源缺失，见 #45）
-		const opened = this.openSource();
-		if (!opened.ok) {
+		// 打开任务仓库：来源判定只在此处做一次（仓库缺席即「来源缺失」，见 #45）
+		const repository = this.openRepository();
+		if (!repository) {
 			this.renderSourceMissing();
 			return;
 		}
-		this.repository = opened.repo;
-		this.capabilities = opened.capabilities;
+		this.repository = repository;
 
 		// 加载任务
 		this.listWrapEl.empty();
@@ -95,7 +91,7 @@ export class ReportModal extends Modal {
 	private renderSourceMissing(): void {
 		this.listWrapEl.empty();
 		this.listWrapEl.createEl("p", {
-			text: this.plugin.t(sourceMissingMessageKey(this.plugin.settings.taskSource)),
+			text: this.plugin.t("report.tasknotesMissing"),
 			cls: "tah-error",
 		});
 	}
@@ -170,7 +166,6 @@ export class ReportModal extends Modal {
 			this.allTasks,
 			this.plugin.settings.dateFields,
 			new Set(this.candidateTasks.keys()),
-			this.capabilities,
 			this.plugin.settings.weekStartsOnMonday,
 			this.plugin.t,
 			this.plugin.lang,

@@ -6,7 +6,6 @@ import {
 	parseTitleQuery,
 	filterTasksByTitleQuery,
 	isTitleQueryEmpty,
-	stripContextTokens,
 } from "../src/core/filter";
 import type { DateField, TaskInfo } from "../src/types";
 
@@ -184,18 +183,4 @@ test("filterTasksByTitleQuery 上下文为精确匹配，不做子串匹配", ()
 	// @office 只匹配精确等于 office 的上下文，不匹配 workplace 的子串 office
 	const result = filterTasksByTitleQuery(tasks, { keywords: [], tags: [], contexts: ["office"] });
 	assert.deepEqual(result.map((t) => t.id), ["a"]);
-});
-
-test("stripContextTokens 去掉 @上下文 token，保留关键字与 #标签", () => {
-	// 空白结构原样保留（见 #45），因此按令牌断言，不锁死具体空格数。
-	const tokens = (input: string) => stripContextTokens(input).split(/\s+/).filter(Boolean);
-	assert.deepEqual(tokens("报告 @工作 #前端"), ["报告", "#前端"]);
-	assert.deepEqual(tokens("@a @b"), []);
-	assert.deepEqual(tokens("  报告   @x  标签  "), ["报告", "标签"]);
-	assert.equal(stripContextTokens(""), "");
-});
-
-test("Tasks 来源先去除 @上下文再解析：不再产生上下文条件（UI 层禁用，不改 parseTitleQuery）", () => {
-	const parsed = parseTitleQuery(stripContextTokens("周报 @工作 #前端"));
-	assert.deepEqual(parsed, { keywords: ["周报"], tags: ["前端"], contexts: [] });
 });

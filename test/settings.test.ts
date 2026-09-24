@@ -64,12 +64,6 @@ test("normalizeSettings 日期口径：载入原样保留（过滤非法项是�
 	assert.deepEqual(settings.dateFields, ["due", "bogus", "due", "completedDate"]);
 });
 
-test("normalizeSettings taskSource：缺省 tasknotes、保留合法值、非法归一", () => {
-	assert.equal(load({}).taskSource, "tasknotes");
-	assert.equal(load({ taskSource: "obsidian-tasks" }).taskSource, "obsidian-tasks");
-	assert.equal(load({ taskSource: "nonsense" }).taskSource, "tasknotes");
-});
-
 test("normalizeSettings 报告语言空回退默认、界面语言非法归一 auto（与变更一致）", () => {
 	assert.equal(load({ language: "   " }).language, DEFAULT_SETTINGS.language);
 	assert.equal(load({ uiLanguage: "klingon" }).uiLanguage, "auto");
@@ -231,20 +225,6 @@ test("normalizeSettings 保留合法界面语言", () => {
 	assert.equal(load({ uiLanguage: "en" }).uiLanguage, "en");
 	assert.equal(load({ uiLanguage: "zh" }).uiLanguage, "zh");
 	assert.equal(load({ uiLanguage: "auto" }).uiLanguage, "auto");
-});
-
-test("normalizeSettings 默认任务来源为 tasknotes（旧数据补齐）", () => {
-	assert.equal(load({}).taskSource, "tasknotes");
-});
-
-test("normalizeSettings 保留合法任务来源", () => {
-	assert.equal(load({ taskSource: "tasknotes" }).taskSource, "tasknotes");
-	assert.equal(load({ taskSource: "obsidian-tasks" }).taskSource, "obsidian-tasks");
-});
-
-test("normalizeSettings 非法任务来源回退 tasknotes", () => {
-	assert.equal(load({ taskSource: "jira" }).taskSource, "tasknotes");
-	assert.equal(load({ taskSource: 123 }).taskSource, "tasknotes");
 });
 
 test("normalizeSettings 空或纯空白报告语言回退英文", () => {

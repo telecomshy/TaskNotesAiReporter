@@ -82,17 +82,6 @@ export function isTitleQueryEmpty(query: TitleQuery): boolean {
 	return query.keywords.length === 0 && query.tags.length === 0 && query.contexts.length === 0;
 }
 
-/**
- * 去掉输入里的 `@上下文` 令牌（其余令牌与空白结构原样保留）。
- *
- * 供界面在「来源不支持上下文」时于 **UI 层禁用** 该维度：用户无法输入一个永远不会命中的条件。
- * 刻意不改 `parseTitleQuery`——它保持来源无关的纯函数（见 #45 修订第四节）。
- */
-export function stripContextTokens(input: string): string {
-	return input.replace(/(^|\s)@\S+/g, "$1");
-
-}
-
 /** 标签是否命中查询：支持层级前缀匹配（#work 命中 work 及 work/xxx 子级）。 */
 function matchesTag(taskTag: string, queryTag: string): boolean {
 	return taskTag === queryTag || taskTag.startsWith(queryTag + "/");
