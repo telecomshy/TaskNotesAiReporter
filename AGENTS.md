@@ -10,7 +10,9 @@ Read `docs/agents/triage-labels.md` when triaging an issue or applying or removi
 
 ### Sub-agent models
 
-Read `docs/agents/subagent-models.md` before spawning a sub-agent. It pins which model each kind of sub-agent must use (e.g. `/code-review` runs on `deepseek/deepseek-v4-flash`) and how to resolve `providerID/modelID` without guessing.
+Before spawning a sub-agent, pin its `model` (`providerID/modelID`) from the matrix in `~/.config/opencode/shy-models.md` (user-level; `/shy-setup-models` generates and probes it). Name IDs only from the model catalog (`opencode.models`, add `all: true` when a model seems missing) — IDs drift.
+
+On failure: retry a connection failure once, then degrade — fill the planned run count with reachable models and label the actual matrix in the report (a self-review by the implementing agent is a weaker substitute and must be labelled as such). When the provider blocks a response (`Provider blocked the response`), the prompt is too large: fetch inputs in smaller slices rather than switching models.
 
 ### Domain docs
 
