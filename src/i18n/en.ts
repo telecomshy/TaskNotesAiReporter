@@ -107,8 +107,7 @@ export const en = {
 		tabGeneral: "General",
 		generalHeading: "Report generation",
 		taskSourceName: "Task source",
-		taskSourceDesc:
-			"Which task plugin to read tasks from. Independent of the AI provider (the provider chooses the model).",
+		taskSourceDesc: "Which task plugin to read tasks from.",
 
 		taskSourceTaskNotes: "TaskNotes",
 		taskSourceObsidianTasks: "Obsidian Tasks",

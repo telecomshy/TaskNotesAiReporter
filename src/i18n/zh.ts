@@ -104,7 +104,7 @@ export const zh: Strings = {
 		tabGeneral: "常规配置",
 		generalHeading: "报告生成",
 		taskSourceName: "来源",
-		taskSourceDesc: "从哪个任务插件读取任务。与 AI「供应商」正交：来源决定读数据，供应商决定用哪个模型。",
+		taskSourceDesc: "从哪个任务插件读取任务。",
 
 		taskSourceTaskNotes: "TaskNotes",
 		taskSourceObsidianTasks: "Obsidian Tasks",

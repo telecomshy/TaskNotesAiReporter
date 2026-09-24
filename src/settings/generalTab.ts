@@ -33,19 +33,6 @@ export function renderGeneralTab(container: HTMLElement, ctx: SettingsTabContext
 		});
 
 	new Setting(container)
-		.setName(t("settings.taskSourceName"))
-		.setDesc(t("settings.taskSourceDesc"))
-		.addDropdown((dropdown) =>
-			dropdown
-				.addOption("tasknotes", t("settings.taskSourceTaskNotes"))
-				.addOption("obsidian-tasks", t("settings.taskSourceObsidianTasks"))
-				.setValue(ctx.plugin.settings.taskSource)
-				.onChange((value) => {
-					void ctx.plugin.appSettings.setTaskSource(value);
-				})
-		);
-
-	new Setting(container)
 		.setName(t("settings.reportFolderName"))
 		.setDesc(t("settings.reportFolderDesc"))
 		.addText((text) =>
