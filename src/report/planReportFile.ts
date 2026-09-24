@@ -67,7 +67,7 @@ export async function planReportFile(
  * 标题承载用户可编辑的模板名，不转义会让引号截断标量、破坏整个 frontmatter。
  */
 function escapeYamlScalar(value: string): string {
-	return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/[\r\n]+/g, " ");
+	return value.replace(/"/g, '\\"').replace(/\n+/g, " ");
 }
 
 /** 拼 frontmatter 头部（含结尾空行）。 */

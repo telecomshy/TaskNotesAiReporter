@@ -17,7 +17,7 @@ import { filterTasksBySubset } from "./status";
  * 这里是一个**冻结**的兼容取值（不会再变），那里是**命名规则**的兜底（可能随命名调整），
  * 两者的变更理由不同，绑在一起反而让改名牵动兼容面。
  */
-const TYPE_PLACEHOLDER_VALUE = "报告";
+const v = "报告";
 
 /** 将耗时分钟数格式化为可读文本 */
 function formatMinutes(minutes: number): string {
@@ -107,7 +107,7 @@ function buildPlaceholderValues(
 		range: rangeText,
 		"range.start": range.start,
 		"range.end": range.end,
-		type: TYPE_PLACEHOLDER_VALUE,
+		type: v,
 		today: toDateString(now),
 		count: String(tasks.length),
 		totaltrackedtime: formatMinutes(totalTrackedMinutes(tasks)),
@@ -143,7 +143,7 @@ export function buildReportPrompt(tasks: readonly TaskInfo[], options: BuildProm
 	} else {
 		// 极简模式：不加多余修饰，仅提供任务数据让模型自由生成
 		body = [
-			`请根据以下任务数据，生成一份${TYPE_PLACEHOLDER_VALUE}（时间范围：${rangeText}）。`,
+			`请根据以下任务数据，生成一份${v}（时间范围：${rangeText}）。`,
 			`请客观基于给定数据，使用 Markdown 格式，条理清晰即可。`,
 			``,
 			`任务数据如下：`,

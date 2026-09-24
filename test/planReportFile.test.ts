@@ -124,6 +124,15 @@ test("模板名首尾空白被修剪（与文件名同一规则）", async () =>
 	assert.ok(plan.content.includes(`title: "周报 2026-08-31 ~ 2026-09-06"`));
 });
 
+test("frontmatter：结构完整性——YAML 头、分隔符与正文接缝均正确（#55）", async () => {
+	const { deps } = harness(["TaskNotes/Reports"]);
+	const plan = await planReportFile(baseInput(), deps);
+	assert.ok(plan.content.startsWith("---\n"));
+	assert.ok(plan.content.includes("---\n\n"));
+	assert.ok(plan.content.length > 0);
+	assert.ok(plan.path.endsWith(".md"));
+});
+
 test("frontmatter：不再写 type 键（恒定值零信息，#55）", async () => {
 	const { deps } = harness(["TaskNotes/Reports"]);
 	const plan = await planReportFile(baseInput({ templateName: "  周报  " }), deps);
