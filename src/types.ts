@@ -73,9 +73,6 @@ export interface DateRange {
 	end: string;
 }
 
-/** 报告类型（对应周/月/年） */
-export type ReportType = "week" | "month" | "year" | "custom";
-
 /** 报告模板 */
 export interface ReportTemplate {
 	id: string; // 唯一标识

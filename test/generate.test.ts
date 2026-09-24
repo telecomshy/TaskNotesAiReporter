@@ -11,7 +11,7 @@ import {
 import { fakeTaskRepository } from "./fakes/taskRepository";
 import { makeTask } from "./fakes/task";
 import type { AIClientConfig } from "../src/ai/client";
-import type { DateRange, ReportType } from "../src/types";
+import type { DateRange } from "../src/types";
 
 function baseSettings(over: Partial<GenerateSettings> = {}): GenerateSettings {
 	return {
@@ -35,7 +35,6 @@ function baseIntent(over: Partial<GenerateIntent> = {}): GenerateIntent {
 	return {
 		tasks: [makeTask({ id: "a", title: "A", completedDate: "2026-09-03" })],
 		templateId: "",
-		reportType: "custom",
 		...over,
 	};
 }
@@ -43,7 +42,7 @@ function baseIntent(over: Partial<GenerateIntent> = {}): GenerateIntent {
 interface Captured {
 	prompt: string;
 	chatConfig: AIClientConfig;
-	saved: { folder: string; type: ReportType; range: DateRange; content: string; templateName?: string };
+	saved: { folder: string; range: DateRange; content: string; templateName?: string };
 }
 
 function setup(
@@ -62,8 +61,8 @@ function setup(
 			captured.chatConfig = config;
 			return "生成的报告正文";
 		},
-		save: async (folder, type, range, content, templateName) => {
-			captured.saved = { folder, type, range, content, templateName };
+		save: async (folder, range, content, templateName) => {
+			captured.saved = { folder, range, content, templateName };
 			return "TaskNotes/Reports/报告.md";
 		},
 		now: () => new Date(2026, 8, 3),
@@ -164,7 +163,7 @@ test("模型参数回退：无自带上限用全局（设置查询）", async ()
 	assert.equal(captured.chatConfig?.maxTokens, 8192);
 });
 
-test("装配在 module 内：报告语言与生成参数取自设置查询，报告类型取自用户意图（#49 修订四）", async () => {
+test("装配在 module 内：报告语言与生成参数取自设置查询（#49 修订三）", async () => {
 	const { deps, captured } = setup({
 		settings: () =>
 			baseSettings({
@@ -174,12 +173,17 @@ test("装配在 module 内：报告语言与生成参数取自设置查询，报
 				timeoutSeconds: 7,
 			}),
 	});
-	await createGeneration(deps)(baseIntent({ reportType: "week" }));
+	await createGeneration(deps)(baseIntent());
 	assert.ok(captured.prompt?.trimEnd().endsWith("输出语言：English。"));
-	assert.equal(captured.saved?.type, "week", "报告类型来自意图对象");
 	assert.equal(captured.chatConfig?.temperature, 0.2);
 	assert.equal(captured.chatConfig?.maxTokens, 1111);
 	assert.equal(captured.chatConfig?.timeoutSeconds, 7);
+});
+
+test("模板名随保存一起交出：与文件名同源（#55）", async () => {
+	const { deps, captured } = setup({ settings: settingsWithTemplate() });
+	await createGeneration(deps)(baseIntent({ templateId: "t1" }));
+	assert.equal(captured.saved?.templateName, "周报");
 });
 
 test("重入守卫：进行中重入返回「生成中」，双击只产出一份报告", async () => {

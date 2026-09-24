@@ -4,17 +4,18 @@
  *
  * 纯逻辑，不依赖 Obsidian：时刻、存在性探测与路径规范化都由调用方注入，
  * vault 适配器（writer.ts）退化为纯 I/O。对外文件名格式与行为保持不变。
+ *
+ * frontmatter 的 `title` 与文件名同源（都用 `reportName` 的「模板名 + 兜底」规则，见 #55）；
+ * 恒定值的 `type` 键已删除（零信息，汇总请用 `generator`）。
  */
 
-import type { DateRange, ReportType } from "../types";
-import { buildDatedReportFilename } from "../core/filename";
-import { REPORT_TYPE_LABEL } from "../core/reportType";
+import type { DateRange } from "../types";
+import { buildDatedReportFilename, reportName } from "../core/filename";
 
 /** 报告计划的输入要素。 */
 export interface ReportPlanInput {
 	folder: string;
 	templateName?: string;
-	type: ReportType;
 	range: DateRange;
 	body: string;
 }
@@ -56,17 +57,28 @@ export async function planReportFile(
 
 	const baseName = buildDatedReportFilename(input.templateName ?? "", now);
 	const path = await resolvePath(baseName, folderPath, now, deps);
-	const content = `${buildReportFrontmatter(input.type, input.range, now)}\n${input.body}`;
+	const content = `${buildReportFrontmatter(input.templateName, input.range, now)}\n${input.body}`;
 
 	return { path, content, folderToCreate };
 }
 
+/**
+ * 把一段文本安全地放进**双引号 YAML 标量**：转义反斜杠与引号、把换行压成空格。
+ * 标题承载用户可编辑的模板名，不转义会让引号截断标量、破坏整个 frontmatter。
+ */
+function escapeYamlScalar(value: string): string {
+	return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/[\r\n]+/g, " ");
+}
+
 /** 拼 frontmatter 头部（含结尾空行）。 */
-function buildReportFrontmatter(type: ReportType, range: DateRange, now: Date): string {
+function buildReportFrontmatter(
+	templateName: string | undefined,
+	range: DateRange,
+	now: Date
+): string {
 	return [
 		"---",
-		`title: "${REPORT_TYPE_LABEL[type]} ${range.start} ~ ${range.end}"`,
-		`type: ${type}`,
+		`title: "${escapeYamlScalar(reportName(templateName))} ${range.start} ~ ${range.end}"`,
 		`start: "${range.start}"`,
 		`end: "${range.end}"`,
 		`generatedAt: "${now.toISOString()}"`,

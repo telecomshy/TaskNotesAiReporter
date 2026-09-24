@@ -19,11 +19,10 @@ const task: TaskInfo = {
 test("buildReportPrompt 极简模式（无模板）包含关键内容", () => {
 	const prompt = buildReportPrompt([task], {
 		range: { start: "2026-08-31", end: "2026-09-06" },
-		type: "week",
 		language: "中文",
 	});
-	assert.ok(prompt.includes("周报"));
-	assert.ok(prompt.includes("2026-08-31 至 2026-09-06"));
+	// 钉住整句：仅断言含「周报」会被任务标题「写周报」满足，验不出取值（#55）。
+	assert.ok(prompt.includes("生成一份报告（时间范围：2026-08-31 至 2026-09-06）"));
 	assert.ok(prompt.includes("写周报"));
 });
 
@@ -31,11 +30,11 @@ test("buildReportPrompt 模板占位符替换", () => {
 	const template = "类型：{{type}}；范围：{{range}}；任务：{{tasks}}";
 	const prompt = buildReportPrompt([task], {
 		range: { start: "2026-09-01", end: "2026-09-30" },
-		type: "month",
 		language: "中文",
 		templateContent: template,
 	});
-	assert.ok(prompt.includes("类型：月报"));
+	// {{type}} 恒渲染「报告」（#55：报告类型已废弃，产物不分周期类型）。
+	assert.ok(prompt.includes("类型：报告；"));
 	assert.ok(prompt.includes("2026-09-01 至 2026-09-30"));
 	assert.ok(prompt.includes("写周报"));
 });
@@ -44,7 +43,6 @@ test("buildReportPrompt 模板内容原样保留（不含占位符的部分）",
 	const template = "请生成本周工作总结。\n\n{{tasks}}";
 	const prompt = buildReportPrompt([task], {
 		range: { start: "2026-09-01", end: "2026-09-30" },
-		type: "week",
 		language: "中文",
 		templateContent: template,
 	});
@@ -56,7 +54,6 @@ test("buildReportPrompt 模板内容原样保留（不含占位符的部分）",
 test("buildReportPrompt 极简模式：输出语言声明位于末尾", () => {
 	const prompt = buildReportPrompt([task], {
 		range: { start: "2026-08-31", end: "2026-09-06" },
-		type: "week",
 		language: "English",
 	});
 	assert.ok(prompt.trimEnd().endsWith("输出语言：English。"));
@@ -65,7 +62,6 @@ test("buildReportPrompt 极简模式：输出语言声明位于末尾", () => {
 test("buildReportPrompt 模板模式：同样声明输出语言且位于末尾", () => {
 	const prompt = buildReportPrompt([task], {
 		range: { start: "2026-09-01", end: "2026-09-30" },
-		type: "month",
 		language: "English",
 		templateContent: "请生成月报。\n\n{{tasks}}",
 	});
@@ -78,7 +74,6 @@ const range = { start: "2026-09-01", end: "2026-09-30" };
 test("附加要求：位于正文之后、输出语言行之前", () => {
 	const prompt = buildReportPrompt([task], {
 		range,
-		type: "month",
 		language: "中文",
 		templateContent: "请生成月报。\n\n{{tasks}}",
 		extraRequirements: "请用轻松的语气。",
@@ -93,7 +88,6 @@ test("附加要求：位于正文之后、输出语言行之前", () => {
 test("附加要求：极简模式（无模板）下同样追加", () => {
 	const prompt = buildReportPrompt([task], {
 		range,
-		type: "week",
 		language: "中文",
 		extraRequirements: "请聚焦数据准确性。",
 	});
@@ -105,7 +99,6 @@ test("附加要求：极简模式（无模板）下同样追加", () => {
 test("附加要求：占位符按字面保留，不参与替换", () => {
 	const prompt = buildReportPrompt([task], {
 		range,
-		type: "week",
 		language: "中文",
 		templateContent: "模板：{{tasks}}",
 		extraRequirements: "请参考 {{tasks}} 的格式。",
@@ -114,10 +107,9 @@ test("附加要求：占位符按字面保留，不参与替换", () => {
 });
 
 test("附加要求：纯空白不追加，与无该字段完全一致", () => {
-	const without = buildReportPrompt([task], { range, type: "week", language: "中文" });
+	const without = buildReportPrompt([task], { range, language: "中文" });
 	const blank = buildReportPrompt([task], {
 		range,
-		type: "week",
 		language: "中文",
 		extraRequirements: "   \n\t ",
 	});
@@ -133,7 +125,6 @@ const statuses: StatusDefinition[] = [
 test("占位符：{{range.start}} / {{range.end}} 引用起止日期", () => {
 	const prompt = buildReportPrompt([task], {
 		range,
-		type: "month",
 		language: "中文",
 		templateContent: "{{range.start}} ~ {{range.end}}",
 	});
@@ -143,7 +134,6 @@ test("占位符：{{range.start}} / {{range.end}} 引用起止日期", () => {
 test("占位符：{{today}} 取注入的 now", () => {
 	const prompt = buildReportPrompt([task], {
 		range,
-		type: "week",
 		language: "中文",
 		now: new Date(2026, 8, 7),
 		templateContent: "生成于 {{today}}",
@@ -159,7 +149,6 @@ test("占位符：{{count}} 与各子集计数", () => {
 	];
 	const prompt = buildReportPrompt(tasks, {
 		range,
-		type: "week",
 		language: "中文",
 		statuses,
 		templateContent:
@@ -176,7 +165,6 @@ test("占位符：{{completedTasks}} 只注入已完成任务", () => {
 	];
 	const prompt = buildReportPrompt(tasks, {
 		range,
-		type: "week",
 		language: "中文",
 		statuses,
 		templateContent: "{{completedTasks}}",
@@ -194,7 +182,6 @@ test("占位符：{{openTasks}} 含进行中与未开始", () => {
 	];
 	const prompt = buildReportPrompt(tasks, {
 		range,
-		type: "week",
 		language: "中文",
 		statuses,
 		templateContent: "{{openTasks}}",
@@ -208,7 +195,6 @@ test("占位符：{{totalTrackedTime}} 汇总耗时", () => {
 	const tasks = [makeTask({ id: "a", totalTrackedTime: 90 }), makeTask({ id: "b", totalTrackedTime: 30 })];
 	const prompt = buildReportPrompt(tasks, {
 		range,
-		type: "week",
 		language: "中文",
 		templateContent: "耗时 {{totalTrackedTime}}",
 	});
@@ -218,7 +204,6 @@ test("占位符：{{totalTrackedTime}} 汇总耗时", () => {
 test("占位符：大小写不敏感且容许内部空格", () => {
 	const prompt = buildReportPrompt([task], {
 		range,
-		type: "week",
 		language: "中文",
 		templateContent: "{{ RANGE }}|{{COUNT}}|{{ Range.Start }}",
 	});
@@ -230,7 +215,6 @@ test("占位符：大小写不敏感且容许内部空格", () => {
 test("占位符：未知占位符原样保留", () => {
 	const prompt = buildReportPrompt([task], {
 		range,
-		type: "week",
 		language: "中文",
 		templateContent: "{{Task}} {{nope}}",
 	});
@@ -251,4 +235,3 @@ test("formatTaskLine 完整保留超长详情（不限 200 字）", () => {
 	assert.ok(line.includes(longDetail), "超长详情应完整出现在行内");
 	assert.ok(!line.includes("…"), "不应出现截断省略号");
 });
-

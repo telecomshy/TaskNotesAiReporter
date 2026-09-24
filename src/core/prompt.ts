@@ -2,10 +2,22 @@
  * 报告提示词构造。纯函数，无 Obsidian 依赖，可单元测试。
  */
 
-import type { DateRange, ReportType, StatusDefinition, TaskInfo } from "../types";
-import { REPORT_TYPE_LABEL } from "./reportType";
+import type { DateRange, StatusDefinition, TaskInfo } from "../types";
 import { toDateString } from "./dates";
 import { filterTasksBySubset } from "./status";
+
+/**
+ * 遗留占位符 `{{type}}` 的取值：恒为「报告」。
+ *
+ * 这是刻意保留的兼容占位符（ADR-0009「保留以兼容」）——旧模板可能引用它，
+ * 而占位符替换对未识别名称**原样保留**，删掉取值会让旧模板文字漏进提示词。
+ * 产物本就不分周期类型（#55），故它是常量、与任何设置无关。
+ *
+ * 它与 `core/filename` 里「报告名兜底」的「报告」是同一个词，但**刻意不共享常量**：
+ * 这里是一个**冻结**的兼容取值（不会再变），那里是**命名规则**的兜底（可能随命名调整），
+ * 两者的变更理由不同，绑在一起反而让改名牵动兼容面。
+ */
+const TYPE_PLACEHOLDER_VALUE = "报告";
 
 /** 将耗时分钟数格式化为可读文本 */
 function formatMinutes(minutes: number): string {
@@ -54,7 +66,6 @@ export function formatTaskLine(task: TaskInfo): string {
 
 export interface BuildPromptOptions {
 	range: DateRange;
-	type: ReportType;
 	language: string;
 	templateContent?: string; // 模板内容（含占位符）；为空则极简模式
 	/** 本次生成追加在模板之后的额外指令；按字面拼接，不参与占位符替换。纯空白视为缺省。 */
@@ -82,7 +93,7 @@ function buildPlaceholderValues(
 	options: BuildPromptOptions,
 	rangeText: string
 ): Record<string, string> {
-	const { range, type } = options;
+	const { range } = options;
 	const statuses = options.statuses ?? [];
 	const now = options.now ?? new Date();
 
@@ -96,7 +107,7 @@ function buildPlaceholderValues(
 		range: rangeText,
 		"range.start": range.start,
 		"range.end": range.end,
-		type: REPORT_TYPE_LABEL[type],
+		type: TYPE_PLACEHOLDER_VALUE,
 		today: toDateString(now),
 		count: String(tasks.length),
 		totaltrackedtime: formatMinutes(totalTrackedMinutes(tasks)),
@@ -123,7 +134,7 @@ function renderPlaceholders(template: string, values: Record<string, string>): s
  * - 否则（极简模式）：仅提供任务列表与时间范围，让模型自由生成报告。
  */
 export function buildReportPrompt(tasks: readonly TaskInfo[], options: BuildPromptOptions): string {
-	const { range, type, language, templateContent, extraRequirements } = options;
+	const { range, language, templateContent, extraRequirements } = options;
 	const rangeText = `${range.start} 至 ${range.end}`;
 
 	let body: string;
@@ -132,7 +143,7 @@ export function buildReportPrompt(tasks: readonly TaskInfo[], options: BuildProm
 	} else {
 		// 极简模式：不加多余修饰，仅提供任务数据让模型自由生成
 		body = [
-			`请根据以下任务数据，生成一份${REPORT_TYPE_LABEL[type]}（时间范围：${rangeText}）。`,
+			`请根据以下任务数据，生成一份${TYPE_PLACEHOLDER_VALUE}（时间范围：${rangeText}）。`,
 			`请客观基于给定数据，使用 Markdown 格式，条理清晰即可。`,
 			``,
 			`任务数据如下：`,

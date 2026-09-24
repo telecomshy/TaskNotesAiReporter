@@ -6,7 +6,7 @@
 
 import { App, Modal, Notice, TFile } from "obsidian";
 import type TaskNotesAIHelperPlugin from "../../main";
-import type { ReportType, TaskInfo } from "../types";
+import type { TaskInfo } from "../types";
 import type { TaskRepository } from "../tasks/repository";
 import { chatCompletion } from "../ai/client";
 import { saveReport } from "../report/writer";
@@ -22,7 +22,6 @@ import {
 export class ReportModal extends Modal {
 	private allTasks: TaskInfo[] = [];
 	private candidateTasks = new Map<string, TaskInfo>();
-	private reportType: ReportType = "custom";
 
 	private listWrapEl!: HTMLElement;
 	private footerEl!: HTMLElement;
@@ -255,15 +254,14 @@ export class ReportModal extends Modal {
 				},
 				resolveModel: () => this.plugin.providers.resolveActive(),
 				chat: (prompt, config) => chatCompletion(config, [{ role: "user", content: prompt }]),
-				save: (folder, type, range, content, templateName) =>
-					saveReport(this.app, folder, type, range, content, templateName),
+				save: (folder, range, content, templateName) =>
+					saveReport(this.app, folder, range, content, templateName),
 				now: () => new Date(),
 			}));
 
 			const result = await generate({
 				tasks: this.getCandidateTasks(),
 				templateId: this.selectedTemplateId,
-				reportType: this.reportType,
 				extraRequirements: this.extraRequirementsInput?.value,
 			});
 

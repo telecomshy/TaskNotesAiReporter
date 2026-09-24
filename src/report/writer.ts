@@ -5,7 +5,7 @@
  */
 
 import { normalizePath, type App } from "obsidian";
-import type { DateRange, ReportType } from "../types";
+import type { DateRange } from "../types";
 import { planReportFile } from "./planReportFile";
 
 /**
@@ -17,13 +17,12 @@ import { planReportFile } from "./planReportFile";
 export async function saveReport(
 	app: App,
 	folder: string,
-	type: ReportType,
 	range: DateRange,
 	content: string,
 	templateName?: string
 ): Promise<string> {
 	const plan = await planReportFile(
-		{ folder, templateName, type, range, body: content },
+		{ folder, templateName, range, body: content },
 		{
 			now: () => new Date(),
 			exists: (path) => app.vault.adapter.exists(path),

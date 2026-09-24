@@ -1,7 +1,7 @@
 /**
  * 「生成」深 module（#49）：一次生成一个入口。
  *
- * 入口收**用户意图**（已加入 任务集合 + 所选 报告模板 + 报告类型 + 附加要求，#49 修订四）
+ * 入口收**用户意图**（已加入 任务集合 + 所选 报告模板 + 附加要求，#55 起不再收报告类型）
  * 与**注入依赖**（设置查询、当前模型 解析、chat / save、时间源）；输入校验、报告语言与
  * 生成参数的读取、任务水合（按 #48 批补）、提示词组装、调模型、写入都在 module 内——
  * 界面只收集输入与反馈，不拼参数。
@@ -14,7 +14,6 @@ import type {
 	ActiveModelResolution,
 	DateRange,
 	ReportTemplate,
-	ReportType,
 	TaskInfo,
 } from "../types";
 import type { AIClientConfig } from "../ai/client";
@@ -22,14 +21,12 @@ import { hydrateTasks, type TaskRepository } from "../tasks/repository";
 import { buildReportPrompt } from "../core/prompt";
 import { getReportRange } from "../core/dates";
 
-/** 用户意图：界面只收集这四样（#49 修订四：三样 + 报告类型）。 */
+/** 用户意图：界面只收集这三样（#55 起移除报告类型——产物不分周期类型）。 */
 export interface GenerateIntent {
 	/** 已加入 的任务集合（即 报告任务集合）。 */
 	tasks: readonly TaskInfo[];
 	/** 所选 报告模板 id（空串 = 不选模板，极简模式）。 */
 	templateId: string;
-	/** 报告类型：用户在界面选定，是本次生成的意图而非持久化设置。 */
-	reportType: ReportType;
 	/** 附加要求；纯空白视为缺省。 */
 	extraRequirements?: string;
 }
@@ -58,7 +55,6 @@ export interface GenerateDeps {
 	/** 保存报告，返回最终文件路径。 */
 	save(
 		folder: string,
-		type: ReportType,
 		range: DateRange,
 		content: string,
 		templateName?: string
@@ -128,7 +124,6 @@ async function runGeneration(intent: GenerateIntent, deps: GenerateDeps): Promis
 		const statuses = await deps.repository.statuses();
 		const prompt = buildReportPrompt(tasksWithDetails, {
 			range,
-			type: intent.reportType,
 			language: s.language,
 			templateContent: template?.content,
 			extraRequirements: intent.extraRequirements,
@@ -148,7 +143,7 @@ async function runGeneration(intent: GenerateIntent, deps: GenerateDeps): Promis
 	}
 
 	try {
-		const path = await deps.save(s.reportFolder, intent.reportType, range, content, template?.name);
+		const path = await deps.save(s.reportFolder, range, content, template?.name);
 		return { ok: true, path };
 	} catch (error) {
 		return { ok: false, reason: "save-error", error };
