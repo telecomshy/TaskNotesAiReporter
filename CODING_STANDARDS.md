@@ -27,6 +27,11 @@ Rules a reviewer applies to the diff:
 - `src/ai/request.ts` deliberately uses global timers — ADR-0002. Don't flag the
   pattern, and don't "fix" the `obsidianmd/prefer-window-timers` exemption in
   `eslint.config.mjs`.
+- `src/settings/index.ts` opts out of
+  `obsidianmd/settings-tab/prefer-setting-definitions`: the settings UI is fully
+  custom (tab bar, provider cards, secret controls, template modal), so the
+  declarative settings API doesn't apply yet. The `eslint.config.mjs` exemption
+  holds until that UI is redesigned.
 - Line endings: `core.autocrlf = true`, so CRLF in the working tree is normal and
   normalises to LF in the repo. Don't flag it.
 
