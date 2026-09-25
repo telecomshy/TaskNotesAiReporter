@@ -124,13 +124,13 @@ test("模板名首尾空白被修剪（与文件名同一规则）", async () =>
 	assert.ok(plan.content.includes(`title: "周报 2026-08-31 ~ 2026-09-06"`));
 });
 
-test("frontmatter：结构完整性——YAML 头、分隔符与正文接缝均正确（#55）", async () => {
+test("frontmatter：模板名含反斜杠或回车时不破坏 YAML 标量（#55）", async () => {
 	const { deps } = harness(["TaskNotes/Reports"]);
-	const plan = await planReportFile(baseInput(), deps);
-	assert.ok(plan.content.startsWith("---\n"));
-	assert.ok(plan.content.includes("---\n\n"));
-	assert.ok(plan.content.length > 0);
-	assert.ok(plan.path.endsWith(".md"));
+	const plan = await planReportFile(baseInput({ templateName: "a\\b\rc" }), deps);
+	// 反斜杠须转义——否则 YAML 双引号标量把 `\b` 当转义序列（退格）解析，标题吞字；
+	// 回车须与换行一并压掉——否则 title 不再是单行。
+	assert.ok(plan.content.includes(`title: "a\\\\b c 2026-08-31 ~ 2026-09-06"`));
+	assert.equal(plan.content.split("\n").filter((line) => line.startsWith("title: ")).length, 1);
 });
 
 test("frontmatter：不再写 type 键（恒定值零信息，#55）", async () => {

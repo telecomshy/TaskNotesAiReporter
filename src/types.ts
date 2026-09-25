@@ -67,10 +67,7 @@ export interface TaskNotesPublicApi {
 /** 日期字段口径（用于任务自动筛选） */
 export type DateField = "completedDate" | "due" | "scheduled" | "dateCreated";
 
-/**
- * 日期范围（闭区间，YYYY-MM-DD）。
- * 注：`ReportType` 已收成单值 `report` 并保留，以兼容旧模板里的 `{{type}}` 占位符。
- */
+/** 日期范围（闭区间，YYYY-MM-DD） */
 export interface DateRange {
 	start: string;
 	end: string;

@@ -183,7 +183,7 @@ test("装配在 module 内：报告语言与生成参数取自设置查询（#49
 test("模板名随保存一起交出：与文件名同源（#55）", async () => {
 	const { deps, captured } = setup({ settings: settingsWithTemplate() });
 	await createGeneration(deps)(baseIntent({ templateId: "t1" }));
-	assert.ok(captured.saved !== undefined);
+	assert.equal(captured.saved?.templateName, "周报");
 });
 
 test("重入守卫：进行中重入返回「生成中」，双击只产出一份报告", async () => {
