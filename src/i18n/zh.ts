@@ -120,6 +120,10 @@ export const zh: Strings = {
 		uiLanguageAuto: "自动（跟随 Obsidian）",
 		uiLanguageZh: "中文（简体）",
 		uiLanguageEn: "英文",
+		modelPageDesc: "选择生成报告所用的模型与供应商",
+		templatePageDesc: "管理报告模板",
+		templateCount: "{{count}} 个模板",
+		templateCount_plural: "{{count}} 个模板",
 	},
 	model: {
 		providersHeading: "AI 提供商",

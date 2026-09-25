@@ -25,12 +25,6 @@ export default defineConfig([
 		rules: { "obsidianmd/prefer-window-timers": "off" },
 	},
 	{
-		// 设置页是全自绘 UI（tab 栏、服务商卡片、密钥控件、模板弹窗），声明式
-		// settings definitions 暂不适用；豁免到该 UI 重做为止，迁移另开 ticket。
-		files: ["src/settings/index.ts"],
-		rules: { "obsidianmd/settings-tab/prefer-setting-definitions": "off" },
-	},
-	{
 		languageOptions: {
 			parserOptions: {
 				projectService: {

@@ -123,6 +123,10 @@ export const en = {
 		uiLanguageAuto: "Auto (follow Obsidian)",
 		uiLanguageZh: "Chinese (Simplified)",
 		uiLanguageEn: "English",
+		modelPageDesc: "Choose the model and provider used to generate reports",
+		templatePageDesc: "Manage report templates",
+		templateCount: "{{count}} template",
+		templateCount_plural: "{{count}} templates",
 	},
 	model: {
 		providersHeading: "AI providers",

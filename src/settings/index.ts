@@ -1,109 +1,140 @@
 /**
- * 设置页主入口：Tab 栏 + 内容分派。
- * 各 Tab 的具体渲染逻辑拆分为：
- *  - modelTab.ts      「模型配置」Tab
- *  - templateTab.ts   「模板配置」Tab
- *  - generalTab.ts    「常规配置」Tab
+ * 设置页主入口（#54，Path A：Obsidian 声明式设置 API）。
+ *
+ * 顶层 = 两个自绘子页入口（模型 / 模板）+「常规」域的声明式定义（平铺，进设置搜索索引）。
+ * 自绘子页复用 modelTab / templateTab 的渲染函数，包进 `SettingPage`；
+ * 控件读写经 `./definitions` 的路由落到门面，视图不直写设置（#46）。
  */
 
-import { PluginSettingTab, type App, type EventRef } from "obsidian";
+import {
+	PluginSettingTab,
+	SettingPage,
+	type App,
+	type SettingDefinitionItem,
+} from "obsidian";
 import type TaskNotesAIHelperPlugin from "../../main";
 import { renderModelTab } from "./modelTab";
-import { renderGeneralTab } from "./generalTab";
 import { renderTemplateTab } from "./templateTab";
+import {
+	generalSettingDefinitions,
+	readControlValue,
+	routeControlKey,
+	writeControlValue,
+} from "./definitions";
 
-/** 各 Tab 渲染共享的上下文 */
+/** 各渲染入口共享的上下文 */
 export interface SettingsTabContext {
 	plugin: TaskNotesAIHelperPlugin;
 	app: App;
-	/** 重新渲染整个设置页（切换 Tab 或保存后刷新）。 */
+	/** 重新渲染当前视图（子页内变更后刷新）。 */
 	refresh: () => void;
 }
 
-type TabName = "model" | "general" | "template";
+/** 自绘子页的渲染函数签名（modelTab / templateTab 的入口）。 */
+type PageRenderer = (container: HTMLElement, ctx: SettingsTabContext) => void;
 
-export class TaskNotesAIHelperSettingTab extends PluginSettingTab {
-	private currentTab: TabName = "model";
-	/** 密钥存储变化订阅（每次 display 重新绑定，见 ADR-0008）。 */
-	private secretRef: EventRef | null = null;
-
+/**
+ * 自绘子页：把既有渲染函数包进 `SettingPage`。
+ * `display()` 即重绘点；`hide()` 时向设置页注销重绘句柄（密钥变化刷新用）。
+ */
+class CustomSettingsPage extends SettingPage {
 	constructor(
-		app: App,
-		private plugin: TaskNotesAIHelperPlugin
+		private readonly plugin: TaskNotesAIHelperPlugin,
+		private readonly app: App,
+		title: string,
+		private readonly renderPage: PageRenderer,
+		private readonly registerRefresh: (refresh: (() => void) | null) => void
 	) {
-		super(app, plugin);
+		super();
+		this.title = title;
 	}
 
 	display(): void {
-		const { containerEl } = this;
-		containerEl.empty();
-		containerEl.addClass("tah-settings");
-
-		// Tab 栏
-		const tabBar = containerEl.createDiv({ cls: "tah-tab-bar" });
-		const modelTabBtn = tabBar.createEl("button", { text: this.plugin.t("settings.tabModel") });
-		const templateTabBtn = tabBar.createEl("button", {
-			text: this.plugin.t("settings.tabTemplate"),
-		});
-		const generalTabBtn = tabBar.createEl("button", {
-			text: this.plugin.t("settings.tabGeneral"),
-		});
-		modelTabBtn.addClass("tah-tab-btn");
-		templateTabBtn.addClass("tah-tab-btn");
-		generalTabBtn.addClass("tah-tab-btn");
-
-		const content = containerEl.createDiv({ cls: "tah-tab-content" });
-
 		const refresh = () => {
-			// 语言可能已切换：同步 Tab 文案
-			modelTabBtn.setText(this.plugin.t("settings.tabModel"));
-			templateTabBtn.setText(this.plugin.t("settings.tabTemplate"));
-			generalTabBtn.setText(this.plugin.t("settings.tabGeneral"));
-
-			modelTabBtn.toggleClass("tah-tab-active", this.currentTab === "model");
-			generalTabBtn.toggleClass("tah-tab-active", this.currentTab === "general");
-			templateTabBtn.toggleClass("tah-tab-active", this.currentTab === "template");
-
-			content.empty();
-			const ctx: SettingsTabContext = {
-				plugin: this.plugin,
-				app: this.app,
-				refresh,
-			};
-			if (this.currentTab === "model") {
-				renderModelTab(content, ctx);
-			} else if (this.currentTab === "template") {
-				renderTemplateTab(content, ctx);
-			} else {
-				renderGeneralTab(content, ctx);
-			}
+			this.containerEl.empty();
+			this.renderPage(this.containerEl, { plugin: this.plugin, app: this.app, refresh });
 		};
-
-		modelTabBtn.addEventListener("click", () => {
-			this.currentTab = "model";
-			refresh();
-		});
-		generalTabBtn.addEventListener("click", () => {
-			this.currentTab = "general";
-			refresh();
-		});
-		templateTabBtn.addEventListener("click", () => {
-			this.currentTab = "template";
-			refresh();
-		});
-
-		// 密钥存储变化（增删改）时重渲染，刷新密钥控件的「不可用」提示。
-		if (this.secretRef) this.app.secretStorage.offref(this.secretRef);
-		this.secretRef = this.app.secretStorage.on("changed", () => refresh());
-
+		this.registerRefresh(refresh);
 		refresh();
 	}
 
 	hide(): void {
-		if (this.secretRef) {
-			this.app.secretStorage.offref(this.secretRef);
-			this.secretRef = null;
-		}
+		this.registerRefresh(null);
 		super.hide();
+	}
+}
+
+export class TaskNotesAIHelperSettingTab extends PluginSettingTab {
+	/** 自绘子页的重绘句柄：子页 display 时登记、hide 时注销。 */
+	private pageRefresh: (() => void) | null = null;
+
+	constructor(
+		app: App,
+		private readonly plugin: TaskNotesAIHelperPlugin
+	) {
+		super(app, plugin);
+		// 密钥存储变化（增删改）时重绘自绘子页，刷新密钥控件的「不可用」提示（ADR-0008 的门面）。
+		// 随插件卸载自动清理；原 display()/hide() 里的手动订阅随之移除。
+		this.plugin.registerEvent(this.app.secretStorage.on("changed", () => this.pageRefresh?.()));
+	}
+
+	getSettingDefinitions(): SettingDefinitionItem[] {
+		const t = this.plugin.t;
+		return [
+			{
+				type: "page",
+				name: t("settings.tabModel"),
+				desc: t("settings.modelPageDesc"),
+				displayValue: () => this.activeModelLabel(),
+				page: () =>
+					new CustomSettingsPage(
+						this.plugin,
+						this.app,
+						t("settings.tabModel"),
+						renderModelTab,
+						(refresh) => (this.pageRefresh = refresh)
+					),
+			},
+			{
+				type: "page",
+				name: t("settings.tabTemplate"),
+				desc: t("settings.templatePageDesc"),
+				displayValue: () =>
+					t("settings.templateCount", { count: this.plugin.settings.templates.length }),
+				page: () =>
+					new CustomSettingsPage(
+						this.plugin,
+						this.app,
+						t("settings.tabTemplate"),
+						renderTemplateTab,
+						(refresh) => (this.pageRefresh = refresh)
+					),
+			},
+			...generalSettingDefinitions(t),
+		];
+	}
+
+	getControlValue(key: string): unknown {
+		return readControlValue(this.plugin.settings, key);
+	}
+
+	setControlValue(key: string, value: unknown): void | Promise<void> {
+		const route = routeControlKey(key);
+		if (!route) return;
+		return writeControlValue(this.plugin.appSettings, route, value).then(() => {
+			// 界面语言是自反设置：换语言后整页文案与定义都要重建（含搜索索引）。
+			if (route.kind === "uiLanguage") {
+				this.plugin.applyLanguage();
+				this.update();
+			}
+		});
+	}
+
+	/** 子页入口的当前值摘要：当前模型（供应商）。 */
+	private activeModelLabel(): string {
+		const settings = this.plugin.settings;
+		if (!settings.activeModel) return "—";
+		const provider = settings.providers.find((p) => p.id === settings.activeProviderId);
+		return provider ? `${settings.activeModel} · ${provider.name}` : settings.activeModel;
 	}
 }
