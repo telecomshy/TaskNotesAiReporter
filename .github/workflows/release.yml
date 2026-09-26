@@ -48,6 +48,19 @@ jobs:
                   # Published directly (no --draft): the assets uploaded here are the
                   # exact bytes the attestation above signs. Uploading assets by hand
                   # from a Windows checkout (CRLF) breaks digest verification.
-                  gh release create "$tag" \
-                    --title="$tag" \
-                    main.js manifest.json ${{ steps.styles.outputs.exists == 'true' && 'styles.css' || '' }}
+                  assets=(main.js manifest.json)
+                  if [ "${{ steps.styles.outputs.exists }}" = "true" ]; then
+                      assets+=(styles.css)
+                  fi
+
+                  # Release notes: the directory flags a release with no description.
+                  # Prefer the annotated tag message (git tag -a 1.2.3 -m "notes"),
+                  # ignoring a message that only repeats the tag name; otherwise let
+                  # GitHub generate the change list. Hand-written notes can also be
+                  # edited on the release page after publishing.
+                  notes="$(git tag -l --format='%(contents)' "$tag" 2>/dev/null || true)"
+                  if [ -n "${notes// }" ] && [ "$notes" != "$tag" ]; then
+                      gh release create "$tag" --title="$tag" --notes "$notes" "${assets[@]}"
+                  else
+                      gh release create "$tag" --title="$tag" --generate-notes "${assets[@]}"
+                  fi
