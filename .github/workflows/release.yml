@@ -36,6 +36,7 @@ jobs:
               with:
                   subject-path: |
                       main.js
+                      manifest.json
                       ${{ steps.styles.outputs.exists == 'true' && 'styles.css' || '' }}
 
             - name: Create release
@@ -44,7 +45,9 @@ jobs:
               run: |
                   tag="${GITHUB_REF#refs/tags/}"
 
+                  # Published directly (no --draft): the assets uploaded here are the
+                  # exact bytes the attestation above signs. Uploading assets by hand
+                  # from a Windows checkout (CRLF) breaks digest verification.
                   gh release create "$tag" \
                     --title="$tag" \
-                    --draft \
                     main.js manifest.json ${{ steps.styles.outputs.exists == 'true' && 'styles.css' || '' }}
