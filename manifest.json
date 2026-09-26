@@ -1,7 +1,7 @@
 {
 	"id": "tasknotes-aireporter",
 	"name": "TaskNotes AI Reporter",
-	"version": "0.4.0",
+	"version": "0.4.1",
 	"minAppVersion": "1.12.2",
 	"description": "Turn selected tasks from TaskNotes into AI-written reports using custom templates and any OpenAI-compatible model.",
 	"author": "telecomshy",
