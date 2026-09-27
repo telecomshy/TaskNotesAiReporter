@@ -24,7 +24,16 @@ import {
 	type PickerSession,
 	type PickerTab,
 } from "./pickerSession";
-import { getMonthRange, getQuarterRange, getWeekRange, getYearRange } from "../core/dates";
+import {
+	getLastMonthRange,
+	getLastQuarterRange,
+	getLastWeekRange,
+	getLastYearRange,
+	getMonthRange,
+	getQuarterRange,
+	getWeekRange,
+	getYearRange,
+} from "../core/dates";
 import type { DateField, DateRange, TaskInfo } from "../types";
 import type { UiLanguage, Translator } from "../i18n";
 
@@ -127,16 +136,37 @@ export class TaskPickerModal extends Modal {
 	}
 
 	private renderTimeFilter(): void {
-		const quickRow = this.filterEl.createDiv({ cls: "tah-quick-row" });
-		const quickButtons: Array<{ label: string; range: DateRange | null }> = [
-			{ label: this.t("taskPicker.quickThisWeek"), range: getWeekRange(new Date(), this.weekStartsOnMonday) },
-			{ label: this.t("taskPicker.quickThisMonth"), range: getMonthRange(new Date()) },
-			{ label: this.t("taskPicker.quickThisQuarter"), range: getQuarterRange(new Date()) },
-			{ label: this.t("taskPicker.quickThisYear"), range: getYearRange(new Date()) },
+		const today = new Date();
+		// 快捷按钮区两行：第 1 行「本 X」周期，第 2 行「上一 X」周期 + 清除范围
+		this.renderQuickButtons(this.filterEl.createDiv({ cls: "tah-quick-row" }), [
+			{ label: this.t("taskPicker.quickThisWeek"), range: getWeekRange(today, this.weekStartsOnMonday) },
+			{ label: this.t("taskPicker.quickThisMonth"), range: getMonthRange(today) },
+			{ label: this.t("taskPicker.quickThisQuarter"), range: getQuarterRange(today) },
+			{ label: this.t("taskPicker.quickThisYear"), range: getYearRange(today) },
+		]);
+		this.renderQuickButtons(this.filterEl.createDiv({ cls: "tah-quick-row" }), [
+			{ label: this.t("taskPicker.quickLastWeek"), range: getLastWeekRange(today, this.weekStartsOnMonday) },
+			{ label: this.t("taskPicker.quickLastMonth"), range: getLastMonthRange(today) },
+			{ label: this.t("taskPicker.quickLastQuarter"), range: getLastQuarterRange(today) },
+			{ label: this.t("taskPicker.quickLastYear"), range: getLastYearRange(today) },
 			{ label: this.t("taskPicker.clearRange"), range: null },
-		];
-		for (const btn of quickButtons) {
-			const el = quickRow.createEl("button", { text: btn.label });
+		]);
+
+		const rangeRow = this.filterEl.createDiv({ cls: "tah-picker-range-row" });
+		this.labelEl = rangeRow.createDiv({ cls: "tah-range-label" });
+		this.createClearButton(rangeRow);
+
+		this.calendarContainer = this.filterEl.createDiv({ cls: "tah-calendar-container" });
+		this.renderCalendar();
+	}
+
+	/** 渲染一行快捷按钮；点击走既有「改时间区间」转移（重算可见 + 全选）。 */
+	private renderQuickButtons(
+		row: HTMLElement,
+		buttons: Array<{ label: string; range: DateRange | null }>
+	): void {
+		for (const btn of buttons) {
+			const el = row.createEl("button", { text: btn.label });
 			el.addClass("tah-quick-btn");
 			el.addEventListener("click", () => {
 				this.session = setRange(this.session, btn.range);
@@ -150,13 +180,6 @@ export class TaskPickerModal extends Modal {
 				this.refresh();
 			});
 		}
-
-		const rangeRow = this.filterEl.createDiv({ cls: "tah-picker-range-row" });
-		this.labelEl = rangeRow.createDiv({ cls: "tah-range-label" });
-		this.createClearButton(rangeRow);
-
-		this.calendarContainer = this.filterEl.createDiv({ cls: "tah-calendar-container" });
-		this.renderCalendar();
 	}
 
 	/** 重建日历（用会话里已提交的区间作初值）。 */
