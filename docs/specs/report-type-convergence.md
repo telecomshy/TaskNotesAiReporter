@@ -137,7 +137,7 @@
 
 ### 平台与构建
 
-Obsidian 插件，TypeScript；构建产物 `main.js` 入仓库，改动后须重新构建。开发机 Windows / zh-CN（PowerShell 5.1，codepage 936）。
+Obsidian 插件，TypeScript；构建产物 `main.js` **不入库**（`.gitignore` 排除，2026-09-28 起按官方 `obsidian-sample-plugin` 的 `.gitignore` 口径），由 `npm run build` 生成、随 GitHub Release 资产分发。开发机 Windows / zh-CN（PowerShell 5.1，codepage 936）。
 
 ### 不拆票的理由
 

@@ -171,7 +171,7 @@ Owning source: `en/Plugins/Releasing/Plugin guidelines.md` (<https://docs.obsidi
 - `versions.json`: `{ "0.1.0": "0.12.0" }` (`versions.json:1-3`) — **does not match** `manifest.json` `minAppVersion` of `1.12.2`. The sample contract is `pluginVersion → minAppVersion`, so this should be `"1.12.2"` (or the manifest changed) (`versions.json` vs `sample-plugin/version-bump.mjs:11-16`).
 - `package.json`: `license` `MIT`; build script `tsc -noEmit -skipLibCheck && node esbuild.config.mjs production`; test uses `node --test` + `tsx` (`package.json:6-21`).
 - Root outputs present: `main.js`, `manifest.json`, `styles.css`, `versions.json`, `README.md`. **No `LICENSE`**, **no `.github/`**.
-- `.gitignore` deliberately **keeps `main.js` committed** ("保留 main.js 便于直接部署"); the official sample does the opposite (`.gitignore`: "Don't include the compiled main.js file in the repo … uploaded to GitHub releases instead") (`this repo .gitignore:10-11`; `sample-plugin/.gitignore`).
+- `.gitignore` **stopped committing `main.js` on 2026-09-28**, adopting the official sample's stance (`.gitignore`: "Don't include the compiled main.js file in the repo … uploaded to GitHub releases instead"). Before that date this repo deliberately kept it committed ("保留 main.js 便于直接部署"); the stated reason did **not** hold — both `release.yml:27` and `npm run deploy` (`package.json`: `npm run build && node scripts/deploy.mjs`) build first and never read a committed blob. (`this repo .gitignore`; `sample-plugin/.gitignore`)
 - `esbuild.config.mjs` sets `minify: prod` (`esbuild.config.mjs:40`) — matches the official sample (`sample-plugin/esbuild.config.mjs:41`), so minification is the norm, not a violation.
 - No Node/Electron APIs: HTTP goes through `requestUrl` (`src/ai/transport.ts:6,10-11`); vault access uses `app.vault` with `app` passed explicitly as a parameter (`src/report/writer.ts:32-64`, `src/tasks/obsidian.ts:25-46`); no global `app`. `isDesktopOnly: false` is consistent.
 - It reads tasks via another plugin's runtime object: `app.plugins.plugins["tasknotes"].api` (`src/tasks/obsidian.ts:12-22`), and the README declares the TaskNotes dependency (`README.md:21-23`).
@@ -191,7 +191,7 @@ Owning source: `en/Plugins/Releasing/Plugin guidelines.md` (<https://docs.obsidi
 - **R5. Make the first release** at tag `0.1.0` with assets `main.js`, `manifest.json`, `styles.css`.
 - **R6. Add an explicit Network use disclosure** to the README: state that the plugin sends the selected task data and prompt to the user-configured, OpenAI-compatible endpoint (and fetches the model list from it), and that no telemetry is collected. Consider an English section since the directory reviewers/listing are English. (From F8/F13.)
 - **R7. Move the API key to `SecretStorage`** (store the secret name, resolve with `app.secretStorage.getSecret`). Not a documented hard policy, but it is the first-party recommendation and removes a plaintext-secret finding. (From F13.)
-- **R8. Stop committing `main.js`.** Build outputs belong to the GitHub release; committing them risks a build-verification mismatch and is contrary to the sample's `.gitignore`. Add `main.js` to `.gitignore`. (From F14.)
+- **R8. Stop committing `main.js`.** Build outputs belong to the GitHub release; committing them risks a build-verification mismatch and is contrary to the sample's `.gitignore`. Add `main.js` to `.gitignore`. (From F14.) **→ Adopted 2026-09-28** (`main.js` added to `.gitignore`, `git rm --cached main.js`).
 - **R9. Pre-run `obsidianmd/eslint-plugin`** and address its warnings (the DOM/style/timer/cast/Adapter patterns in F14) before submitting. (From F10.)
 - **R10. Drop the em dashes from the manifest description** and re-check the ≤250-char, sentence-case, no-special-character rules; the description is otherwise compliant. (From F5.)
 - **R11. Optional**: publish a beta via BRAT first; nothing about BRAT is required for submission. (From F11.)
@@ -219,7 +219,7 @@ Legend: **[OK]** satisfied today · **[TODO]** missing / must happen · **[FIX]*
 15. **[TODO] Create GitHub release `0.1.0`** with binary assets `main.js`, `manifest.json`, `styles.css`.
 16. **[OK] Build script** — `package.json` `build` is the first name the scanner looks for (`FAQ.md:68-70`).
 17. **[OK] `styles.css`** present at root and attachable.
-18. **[FIX] `.gitignore`** — add `main.js` (stop committing build output).
+18. **[OK] `.gitignore`** — `main.js` added and untracked (done 2026-09-28; R8 adopted).
 19. **[TODO] Sign in to `community.obsidian.md`** with an Obsidian account.
 20. **[TODO] Connect GitHub** (read-only) in the directory profile.
 21. **[TODO] Submit** the plugin: **Plugins → New plugin** → repo URL `https://github.com/telecomshy/TaskNotesAiReporter` → owner yourself → agree to policies → **Submit**.
@@ -237,7 +237,7 @@ Legend: **[OK]** satisfied today · **[TODO]** missing / must happen · **[FIX]*
 - **No `.github/workflows/release.yml`.** Not strictly required, but without it the release is manual and the scanner has no reproducible production build path.
 - **Network use not clearly disclosed.** The plugin calls arbitrary OpenAI-compatible endpoints; Developer policies require naming the remote services and why. The Chinese README describes AI configuration but has no explicit disclosure section.
 - **Secrets in `data.json`.** API keys are stored plaintext in settings; first-party guidance is `SecretStorage`.
-- **`main.js` committed to the repo.** Contrary to the sample and a build-verification hazard.
+- ~~**`main.js` committed to the repo.** Contrary to the sample and a build-verification hazard.~~ **Resolved 2026-09-28** — `main.js` is now listed in `.gitignore` and untracked (`git rm --cached main.js`), matching the official sample and **R8**. Release assets keep being built from source by `release.yml`, so no consumer is affected.
 - **Lint warnings likely** (non-blocking but review-visible): `document.createElement` vs `createEl`, direct `.style` assignment, bare `setTimeout`, `as TFile` cast, Adapter API `adapter.exists`, and reading `app.plugins.plugins["tasknotes"]` internals.
 - **README hygiene.** The AIGC YAML frontmatter and trailing `> AI生成` may leak into the listing excerpt; README is Chinese-only.
 - **Manifest description contains em dashes** (special characters).

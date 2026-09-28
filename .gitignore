@@ -7,8 +7,10 @@ node_modules/
 # 第三方参考项目（非本项目代码）
 tasknotes-main/
 
-# 构建/缓存产物（保留 main.js 便于直接部署，如不需要可放开注释）
-# main.js
+# 构建/缓存产物 —— main.js 不入库（与官方 obsidian-sample-plugin 的 .gitignore 同口径）
+# 产物由 `npm run build` 生成，随 GitHub Release 资产分发；不提交可避免「产物与源码漂移」、
+# 消除不可读的压缩 diff 与合并冲突（release.yml / npm run deploy 均自己先构建，不依赖库内产物）。
+main.js
 
 # 系统与编辑器杂项
 .DS_Store
