@@ -12,6 +12,7 @@ export const zh: Strings = {
 	notice: {
 		addedTasks: "已加入 {{count}} 个任务",
 		addedTasks_plural: "已加入 {{count}} 个任务",
+		updatedTasks: "已更新任务列表（+{{added}} / −{{removed}}）",
 	},
 	aiError: {
 		modelsNetwork: "获取模型列表失败：{{detail}}",
@@ -58,7 +59,7 @@ export const zh: Strings = {
 		empty: "暂无任务。点击下方「选择任务」筛选并添加任务。",
 		removeAria: "从列表移除",
 		addTasks: "+ 选择任务",
-		appendHint: "新选任务将追加到列表。",
+		appendHint: "可在选择窗口中调整列表；取消勾选已加入任务会将其移除。",
 		noTemplate: "无模板（默认）",
 		extraRequirements: "附加要求",
 		extraRequirementsPlaceholder: "仅作用于本次报告的一次性指令（如语气、篇幅、侧重点）…",
@@ -91,10 +92,11 @@ export const zh: Strings = {
 		parseContexts: "上下文：{{value}}",
 		clearSelection: "清空选择",
 		emptyPickRange: "请先选择时间范围。",
-		emptyNoTasks: "没有可添加的任务。",
+		emptyNoTasks: "没有匹配的任务。",
 		cancel: "取消",
 		confirm: "确定",
 		join: "加入列表（{{count}}）",
+		applyChanges: "应用更改（+{{added}} / −{{removed}}）",
 	},
 	settings: {
 		tabModel: "模型配置",

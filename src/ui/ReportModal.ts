@@ -1,6 +1,6 @@
 /**
  * 生成报告主弹窗。
- * 只有一个任务列表区域：通过「选择任务」窗口追加任务，列表中的任务全部送模型生成报告。
+ * 只有一个任务列表区域：通过「选择任务」窗口加入或移除任务，列表中的任务全部送模型生成报告。
  * 每项右侧的小 × 直接从列表移除；工具栏的「清空」清空整个列表。
  */
 
@@ -13,6 +13,7 @@ import { saveReport } from "../report/writer";
 import { createGeneration, type GenerateSettings } from "../report/generate";
 import { describeReportFailure } from "../report/errorMessage";
 import { TaskPickerModal } from "./TaskPickerModal";
+import { summarizeChanges } from "./pickerSession";
 import { renderTaskMeta } from "./taskMeta";
 import {
 	applyGenerateButtonState,
@@ -168,12 +169,25 @@ export class ReportModal extends Modal {
 			this.plugin.settings.weekStartsOnMonday,
 			this.plugin.t,
 			this.plugin.lang,
-			(tasks) => {
-				for (const task of tasks) {
+			(changes) => {
+				for (const id of changes.removeIds) {
+					this.candidateTasks.delete(id);
+				}
+				for (const task of changes.addedTasks) {
 					this.candidateTasks.set(task.id, task);
 				}
 				this.renderTaskList();
-				new Notice(this.plugin.t("notice.addedTasks", { count: tasks.length }));
+				const summary = summarizeChanges(changes);
+				if (summary.removed > 0) {
+					new Notice(
+						this.plugin.t("notice.updatedTasks", {
+							added: summary.added,
+							removed: summary.removed,
+						})
+					);
+				} else {
+					new Notice(this.plugin.t("notice.addedTasks", { count: summary.added }));
+				}
 			}
 		).open();
 	}

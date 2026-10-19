@@ -11,6 +11,7 @@ export const en = {
 	notice: {
 		addedTasks: "Added {{count}} task",
 		addedTasks_plural: "Added {{count}} tasks",
+		updatedTasks: "Updated task list (+{{added}} / -{{removed}})",
 	},
 	aiError: {
 		modelsNetwork: "Failed to fetch model list: {{detail}}",
@@ -58,7 +59,7 @@ export const en = {
 		empty: "No tasks yet. Click \"Select tasks\" below to filter and add tasks.",
 		removeAria: "Remove from list",
 		addTasks: "+ Select tasks",
-		appendHint: "Newly selected tasks will be appended to the list.",
+		appendHint: "Adjust the list in the task picker; unchecking a joined task removes it.",
 		noTemplate: "No template (default)",
 		extraRequirements: "Extra requirements",
 		extraRequirementsPlaceholder:
@@ -93,10 +94,11 @@ export const en = {
 		parseContexts: "Contexts: {{value}}",
 		clearSelection: "Clear selection",
 		emptyPickRange: "Pick a date range first.",
-		emptyNoTasks: "No tasks available.",
+		emptyNoTasks: "No matching tasks.",
 		cancel: "Cancel",
 		confirm: "Confirm",
 		join: "Add to list ({{count}})",
+		applyChanges: "Apply changes (+{{added}} / -{{removed}})",
 	},
 	settings: {
 		tabModel: "Model",

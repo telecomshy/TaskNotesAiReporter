@@ -1,7 +1,8 @@
 /**
- * 选择任务窗口（一次性任务选择器）。
- * 分 Tab：按时间 / 按标题。两个 Tab 都是「筛选 → 可勾选 → 加入列表」。
- * 只呈现尚未「已加入」的任务；排除由会话（pickerSession）据已加入集合自行完成。
+ * 选择任务窗口（任务集合编辑器）。
+ * 分 Tab：按时间 / 按标题。两个 Tab 都是「筛选 → 勾选 → 应用更改」。
+ * 按当前筛选呈现任务；已加入任务默认勾选，取消勾选并确认会将其从主列表移除。
+ * 确认只提交当前可见任务的差异，筛选之外的任务不受影响。
  * 本类退化为渲染器：会话状态（Tab / 区间 / 查询 / 勾选）由 pickerSession 拥有。
  */
 
@@ -11,16 +12,19 @@ import { renderTaskMeta } from "./taskMeta";
 import {
 	clearSelection,
 	createSession,
+	hasDesiredVisible,
 	isQueryEmpty,
 	parsedQuery,
+	pendingChanges,
 	selectAllState,
-	selectedTasks,
 	setAll,
 	setQuery,
 	setRange,
+	summarizeChanges,
 	switchTab,
 	toggle,
 	visibleTasks,
+	type PickerChanges,
 	type PickerSession,
 	type PickerTab,
 } from "./pickerSession";
@@ -55,7 +59,7 @@ export class TaskPickerModal extends Modal {
 		private weekStartsOnMonday: boolean,
 		private t: Translator,
 		private lang: UiLanguage,
-		private onConfirm: (tasks: TaskInfo[]) => void
+		private onConfirm: (changes: PickerChanges) => void
 	) {
 		super(app);
 		this.session = createSession(allTasks, dateFields, candidateIds);
@@ -301,7 +305,7 @@ export class TaskPickerModal extends Modal {
 
 			const checkbox = item.createEl("input", { type: "checkbox" });
 			checkbox.addClass("tah-task-checkbox");
-			checkbox.checked = this.session.checked.has(task.id);
+			checkbox.checked = this.session.desiredIds.has(task.id);
 			checkbox.addEventListener("change", () => {
 				this.session = toggle(this.session, task.id);
 				this.updateConfirmState();
@@ -318,10 +322,19 @@ export class TaskPickerModal extends Modal {
 
 	private updateConfirmState(): void {
 		if (!this.confirmBtn) return;
-		const count = selectedTasks(this.session).length;
-		this.confirmBtn.setText(this.t("taskPicker.join", { count }));
-		this.confirmBtn.disabled = count === 0;
-		if (this.clearBtn) this.clearBtn.disabled = count === 0;
+		const changes = pendingChanges(this.session);
+		const summary = summarizeChanges(changes);
+
+		this.confirmBtn.setText(
+			summary.removed > 0
+				? this.t("taskPicker.applyChanges", {
+						added: summary.added,
+						removed: summary.removed,
+					})
+				: this.t("taskPicker.join", { count: summary.added })
+		);
+		this.confirmBtn.disabled = summary.isEmpty;
+		if (this.clearBtn) this.clearBtn.disabled = !hasDesiredVisible(this.session);
 
 		// 按标题页：同步「全选」复选框状态
 		if (this.session.tab === "title" && this.selectAllBox) {
@@ -332,9 +345,9 @@ export class TaskPickerModal extends Modal {
 	}
 
 	private confirm(): void {
-		const tasks = selectedTasks(this.session);
-		if (tasks.length === 0) return;
-		this.onConfirm(tasks);
+		const changes = pendingChanges(this.session);
+		if (summarizeChanges(changes).isEmpty) return;
+		this.onConfirm(changes);
 		this.close();
 	}
 }
