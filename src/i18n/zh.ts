@@ -97,6 +97,8 @@ export const zh: Strings = {
 		confirm: "确定",
 		join: "加入列表（{{count}}）",
 		applyChanges: "应用更改（+{{added}} / −{{removed}}）",
+		joinedBadge: "已加入",
+		removingBadge: "将移除",
 	},
 	settings: {
 		tabModel: "模型配置",

@@ -99,6 +99,8 @@ export const en = {
 		confirm: "Confirm",
 		join: "Add to list ({{count}})",
 		applyChanges: "Apply changes (+{{added}} / -{{removed}})",
+		joinedBadge: "Joined",
+		removingBadge: "Will remove",
 	},
 	settings: {
 		tabModel: "Model",

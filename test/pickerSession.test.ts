@@ -5,6 +5,7 @@ import {
 	createSession,
 	hasDesiredVisible,
 	isQueryEmpty,
+	joinedBadgeState,
 	parsedQuery,
 	pendingChanges,
 	selectAllState,
@@ -278,6 +279,27 @@ test("summarizeChanges：计数与空差异", () => {
 		summarizeChanges({ addedTasks: [], removeIds: [] }),
 		{ added: 0, removed: 0, isEmpty: true }
 	);
+});
+
+test("joinedBadgeState：已加入 / 勾选四种组合", () => {
+	const session = createSession(tasks, dateFields, new Set(["b"]));
+	assert.equal(joinedBadgeState(session, "b"), "joined");
+	assert.equal(joinedBadgeState(toggle(session, "b"), "b"), "removing");
+	assert.equal(joinedBadgeState(session, "a"), "none");
+	assert.equal(joinedBadgeState(toggle(session, "a"), "a"), "none");
+});
+
+test("joinedBadgeState：与 Tab 无关", () => {
+	const time = setRange(createSession(tasks, dateFields, new Set(["b"])), march);
+	const title = switchTab(time, "title");
+
+	assert.equal(joinedBadgeState(time, "b"), "joined");
+	assert.equal(joinedBadgeState(title, "b"), "joined");
+
+	const timeOff = toggle(time, "b");
+	const titleOff = toggle(title, "b");
+	assert.equal(joinedBadgeState(timeOff, "b"), "removing");
+	assert.equal(joinedBadgeState(titleOff, "b"), "removing");
 });
 
 test("hasDesiredVisible：当前可见任务是否仍有勾选", () => {

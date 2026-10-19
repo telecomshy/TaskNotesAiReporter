@@ -772,6 +772,42 @@
 	text-overflow: ellipsis;
 }
 
+/* 选择任务窗口：标题行 + 已加入状态徽标 */
+.tah-task-title-row {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	min-width: 0;
+}
+
+.tah-task-title-row .tah-task-title {
+	flex: 0 1 auto;
+	min-width: 0;
+}
+
+.tah-task-badge {
+	flex-shrink: 0;
+	padding: 0 0.35rem;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 3px;
+	background: var(--background-modifier-hover);
+	color: var(--text-muted);
+	font-size: 0.7rem;
+	line-height: 1.5;
+	white-space: nowrap;
+}
+
+.tah-task-badge-joined {
+	border-color: var(--interactive-accent, var(--background-modifier-border));
+	color: var(--text-accent, var(--text-normal));
+}
+
+.tah-task-badge-removing {
+	border-color: var(--text-warning, var(--background-modifier-border));
+	background: transparent;
+	color: var(--text-warning, var(--text-normal));
+}
+
 .tah-task-meta {
 	font-size: 0.75rem;
 	color: var(--text-muted);

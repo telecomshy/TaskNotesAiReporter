@@ -14,6 +14,7 @@ import {
 	createSession,
 	hasDesiredVisible,
 	isQueryEmpty,
+	joinedBadgeState,
 	parsedQuery,
 	pendingChanges,
 	selectAllState,
@@ -24,6 +25,7 @@ import {
 	switchTab,
 	toggle,
 	visibleTasks,
+	type JoinedBadgeState,
 	type PickerChanges,
 	type PickerSession,
 	type PickerTab,
@@ -306,18 +308,48 @@ export class TaskPickerModal extends Modal {
 			const checkbox = item.createEl("input", { type: "checkbox" });
 			checkbox.addClass("tah-task-checkbox");
 			checkbox.checked = this.session.desiredIds.has(task.id);
-			checkbox.addEventListener("change", () => {
-				this.session = toggle(this.session, task.id);
-				this.updateConfirmState();
-			});
 
 			const info = item.createDiv({ cls: "tah-task-info" });
-			const titleEl = info.createDiv({ cls: "tah-task-title" });
+			const titleRow = info.createDiv({ cls: "tah-task-title-row" });
+			const titleEl = titleRow.createDiv({ cls: "tah-task-title" });
 			titleEl.setText(task.title);
+
+			const badgeState = joinedBadgeState(this.session, task.id);
+			const badgeEl =
+				badgeState === "none"
+					? null
+					: titleRow.createSpan({
+							cls: this.badgeClass(badgeState),
+							text: this.badgeText(badgeState),
+						});
+
 			renderTaskMeta(info, task, this.t);
+
+			checkbox.addEventListener("change", () => {
+				this.session = toggle(this.session, task.id);
+				if (badgeEl) this.updateBadge(badgeEl, task.id);
+				this.updateConfirmState();
+			});
 		}
 
 		this.updateConfirmState();
+	}
+
+	private badgeText(state: Exclude<JoinedBadgeState, "none">): string {
+		return this.t(
+			state === "joined" ? "taskPicker.joinedBadge" : "taskPicker.removingBadge"
+		);
+	}
+
+	private badgeClass(state: Exclude<JoinedBadgeState, "none">): string {
+		return `tah-task-badge tah-task-badge-${state}`;
+	}
+
+	private updateBadge(badgeEl: HTMLSpanElement, id: string): void {
+		const state = joinedBadgeState(this.session, id);
+		if (state === "none") return;
+		badgeEl.setText(this.badgeText(state));
+		badgeEl.className = this.badgeClass(state);
 	}
 
 	private updateConfirmState(): void {

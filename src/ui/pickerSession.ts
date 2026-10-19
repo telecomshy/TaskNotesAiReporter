@@ -114,6 +114,18 @@ export function summarizeChanges(changes: PickerChanges): PickerChangeSummary {
 	return { added, removed, isEmpty: added === 0 && removed === 0 };
 }
 
+/** 已加入任务的徽标状态；未加入任务不显示徽标。 */
+export type JoinedBadgeState = "joined" | "removing" | "none";
+
+/**
+ * 徽标状态：已加入且勾选为 `joined`，已加入但取消勾选为 `removing`；
+ * 未加入为 `none`（是否勾选由复选框表达，不额外加徽标）。
+ */
+export function joinedBadgeState(session: PickerSession, id: string): JoinedBadgeState {
+	if (!session.candidateIds.has(id)) return "none";
+	return session.desiredIds.has(id) ? "joined" : "removing";
+}
+
 /** 标题查询的解析结果（关键字 / 标签 / 上下文）。 */
 export function parsedQuery(session: PickerSession): TitleQuery {
 	return parseTitleQuery(session.query);
