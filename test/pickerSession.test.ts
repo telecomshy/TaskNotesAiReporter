@@ -43,6 +43,7 @@ test("初值：时间页、无区间、空查询、已加入任务默认勾选",
 	assert.equal(session.range, null);
 	assert.equal(session.query, "");
 	assert.deepEqual(sorted(session.desiredIds), ["b"]);
+	assert.deepEqual([...session.manuallyUncheckedIds], []);
 	assert.deepEqual(visibleTasks(session), []);
 	assert.deepEqual(session.tasks, tasks);
 	assert.deepEqual([...session.candidateIds], ["b"]);
@@ -108,6 +109,52 @@ test("改时间区间：不取消、也不重新勾选已加入任务", () => {
 	// 新区间内的可加入任务仍按时间页规则自动勾选
 	assert.equal(next.desiredIds.has("c"), true);
 	assert.deepEqual(sorted(next.desiredIds), ["b", "c"]);
+});
+
+test("改时间区间：手动取消的可加入任务不被重新勾选", () => {
+	let session = setRange(createSession(tasks, dateFields, new Set()), march);
+	assert.deepEqual(sorted(session.desiredIds), ["a", "b"]);
+
+	session = toggle(session, "a");
+	const april: DateRange = { start: "2024-04-01", end: "2024-04-30" };
+	session = setRange(session, april);
+	assert.equal(session.desiredIds.has("a"), false);
+	assert.equal(session.desiredIds.has("c"), true);
+
+	const back = setRange(session, march);
+	assert.equal(back.desiredIds.has("a"), false);
+	assert.equal(back.desiredIds.has("b"), true);
+	assert.equal(back.desiredIds.has("c"), true);
+});
+
+test("手动重新勾选会解除自动勾选抑制", () => {
+	let session = setRange(createSession(tasks, dateFields, new Set()), march);
+	session = toggle(session, "a");
+	assert.equal(session.manuallyUncheckedIds.has("a"), true);
+
+	session = toggle(session, "a");
+	assert.equal(session.manuallyUncheckedIds.has("a"), false);
+
+	const april: DateRange = { start: "2024-04-01", end: "2024-04-30" };
+	const back = setRange(setRange(session, april), march);
+	assert.equal(back.desiredIds.has("a"), true);
+});
+
+test("清空选择抑制当前可见任务，全选时解除", () => {
+	let session = setRange(createSession(tasks, dateFields, new Set()), march);
+	session = clearSelection(session);
+	assert.deepEqual(sorted(session.desiredIds), []);
+	assert.deepEqual(sorted(session.manuallyUncheckedIds), ["a", "b"]);
+
+	const april: DateRange = { start: "2024-04-01", end: "2024-04-30" };
+	const away = setRange(session, april);
+	assert.equal(away.desiredIds.has("c"), true);
+	const back = setRange(away, march);
+	assert.deepEqual(sorted(back.desiredIds), ["c"]);
+
+	const all = setAll(back, true);
+	assert.deepEqual(sorted(all.desiredIds), ["a", "b", "c"]);
+	assert.deepEqual(sorted(all.manuallyUncheckedIds), []);
 });
 
 test("setQuery：改搜索词不改变勾选（新增与已加入都保留）", () => {

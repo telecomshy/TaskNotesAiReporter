@@ -42,6 +42,8 @@ export class TaskPickerModal extends Modal {
 	private listEl!: HTMLElement;
 	private labelEl!: HTMLElement;
 	private searchInput!: HTMLInputElement;
+	// 标题页：搜索框内的一键清除按钮
+	private clearSearchBtn?: HTMLButtonElement;
 	private confirmBtn!: HTMLButtonElement;
 	// 「清空选择」按钮（标题页与时间页共用，随 Tab 重建）
 	private clearBtn!: HTMLButtonElement;
@@ -194,30 +196,22 @@ export class TaskPickerModal extends Modal {
 		this.searchInput.value = this.session.query;
 
 		// 一键删除整个搜索词；只改查询、不动勾选
-		const clearSearchBtn = searchRow.createEl("button", {
+		this.clearSearchBtn = searchRow.createEl("button", {
 			cls: "tah-search-clear",
 			text: "×",
 			attr: { "aria-label": this.t("taskPicker.clearSearch") },
 		});
-		clearSearchBtn.setAttr("title", this.t("taskPicker.clearSearch"));
-		const updateClearSearch = (): void => {
-			clearSearchBtn.toggleClass("tah-hidden", this.searchInput.value === "");
-		};
-		updateClearSearch();
-
-		clearSearchBtn.addEventListener("click", () => {
-			this.searchInput.value = "";
-			this.session = setQuery(this.session, "");
-			updateClearSearch();
-			this.refresh();
+		this.clearSearchBtn.setAttr("title", this.t("taskPicker.clearSearch"));
+		this.clearSearchBtn.addEventListener("click", () => {
+			this.applyQuery("");
 			this.searchInput.focus();
 		});
 
 		this.searchInput.addEventListener("input", () => {
-			this.session = setQuery(this.session, this.searchInput.value);
-			updateClearSearch();
-			this.refresh();
+			this.applyQuery(this.searchInput.value);
 		});
+
+		this.updateClearSearchState();
 
 		// 操作行：左「全选」+ 计数，右「清空选择」
 		const actionRow = this.filterEl.createDiv({ cls: "tah-picker-actions" });
@@ -234,6 +228,19 @@ export class TaskPickerModal extends Modal {
 		this.createClearButton(actionRow);
 
 		this.parseLabelEl = this.filterEl.createDiv({ cls: "tah-parse-label tah-range-label" });
+	}
+
+	/** 搜索框的唯一更新入口：同步输入框、会话查询与派生渲染。 */
+	private applyQuery(value: string): void {
+		this.searchInput.value = value;
+		this.session = setQuery(this.session, value);
+		this.refresh();
+	}
+
+	/** 搜索框有内容时才显示一键清除按钮。 */
+	private updateClearSearchState(): void {
+		if (!this.clearSearchBtn) return;
+		this.clearSearchBtn.toggleClass("tah-hidden", this.session.query === "");
 	}
 
 	// ===== 底部 =====
@@ -285,7 +292,10 @@ export class TaskPickerModal extends Modal {
 	}
 
 	private refresh(): void {
-		if (this.session.tab === "title") this.updateParseLabel();
+		if (this.session.tab === "title") {
+			this.updateParseLabel();
+			this.updateClearSearchState();
+		}
 		this.updateLabel();
 		this.renderList();
 	}
