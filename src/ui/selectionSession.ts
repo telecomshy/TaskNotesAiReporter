@@ -20,15 +20,29 @@ export type SelectionTab = "time" | "title";
 /** 左栏为空的原因：未选区间 / 无命中 / 命中项都已加入。 */
 export type LeftEmptyReason = "no-range" | "no-match" | "all-joined" | null;
 
+/** 当前筛选区间的来源：快捷周期 / 自定义日历 / 无。 */
+export type RangeSource = "preset" | "custom" | null;
+
+/** 改变筛选区间的一次动作；来源随之确定，调用方无需再单独记录。 */
+export type RangePick =
+	| { kind: "preset"; range: DateRange }
+	| { kind: "custom"; range: DateRange }
+	| { kind: "open-custom" }
+	| { kind: "clear" };
+
 /**
  * 会话状态。`tasks` / `dateFields` 是打开弹窗时注入、生命周期内恒定的输入。
  * `joined` 保持加入顺序，供右栏与生成共用。
+ *
+ * 不变式：`rangeSource === null` 当且仅当 `range === null`；
+ * `preset` / `custom` 必有区间。区间只由 `chooseRange` 改变。
  */
 export interface SelectionSession {
 	tasks: TaskInfo[];
 	joined: Map<string, TaskInfo>;
 	tab: SelectionTab;
 	range: DateRange | null;
+	rangeSource: RangeSource;
 	query: string;
 	dateFields: readonly DateField[];
 }
@@ -43,6 +57,7 @@ export function createSelectionSession(
 		joined: new Map(),
 		tab: "time",
 		range: null,
+		rangeSource: null,
 		query: "",
 		dateFields,
 	};
@@ -90,16 +105,42 @@ export function parsedQuery(session: SelectionSession): TitleQuery {
 	return parseTitleQuery(session.query);
 }
 
+/** 当前筛选区间：任务列表与区间文字共用的真源。 */
+export function filterRange(session: SelectionSession): DateRange | null {
+	return session.range;
+}
+
+/** 日历初值：只有区间来自自定义选择时才回填；周期快捷区间从不预选日历。 */
+export function calendarSeed(session: SelectionSession): DateRange | null {
+	return session.rangeSource === "custom" ? session.range : null;
+}
+
 // ===== 具名转移 =====
 
-/** 切换 Tab：只改呈现，不改变报告集合。 */
+/** 切换 Tab：只改呈现，不改变报告集合与筛选区间。 */
 export function switchTab(session: SelectionSession, tab: SelectionTab): SelectionSession {
 	return { ...session, tab };
 }
 
-/** 改筛选区间：只改呈现，不改变报告集合。 */
-export function setRange(session: SelectionSession, range: DateRange | null): SelectionSession {
-	return { ...session, range };
+/**
+ * 改变筛选区间。来源随动作确定，区间与来源始终一起转移：
+ * 快捷周期设 preset；自定义选日期设 custom；清空两者归零；
+ * 打开自定义时 preset 区间清空，custom 区间保留以便继续挑选。
+ */
+export function chooseRange(session: SelectionSession, pick: RangePick): SelectionSession {
+	switch (pick.kind) {
+		case "preset":
+			return { ...session, range: pick.range, rangeSource: "preset" };
+		case "custom":
+			return { ...session, range: pick.range, rangeSource: "custom" };
+		case "clear":
+			if (session.range === null && session.rangeSource === null) return session;
+			return { ...session, range: null, rangeSource: null };
+		case "open-custom":
+			if (session.rangeSource === "custom") return session;
+			if (session.range === null && session.rangeSource === null) return session;
+			return { ...session, range: null, rangeSource: null };
+	}
 }
 
 /** 改标题查询：只改呈现，不改变报告集合。 */

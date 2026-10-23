@@ -5,7 +5,6 @@ import {
 	clickDay,
 	containsDay,
 	emptySelection,
-	customSelectionRange,
 	isEdgeDay,
 	isRangeComplete,
 	rangeOf,
@@ -81,15 +80,6 @@ test("isRangeComplete：两次点击后才完成，单击仍可选择终点", ()
 	// 已完成区间后再次点击会重新开始，不应再视为完成
 	const restart = clickDay(second, "2024-03-20");
 	assert.equal(isRangeComplete(restart), false);
-});
-
-test("customSelectionRange：打开自定义时周期快捷区间不保留", () => {
-	// 点过「本月 / 本年」等快捷按钮后，打开自定义：日历与任务列表都从空白开始
-	assert.equal(customSelectionRange(march, false), null);
-	// 自定义选择本身在重新打开时保留
-	assert.equal(customSelectionRange(march, true), march);
-	assert.equal(customSelectionRange(null, true), null);
-	assert.equal(customSelectionRange(null, false), null);
 });
 
 test("clearRange：清空为无区间、无包含、无边界", () => {

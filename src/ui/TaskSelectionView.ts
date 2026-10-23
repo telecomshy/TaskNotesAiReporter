@@ -6,21 +6,22 @@
  */
 
 import { CalendarWidget } from "./Calendar";
-import { customSelectionRange } from "./calendarSelection";
 import { renderTaskMeta } from "./taskMeta";
 import {
 	addAllAddable,
 	addTask,
 	addableTasks,
+	calendarSeed,
+	chooseRange,
 	clearJoined,
 	createSelectionSession,
+	filterRange,
 	leftEmptyReason,
 	parsedQuery,
 	removeTask,
 	joinedCount,
 	joinedTasks,
 	setQuery,
-	setRange,
 	switchTab,
 	type SelectionSession,
 	type SelectionTab,
@@ -38,9 +39,6 @@ export interface TaskSelectionViewOptions {
 }
 
 type MobilePane = "filter" | "joined";
-
-/** 当前筛选区间的来源：快捷周期 / 自定义日历 / 无。 */
-type RangeSource = "preset" | "custom" | null;
 
 export class TaskSelectionView {
 	private session: SelectionSession | null = null;
@@ -66,7 +64,6 @@ export class TaskSelectionView {
 	private clearSearchBtn: HTMLButtonElement | null = null;
 	private calendar: CalendarWidget | null = null;
 	private calendarContainer: HTMLElement | null = null;
-	private rangeSource: RangeSource = null;
 	private mobilePane: MobilePane = "filter";
 
 	constructor(private readonly options: TaskSelectionViewOptions) {
@@ -132,7 +129,6 @@ export class TaskSelectionView {
 	/** 注入任务快照并回到初始状态。 */
 	setTasks(tasks: TaskInfo[]): void {
 		this.session = createSelectionSession(tasks, this.options.dateFields);
-		this.rangeSource = null;
 		this.renderFilter();
 		this.renderAll();
 	}
@@ -303,10 +299,12 @@ export class TaskSelectionView {
 			const el = quickRow.createEl("button", { text: btn.label, cls: "tah-quick-btn" });
 			el.addEventListener("click", () => {
 				if (!this.session) return;
-				this.rangeSource = btn.range ? "preset" : null;
-				this.session = setRange(this.session, btn.range);
+				this.session = chooseRange(
+					this.session,
+					btn.range ? { kind: "preset", range: btn.range } : { kind: "clear" }
+				);
 				// 快捷周期永远不预选自定义日历
-				this.renderCalendar(customSelectionRange(this.session.range, false));
+				this.renderCalendar(calendarSeed(this.session));
 				this.updateRangeLabel();
 				this.setCalendarOpen(false);
 				this.renderAll();
@@ -324,32 +322,24 @@ export class TaskSelectionView {
 		this.calendarToggleBtn.setAttr("aria-controls", "tah-calendar-panel");
 		this.calendarToggleBtn.addEventListener("click", () => {
 			const open = !this.isCalendarOpen();
-			if (open) this.beginCustomSelection();
+			if (open && this.session) {
+				// 打开自定义：周期快捷来源的区间不再占用任务列表，日历与列表一起清空；
+				// 自定义来源的区间保留，避免重复挑选。
+				const next = chooseRange(this.session, { kind: "open-custom" });
+				if (next !== this.session) {
+					this.session = next;
+					this.calendar?.clearRange();
+					this.updateRangeLabel();
+					this.renderAll();
+				}
+			}
 			this.setCalendarOpen(open);
 		});
 
 		this.calendarContainer = this.filterEl.createDiv({ cls: "tah-calendar-container" });
 		this.calendarContainer.id = "tah-calendar-panel";
 		this.setCalendarOpen(false);
-		this.renderCalendar(
-			customSelectionRange(this.session.range, this.rangeSource === "custom")
-		);
-	}
-
-	/**
-	 * 打开自定义选择：来自周期快捷按钮的区间不再占用任务列表；
-	 * 自定义来源的区间保留，避免重复挑选。
-	 */
-	private beginCustomSelection(): void {
-		if (!this.session) return;
-		const nextRange = customSelectionRange(this.session.range, this.rangeSource === "custom");
-		if (nextRange === this.session.range) return;
-
-		this.session = setRange(this.session, nextRange);
-		this.rangeSource = null;
-		this.calendar?.clearRange();
-		this.updateRangeLabel();
-		this.renderAll();
+		this.renderCalendar(calendarSeed(this.session));
 	}
 
 	/** 展开 / 收起自定义日期面板；快捷按钮始终可见。 */
@@ -372,14 +362,15 @@ export class TaskSelectionView {
 
 	private updateRangeLabel(): void {
 		if (!this.rangeLabelEl || !this.session) return;
-		if (this.session.range === null) {
+		const range = filterRange(this.session);
+		if (range === null) {
 			this.rangeLabelEl.setText(this.options.t("taskSelection.noDate"));
 			return;
 		}
 		this.rangeLabelEl.setText(
 			this.options.t("taskSelection.currentFilter", {
-				start: this.session.range.start,
-				end: this.session.range.end,
+				start: range.start,
+				end: range.end,
 			})
 		);
 	}
@@ -395,8 +386,7 @@ export class TaskSelectionView {
 			initialRange,
 			(range, complete) => {
 				if (!range || !this.session) return;
-				this.rangeSource = "custom";
-				this.session = setRange(this.session, range);
+				this.session = chooseRange(this.session, { kind: "custom", range });
 				this.updateRangeLabel();
 				// 两次点击选完区间才收起；单击只是单日区间，可能还在选起点
 				if (complete) this.setCalendarOpen(false);

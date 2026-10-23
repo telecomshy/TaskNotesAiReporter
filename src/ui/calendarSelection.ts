@@ -44,18 +44,6 @@ export function isRangeComplete(selection: CalendarSelection): boolean {
 	return selection.end !== null;
 }
 
-/**
- * 打开自定义选择时使用的区间。
- * 只有当前区间来自自定义选择时才保留；周期快捷区间清空——
- * 日历与任务列表共用这个值，避免「日历空白但列表仍是旧周期」。
- */
-export function customSelectionRange(
-	activeRange: DateRange | null,
-	fromCustomSelection: boolean
-): DateRange | null {
-	return fromCustomSelection ? activeRange : null;
-}
-
 /** 归一化区间：仅起点时为单日区间，反向时升序；无起点时为 null。 */
 export function rangeOf(selection: CalendarSelection): DateRange | null {
 	if (selection.start === null) return null;
