@@ -80,6 +80,8 @@ export const zh: Strings = {
 		quickThisQuarter: "本季度",
 		quickThisYear: "本年",
 		clearRange: "清除范围",
+		customRange: "自定义日期",
+		hideCalendar: "收起日历",
 		noDate: "未选择日期（请选择时间范围或使用快捷按钮）",
 		currentFilter: "当前筛选：{{start}} ~ {{end}}",
 		searchPlaceholder: "关键字 #标签 @上下文（空格分隔）…",

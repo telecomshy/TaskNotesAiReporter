@@ -56,6 +56,8 @@ export class TaskSelectionView {
 	private readonly mobileJoinedBtn: HTMLButtonElement;
 
 	private rangeLabelEl: HTMLElement | null = null;
+	private calendarToggleBtn: HTMLButtonElement | null = null;
+	private calendarOpen = false;
 	private parseLabelEl: HTMLElement | null = null;
 	private searchInput: HTMLInputElement | null = null;
 	private clearSearchBtn: HTMLButtonElement | null = null;
@@ -267,6 +269,7 @@ export class TaskSelectionView {
 		this.calendar = null;
 		this.calendarContainer = null;
 		this.rangeLabelEl = null;
+		this.calendarToggleBtn = null;
 		this.parseLabelEl = null;
 		this.searchInput = null;
 		this.clearSearchBtn = null;
@@ -299,6 +302,7 @@ export class TaskSelectionView {
 				if (btn.range) this.renderCalendar();
 				else this.calendar?.clearRange();
 				this.updateRangeLabel();
+				this.setCalendarOpen(false);
 				this.renderAll();
 			});
 		}
@@ -307,8 +311,29 @@ export class TaskSelectionView {
 		this.rangeLabelEl = rangeRow.createDiv({ cls: "tah-range-label" });
 		this.updateRangeLabel();
 
+		this.calendarToggleBtn = rangeRow.createEl("button", {
+			text: t("taskSelection.customRange"),
+			cls: "tah-batch-remove-btn",
+		});
+		this.calendarToggleBtn.addEventListener("click", () => {
+			this.setCalendarOpen(!this.calendarOpen);
+		});
+
 		this.calendarContainer = this.filterEl.createDiv({ cls: "tah-calendar-container" });
 		this.renderCalendar();
+		this.setCalendarOpen(false);
+	}
+
+	/** 展开 / 收起自定义日期面板；快捷按钮始终可见。 */
+	private setCalendarOpen(open: boolean): void {
+		this.calendarOpen = open;
+		this.calendarContainer?.toggleClass("tah-hidden", !open);
+		if (this.calendarToggleBtn) {
+			this.calendarToggleBtn.setText(
+				this.options.t(open ? "taskSelection.hideCalendar" : "taskSelection.customRange")
+			);
+			this.calendarToggleBtn.setAttr("aria-expanded", String(open));
+		}
 	}
 
 	private updateRangeLabel(): void {
@@ -338,6 +363,8 @@ export class TaskSelectionView {
 				if (!range || !this.session) return;
 				this.session = setRange(this.session, range);
 				this.updateRangeLabel();
+				// 区间选完即收起，把高度还给任务列表；想改再点「自定义日期」
+				this.setCalendarOpen(false);
 				this.renderAll();
 			}
 		);

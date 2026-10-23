@@ -82,6 +82,8 @@ export const en = {
 		quickThisQuarter: "This quarter",
 		quickThisYear: "This year",
 		clearRange: "Clear range",
+		customRange: "Custom dates",
+		hideCalendar: "Hide calendar",
 		noDate: "No date selected (pick a range or use a quick button)",
 		currentFilter: "Filter: {{start}} ~ {{end}}",
 		searchPlaceholder: "keyword #tag @context (space-separated)…",

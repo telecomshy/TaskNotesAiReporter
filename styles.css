@@ -504,6 +504,12 @@
 	overflow-x: hidden;
 }
 
+/* 生成报告弹窗：固定高度，任务列表在内部滚动，不随任务数量伸缩 */
+.modal.tah-modal-root .tah-modal {
+	height: min(78vh, 700px);
+	max-height: min(78vh, 700px);
+}
+
 /* 选择任务区：左筛选、右报告集合 */
 .tah-selection-body {
 	flex: 1 1 auto;
