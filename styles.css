@@ -495,12 +495,6 @@
 	width: min(92vw, 560px);
 }
 
-/* 选择任务窗口（筛选区 + 任务列表上下排列）窄宽度 */
-.modal.tah-modal-root-picker {
-	max-width: min(92vw, 520px);
-	width: min(92vw, 520px);
-}
-
 .tah-modal {
 	display: flex;
 	flex-direction: column;
@@ -510,12 +504,61 @@
 	overflow-x: hidden;
 }
 
-/* 主窗口单栏布局 */
-.tah-main {
+/* 选择任务区：左筛选、右报告集合 */
+.tah-selection-body {
 	flex: 1 1 auto;
 	min-height: 0;
 	display: flex;
 	flex-direction: column;
+	overflow: hidden;
+}
+
+.tah-selection-layout {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	gap: 0.9rem;
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+.tah-selection-pane {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	padding: 0.6rem;
+}
+
+.tah-selection-actions {
+	margin-bottom: 0.4rem;
+}
+
+.tah-selection-list.tah-selection-list {
+	flex: 1 1 auto;
+	max-height: none;
+	min-height: 0;
+}
+
+.tah-selection-mobile-tabs {
+	display: none;
+	gap: 0.4rem;
+	margin-bottom: 0.5rem;
+}
+
+@media (max-width: 800px) {
+	.tah-selection-layout {
+		grid-template-columns: 1fr;
+	}
+
+	.tah-selection-mobile-tabs {
+		display: flex;
+	}
+
+	.tah-selection-pane-hidden {
+		display: none;
+	}
 }
 
 .tah-main-header {
@@ -530,36 +573,6 @@
 	margin: 0;
 	font-size: 1rem;
 	font-weight: 600;
-}
-
-.tah-modal-main {
-	flex: 1 1 auto;
-	min-height: 0;
-	display: flex;
-	gap: 1.25rem;
-	overflow-y: auto;
-	overflow-x: hidden;
-	align-items: stretch;
-	min-width: 0;
-}
-
-.tah-pane {
-	flex: 1;
-	min-width: 0;
-}
-
-.tah-pane-left {
-	flex: 0 0 18rem;
-	border-right: 1px solid var(--background-modifier-border);
-	padding-right: 1.25rem;
-	min-width: 0;
-}
-
-.tah-pane-right {
-	flex: 1;
-	display: flex;
-	flex-direction: column;
-	min-width: 0;
 }
 
 .tah-modal-footer {
@@ -689,28 +702,13 @@
 }
 
 /* 任务列表 */
-.tah-select-all {
-	display: flex;
-	align-items: center;
-	gap: 0.3rem;
-	font-size: 0.85rem;
-	cursor: pointer;
-	color: var(--text-muted);
-}
-
-.tah-select-all input[type="checkbox"] {
-	margin: 0;
-}
-
-.tah-batch-remove-btn,
-.tah-picker-clear {
+.tah-batch-remove-btn {
 	padding: 0.2rem 0.6rem;
 	font-size: 0.8rem;
 	cursor: pointer;
 }
 
-.tah-batch-remove-btn:disabled,
-.tah-picker-clear:disabled {
+.tah-batch-remove-btn:disabled {
 	opacity: 0.5;
 	cursor: not-allowed;
 }
@@ -772,42 +770,6 @@
 	text-overflow: ellipsis;
 }
 
-/* 选择任务窗口：标题行 + 已加入状态徽标 */
-.tah-task-title-row {
-	display: flex;
-	align-items: center;
-	gap: 0.4rem;
-	min-width: 0;
-}
-
-.tah-task-title-row .tah-task-title {
-	flex: 0 1 auto;
-	min-width: 0;
-}
-
-.tah-task-badge {
-	flex-shrink: 0;
-	padding: 0 0.35rem;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 3px;
-	background: var(--background-modifier-hover);
-	color: var(--text-muted);
-	font-size: 0.7rem;
-	line-height: 1.5;
-	white-space: nowrap;
-}
-
-.tah-task-badge-joined {
-	border-color: var(--interactive-accent, var(--background-modifier-border));
-	color: var(--text-accent, var(--text-normal));
-}
-
-.tah-task-badge-removing {
-	border-color: var(--text-warning, var(--background-modifier-border));
-	background: transparent;
-	color: var(--text-warning, var(--text-normal));
-}
-
 .tah-task-meta {
 	font-size: 0.75rem;
 	color: var(--text-muted);
@@ -844,22 +806,9 @@
 	flex-shrink: 0;
 }
 
-.tah-add-row {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: 0.6rem;
-	margin-top: 0.75rem;
-}
-
 .tah-add-btn {
 	padding: 0.35rem 0.8rem;
 	cursor: pointer;
-}
-
-.tah-hint {
-	font-size: 0.75rem;
-	color: var(--text-muted);
 }
 
 .tah-generate-btn {
@@ -1024,14 +973,7 @@
 	padding: 1rem 0;
 }
 
-/* ===== 选择任务窗口 ===== */
-
-/* 固定高度，任务列表内部滚动，整个窗口不滚动 */
-.tah-modal-root-picker .tah-modal {
-	height: min(80vh, 640px);
-	max-height: none;
-	overflow-y: hidden;
-}
+/* ===== 选择任务区 ===== */
 
 .tah-picker-tabs {
 	margin-bottom: 0.75rem;
@@ -1064,13 +1006,6 @@
 	justify-content: space-between;
 	gap: 0.6rem;
 	margin-bottom: 0.4rem;
-}
-
-.tah-picker-actions-left {
-	display: flex;
-	align-items: center;
-	gap: 0.6rem;
-	min-width: 0;
 }
 
 /* 时间页：范围信息一行，右侧留「清空选择」 */
@@ -1126,28 +1061,4 @@
 	flex-shrink: 0;
 }
 
-.tah-picker-list {
-	flex: 1 1 auto;
-	min-height: 0;
-	/* 覆盖 .tah-task-list 的 22rem 上限：列表填满弹窗，页脚贴底 */
-	max-height: none;
-	overflow-y: auto;
-	overflow-x: hidden;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 6px;
-	padding: 0.5rem;
-}
 
-.tah-picker-footer {
-	display: flex;
-	justify-content: flex-end;
-	gap: 0.5rem;
-	margin-top: 1rem;
-	padding-top: 0.75rem;
-	flex-shrink: 0;
-}
-
-.tah-picker-footer .tah-generate-btn:disabled {
-	opacity: 0.5;
-	cursor: not-allowed;
-}

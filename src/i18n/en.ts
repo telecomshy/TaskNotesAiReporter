@@ -8,10 +8,10 @@ export const en = {
 	command: {
 		generateReport: "Generate task report",
 	},
+	// 复数回退的样板键：i18n 的 translator 测试用它验证 _plural 解析。
 	notice: {
 		addedTasks: "Added {{count}} task",
 		addedTasks_plural: "Added {{count}} tasks",
-		updatedTasks: "Updated task list (+{{added}} / -{{removed}})",
 	},
 	aiError: {
 		modelsNetwork: "Failed to fetch model list: {{detail}}",
@@ -56,10 +56,8 @@ export const en = {
 
 		joinedTasks: "Joined tasks ({{count}})",
 		clear: "Clear",
-		empty: "No tasks yet. Click \"Select tasks\" below to filter and add tasks.",
+		empty: "No tasks yet. Filter and add tasks from the left.",
 		removeAria: "Remove from list",
-		addTasks: "+ Select tasks",
-		appendHint: "Adjust the list in the task picker; unchecking a joined task removes it.",
 		noTemplate: "No template (default)",
 		extraRequirements: "Extra requirements",
 		extraRequirementsPlaceholder:
@@ -75,6 +73,8 @@ export const en = {
 	},
 	taskPicker: {
 		title: "Select tasks",
+		filterTab: "Filter",
+		selectedPane: "Selected ({{count}})",
 		tabTime: "By date",
 		tabTitle: "By title",
 		quickThisWeek: "This week",
@@ -84,24 +84,18 @@ export const en = {
 		clearRange: "Clear range",
 		noDate: "No date selected (pick a range or use a quick button)",
 		currentFilter: "Filter: {{start}} ~ {{end}}",
-		allTasks: "All tasks ({{count}})",
-		searchResult: "Search \"{{query}}\" ({{count}} matches)",
 		searchPlaceholder: "keyword #tag @context (space-separated)…",
 		clearSearch: "Clear search",
 
-		selectAll: "Select all",
+		addableCount: "{{count}} addable",
+		addAll: "Add all ({{count}})",
+		addAria: "Add to report: {{title}}",
+		allSelected: "All filtered results are already in the report",
 		parseKeywords: "Keywords: {{value}}",
 		parseTags: "Tags: {{value}}",
 		parseContexts: "Contexts: {{value}}",
-		clearSelection: "Clear selection",
 		emptyPickRange: "Pick a date range first.",
 		emptyNoTasks: "No matching tasks.",
-		cancel: "Cancel",
-		confirm: "Confirm",
-		join: "Add to list ({{count}})",
-		applyChanges: "Apply changes (+{{added}} / -{{removed}})",
-		joinedBadge: "Joined",
-		removingBadge: "Will remove",
 	},
 	settings: {
 		tabModel: "Model",

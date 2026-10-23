@@ -58,7 +58,7 @@ Open **Settings → Community plugins → TaskNotes AI Reporter**:
 ## Usage
 
 1. Click the ✨ ribbon icon or run **Generate task report** from the command palette.
-2. Select tasks — **By date** or **By title** — or add them manually. The list shows exactly what will be reported.
+2. Pick tasks in the left pane — **By date** or **By title** — and they move to the report list on the right. The right pane shows exactly what will be reported.
 3. Optionally pick a template and fill in extra requirements.
 4. Click **Generate report**; it is saved as a new note in the report folder.
 
