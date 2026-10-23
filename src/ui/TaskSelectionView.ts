@@ -6,6 +6,7 @@
  */
 
 import { CalendarWidget } from "./Calendar";
+import { calendarInitialRange } from "./calendarSelection";
 import { renderTaskMeta } from "./taskMeta";
 import {
 	addAllAddable,
@@ -38,6 +39,9 @@ export interface TaskSelectionViewOptions {
 
 type MobilePane = "filter" | "joined";
 
+/** 当前筛选区间的来源：快捷周期 / 自定义日历 / 无。 */
+type RangeSource = "preset" | "custom" | null;
+
 export class TaskSelectionView {
 	private session: SelectionSession | null = null;
 
@@ -62,6 +66,7 @@ export class TaskSelectionView {
 	private clearSearchBtn: HTMLButtonElement | null = null;
 	private calendar: CalendarWidget | null = null;
 	private calendarContainer: HTMLElement | null = null;
+	private rangeSource: RangeSource = null;
 	private mobilePane: MobilePane = "filter";
 
 	constructor(private readonly options: TaskSelectionViewOptions) {
@@ -127,6 +132,7 @@ export class TaskSelectionView {
 	/** 注入任务快照并回到初始状态。 */
 	setTasks(tasks: TaskInfo[]): void {
 		this.session = createSelectionSession(tasks, this.options.dateFields);
+		this.rangeSource = null;
 		this.renderFilter();
 		this.renderAll();
 	}
@@ -297,9 +303,10 @@ export class TaskSelectionView {
 			const el = quickRow.createEl("button", { text: btn.label, cls: "tah-quick-btn" });
 			el.addEventListener("click", () => {
 				if (!this.session) return;
+				this.rangeSource = btn.range ? "preset" : null;
 				this.session = setRange(this.session, btn.range);
-				if (btn.range) this.renderCalendar();
-				else this.calendar?.clearRange();
+				// 快捷周期永远不预选自定义日历
+				this.renderCalendar(null);
 				this.updateRangeLabel();
 				this.setCalendarOpen(false);
 				this.renderAll();
@@ -322,7 +329,9 @@ export class TaskSelectionView {
 		this.calendarContainer = this.filterEl.createDiv({ cls: "tah-calendar-container" });
 		this.calendarContainer.id = "tah-calendar-panel";
 		this.setCalendarOpen(false);
-		this.renderCalendar();
+		this.renderCalendar(
+			calendarInitialRange(this.session.range, this.rangeSource === "custom")
+		);
 	}
 
 	/** 展开 / 收起自定义日期面板；快捷按钮始终可见。 */
@@ -357,7 +366,7 @@ export class TaskSelectionView {
 		);
 	}
 
-	private renderCalendar(): void {
+	private renderCalendar(initialRange: DateRange | null): void {
 		if (!this.calendarContainer || !this.session) return;
 		this.calendarContainer.empty();
 		this.calendar = new CalendarWidget(
@@ -365,9 +374,10 @@ export class TaskSelectionView {
 			this.options.weekStartsOnMonday,
 			this.options.t,
 			this.options.lang,
-			this.session.range,
+			initialRange,
 			(range, complete) => {
 				if (!range || !this.session) return;
+				this.rangeSource = "custom";
 				this.session = setRange(this.session, range);
 				this.updateRangeLabel();
 				// 两次点击选完区间才收起；单击只是单日区间，可能还在选起点

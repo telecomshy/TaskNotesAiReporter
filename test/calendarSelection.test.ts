@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+	calendarInitialRange,
 	clearRange,
 	clickDay,
 	containsDay,
@@ -80,6 +81,15 @@ test("isRangeComplete：两次点击后才完成，单击仍可选择终点", ()
 	// 已完成区间后再次点击会重新开始，不应再视为完成
 	const restart = clickDay(second, "2024-03-20");
 	assert.equal(isRangeComplete(restart), false);
+});
+
+test("calendarInitialRange：周期快捷区间不回填自定义日历", () => {
+	// 点过「本月 / 本年」等快捷按钮后，打开自定义日历应从空白开始
+	assert.equal(calendarInitialRange(march, false), null);
+	// 自定义选择本身在重新打开时保留
+	assert.equal(calendarInitialRange(march, true), march);
+	assert.equal(calendarInitialRange(null, true), null);
+	assert.equal(calendarInitialRange(null, false), null);
 });
 
 test("clearRange：清空为无区间、无包含、无边界", () => {

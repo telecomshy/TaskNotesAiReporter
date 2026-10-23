@@ -44,6 +44,17 @@ export function isRangeComplete(selection: CalendarSelection): boolean {
 	return selection.end !== null;
 }
 
+/**
+ * 自定义日历打开时的初值。
+ * 只有当前区间来自自定义选择时才回填；周期快捷按钮的区间不回填，避免误以为已选。
+ */
+export function calendarInitialRange(
+	activeRange: DateRange | null,
+	fromCustomSelection: boolean
+): DateRange | null {
+	return fromCustomSelection ? activeRange : null;
+}
+
 /** 归一化区间：仅起点时为单日区间，反向时升序；无起点时为 null。 */
 export function rangeOf(selection: CalendarSelection): DateRange | null {
 	if (selection.start === null) return null;
