@@ -4,16 +4,15 @@ import {
 	addAllAddable,
 	addTask,
 	addableTasks,
-	clearSelected,
+	clearJoined,
 	createSelectionSession,
-	isQueryEmpty,
-	isSelected,
+	isJoined,
 	leftEmptyReason,
 	matchingTasks,
 	parsedQuery,
 	removeTask,
-	selectedCount,
-	selectedTasks,
+	joinedCount,
+	joinedTasks,
 	setQuery,
 	setRange,
 	switchTab,
@@ -41,8 +40,8 @@ test("初值：时间页、无区间、空查询、报告集合为空", () => {
 	assert.equal(session.tab, "time");
 	assert.equal(session.range, null);
 	assert.equal(session.query, "");
-	assert.equal(selectedCount(session), 0);
-	assert.deepEqual(selectedTasks(session), []);
+	assert.equal(joinedCount(session), 0);
+	assert.deepEqual(joinedTasks(session), []);
 	assert.deepEqual(addableTasks(session), []);
 	assert.deepEqual(matchingTasks(session), []);
 	assert.deepEqual(session.tasks, tasks);
@@ -57,7 +56,7 @@ test("时间筛选：命中区间任务，左栏排除已加入", () => {
 	session = addTask(session, a);
 	assert.deepEqual(ids(matchingTasks(session)), ["a", "b"]);
 	assert.deepEqual(ids(addableTasks(session)), ["b"]);
-	assert.equal(isSelected(session, "a"), true);
+	assert.equal(isJoined(session, "a"), true);
 });
 
 test("标题筛选：关键字、标签、上下文", () => {
@@ -73,12 +72,12 @@ test("加入：按加入顺序进入右栏，左栏消失；重复加入无副�
 	let session = switchTab(createSelectionSession(tasks, dateFields), "title");
 	session = addTask(session, c);
 	session = addTask(session, a);
-	assert.deepEqual(ids(selectedTasks(session)), ["c", "a"]);
+	assert.deepEqual(ids(joinedTasks(session)), ["c", "a"]);
 	assert.deepEqual(ids(addableTasks(session)), ["b"]);
 
 	const again = addTask(session, c);
-	assert.deepEqual(ids(selectedTasks(again)), ["c", "a"]);
-	assert.equal(selectedCount(again), 2);
+	assert.deepEqual(ids(joinedTasks(again)), ["c", "a"]);
+	assert.equal(joinedCount(again), 2);
 });
 
 test("加入全部可见：只加入当前筛选结果中的可加入任务", () => {
@@ -87,47 +86,47 @@ test("加入全部可见：只加入当前筛选结果中的可加入任务", ()
 	assert.deepEqual(ids(addableTasks(session)), ["a", "c"]);
 
 	session = addAllAddable(session);
-	assert.deepEqual(ids(selectedTasks(session)), ["a", "c"]);
+	assert.deepEqual(ids(joinedTasks(session)), ["a", "c"]);
 	assert.deepEqual(addableTasks(session), []);
 
 	// 换查询后只出现新的可加入任务；全选不会重复加入已有任务
 	session = setQuery(session, "");
 	assert.deepEqual(ids(addableTasks(session)), ["b"]);
 	session = addAllAddable(session);
-	assert.deepEqual(ids(selectedTasks(session)), ["a", "c", "b"]);
+	assert.deepEqual(ids(joinedTasks(session)), ["a", "c", "b"]);
 });
 
 test("移除与清空：只作用于报告集合", () => {
 	let session = switchTab(createSelectionSession(tasks, dateFields), "title");
 	session = addTask(addTask(session, a), b);
 	session = removeTask(session, a.id);
-	assert.deepEqual(ids(selectedTasks(session)), ["b"]);
+	assert.deepEqual(ids(joinedTasks(session)), ["b"]);
 	assert.deepEqual(ids(addableTasks(session)), ["a", "c"]);
 
-	session = clearSelected(session);
-	assert.equal(selectedCount(session), 0);
+	session = clearJoined(session);
+	assert.equal(joinedCount(session), 0);
 	assert.deepEqual(ids(addableTasks(session)), ["a", "b", "c"]);
 });
 
 test("筛选转移不改变报告集合：切 Tab / 改区间 / 改查询", () => {
 	let session = createSelectionSession(tasks, dateFields);
 	session = addTask(session, a);
-	assert.deepEqual(ids(selectedTasks(session)), ["a"]);
+	assert.deepEqual(ids(joinedTasks(session)), ["a"]);
 
 	session = switchTab(session, "title");
-	assert.deepEqual(ids(selectedTasks(session)), ["a"]);
+	assert.deepEqual(ids(joinedTasks(session)), ["a"]);
 
 	session = setQuery(session, "beta");
-	assert.deepEqual(ids(selectedTasks(session)), ["a"]);
+	assert.deepEqual(ids(joinedTasks(session)), ["a"]);
 	assert.deepEqual(ids(addableTasks(session)), ["b"]);
 
 	session = switchTab(session, "time");
 	session = setRange(session, april);
-	assert.deepEqual(ids(selectedTasks(session)), ["a"]);
+	assert.deepEqual(ids(joinedTasks(session)), ["a"]);
 	assert.deepEqual(ids(addableTasks(session)), ["c"]);
 
 	session = setRange(session, null);
-	assert.deepEqual(ids(selectedTasks(session)), ["a"]);
+	assert.deepEqual(ids(joinedTasks(session)), ["a"]);
 	assert.deepEqual(addableTasks(session), []);
 });
 
@@ -141,14 +140,14 @@ test("空态原因：未选区间 / 无命中 / 全部已加入", () => {
 	session = setRange(session, april);
 	assert.equal(leftEmptyReason(session), null);
 	session = addAllAddable(session);
-	assert.equal(leftEmptyReason(session), "all-selected");
+	assert.equal(leftEmptyReason(session), "all-joined");
 
 	const title = setQuery(switchTab(createSelectionSession(tasks, dateFields), "title"), "zzz");
 	assert.equal(leftEmptyReason(title), "no-match");
 
 	const titleAll = switchTab(createSelectionSession(tasks, dateFields), "title");
 	assert.equal(leftEmptyReason(titleAll), null);
-	assert.equal(leftEmptyReason(addAllAddable(titleAll)), "all-selected");
+	assert.equal(leftEmptyReason(addAllAddable(titleAll)), "all-joined");
 });
 
 test("归档任务不进入筛选结果", () => {
@@ -165,7 +164,6 @@ test("parsedQuery / isQueryEmpty：解析关键字、标签、上下文", () => 
 		tags: ["work"],
 		contexts: ["home"],
 	});
-	assert.equal(isQueryEmpty(session), false);
-	assert.equal(isQueryEmpty(setQuery(session, "   ")), true);
-	assert.equal(isQueryEmpty(setQuery(session, "#")), true);
+	assert.deepEqual(parsedQuery(setQuery(session, "   ")), { keywords: [], tags: [], contexts: [] });
+	assert.deepEqual(parsedQuery(setQuery(session, "#")), { keywords: [], tags: [], contexts: [] });
 });

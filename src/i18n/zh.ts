@@ -69,10 +69,10 @@ export const zh: Strings = {
 		failureMissingCredentials: "请先在插件设置中填写所选供应商的 Base URL 和 API 密钥",
 		failureGeneric: "生成失败：{{message}}",
 	},
-	taskPicker: {
+	taskSelection: {
 		title: "选择任务",
 		filterTab: "筛选",
-		selectedPane: "已选（{{count}}）",
+		joinedPane: "已加入（{{count}}）",
 		tabTime: "按时间",
 		tabTitle: "按标题",
 		quickThisWeek: "本周",
@@ -88,7 +88,7 @@ export const zh: Strings = {
 		addableCount: "可加入 {{count}} 个",
 		addAll: "全部加入（{{count}}）",
 		addAria: "加入报告：{{title}}",
-		allSelected: "当前筛选结果都已加入报告",
+		allJoined: "当前筛选结果都已加入报告",
 		parseKeywords: "关键字：{{value}}",
 		parseTags: "标签：{{value}}",
 		parseContexts: "上下文：{{value}}",

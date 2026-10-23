@@ -10,7 +10,6 @@
 import {
 	filterTasksByDateRange,
 	filterTasksByTitleQuery,
-	isTitleQueryEmpty,
 	parseTitleQuery,
 	type TitleQuery,
 } from "../core/filter";
@@ -19,15 +18,15 @@ import type { DateField, DateRange, TaskInfo } from "../types";
 export type SelectionTab = "time" | "title";
 
 /** 左栏为空的原因：未选区间 / 无命中 / 命中项都已加入。 */
-export type LeftEmptyReason = "no-range" | "no-match" | "all-selected" | null;
+export type LeftEmptyReason = "no-range" | "no-match" | "all-joined" | null;
 
 /**
  * 会话状态。`tasks` / `dateFields` 是打开弹窗时注入、生命周期内恒定的输入。
- * `selected` 保持加入顺序，供右栏与生成共用。
+ * `joined` 保持加入顺序，供右栏与生成共用。
  */
 export interface SelectionSession {
 	tasks: TaskInfo[];
-	selected: Map<string, TaskInfo>;
+	joined: Map<string, TaskInfo>;
 	tab: SelectionTab;
 	range: DateRange | null;
 	query: string;
@@ -41,7 +40,7 @@ export function createSelectionSession(
 ): SelectionSession {
 	return {
 		tasks: [...tasks],
-		selected: new Map(),
+		joined: new Map(),
 		tab: "time",
 		range: null,
 		query: "",
@@ -52,16 +51,16 @@ export function createSelectionSession(
 // ===== 选择器 =====
 
 /** 右栏：报告集合，按加入顺序。 */
-export function selectedTasks(session: SelectionSession): TaskInfo[] {
-	return Array.from(session.selected.values());
+export function joinedTasks(session: SelectionSession): TaskInfo[] {
+	return Array.from(session.joined.values());
 }
 
-export function selectedCount(session: SelectionSession): number {
-	return session.selected.size;
+export function joinedCount(session: SelectionSession): number {
+	return session.joined.size;
 }
 
-export function isSelected(session: SelectionSession, id: string): boolean {
-	return session.selected.has(id);
+export function isJoined(session: SelectionSession, id: string): boolean {
+	return session.joined.has(id);
 }
 
 /** 当前筛选命中的全部任务（含已加入）。 */
@@ -76,24 +75,19 @@ export function matchingTasks(session: SelectionSession): TaskInfo[] {
 
 /** 左栏：命中且尚未加入。 */
 export function addableTasks(session: SelectionSession): TaskInfo[] {
-	return matchingTasks(session).filter((task) => !session.selected.has(task.id));
+	return matchingTasks(session).filter((task) => !session.joined.has(task.id));
 }
 
 /** 左栏空态原因；有可加入任务时返回 null。 */
 export function leftEmptyReason(session: SelectionSession): LeftEmptyReason {
 	if (session.tab === "time" && session.range === null) return "no-range";
 	if (matchingTasks(session).length === 0) return "no-match";
-	return addableTasks(session).length === 0 ? "all-selected" : null;
+	return addableTasks(session).length === 0 ? "all-joined" : null;
 }
 
 /** 标题查询的解析结果（关键字 / 标签 / 上下文）。 */
 export function parsedQuery(session: SelectionSession): TitleQuery {
 	return parseTitleQuery(session.query);
-}
-
-/** 标题查询是否为空（关键字、标签、上下文三个维度均无条件）。 */
-export function isQueryEmpty(session: SelectionSession): boolean {
-	return isTitleQueryEmpty(parsedQuery(session));
 }
 
 // ===== 具名转移 =====
@@ -115,31 +109,31 @@ export function setQuery(session: SelectionSession, query: string): SelectionSes
 
 /** 加入单个任务；已在报告集合中则原样返回。 */
 export function addTask(session: SelectionSession, task: TaskInfo): SelectionSession {
-	if (session.selected.has(task.id)) return session;
-	const selected = new Map(session.selected);
-	selected.set(task.id, task);
-	return { ...session, selected };
+	if (session.joined.has(task.id)) return session;
+	const joined = new Map(session.joined);
+	joined.set(task.id, task);
+	return { ...session, joined };
 }
 
 /** 加入当前左栏可见的全部可加入任务。 */
 export function addAllAddable(session: SelectionSession): SelectionSession {
 	const addable = addableTasks(session);
 	if (addable.length === 0) return session;
-	const selected = new Map(session.selected);
-	for (const task of addable) selected.set(task.id, task);
-	return { ...session, selected };
+	const joined = new Map(session.joined);
+	for (const task of addable) joined.set(task.id, task);
+	return { ...session, joined };
 }
 
 /** 从报告集合移除单个任务；不存在则原样返回。 */
 export function removeTask(session: SelectionSession, id: string): SelectionSession {
-	if (!session.selected.has(id)) return session;
-	const selected = new Map(session.selected);
-	selected.delete(id);
-	return { ...session, selected };
+	if (!session.joined.has(id)) return session;
+	const joined = new Map(session.joined);
+	joined.delete(id);
+	return { ...session, joined };
 }
 
 /** 清空报告集合。 */
-export function clearSelected(session: SelectionSession): SelectionSession {
-	if (session.selected.size === 0) return session;
-	return { ...session, selected: new Map() };
+export function clearJoined(session: SelectionSession): SelectionSession {
+	if (session.joined.size === 0) return session;
+	return { ...session, joined: new Map() };
 }

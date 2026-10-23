@@ -11,13 +11,13 @@ import {
 	addAllAddable,
 	addTask,
 	addableTasks,
-	clearSelected,
+	clearJoined,
 	createSelectionSession,
 	leftEmptyReason,
 	parsedQuery,
 	removeTask,
-	selectedCount,
-	selectedTasks,
+	joinedCount,
+	joinedTasks,
 	setQuery,
 	setRange,
 	switchTab,
@@ -36,7 +36,7 @@ export interface TaskSelectionViewOptions {
 	lang: UiLanguage;
 }
 
-type MobilePane = "filter" | "selected";
+type MobilePane = "filter" | "joined";
 
 export class TaskSelectionView {
 	private session: SelectionSession | null = null;
@@ -53,7 +53,7 @@ export class TaskSelectionView {
 	private readonly rightTitleEl: HTMLElement;
 	private readonly clearBtn: HTMLButtonElement;
 	private readonly mobileFilterBtn: HTMLButtonElement;
-	private readonly mobileSelectedBtn: HTMLButtonElement;
+	private readonly mobileJoinedBtn: HTMLButtonElement;
 
 	private rangeLabelEl: HTMLElement | null = null;
 	private parseLabelEl: HTMLElement | null = null;
@@ -70,29 +70,29 @@ export class TaskSelectionView {
 
 		const mobileTabs = container.createDiv({ cls: "tah-selection-mobile-tabs" });
 		this.mobileFilterBtn = mobileTabs.createEl("button", {
-			text: t("taskPicker.filterTab"),
+			text: t("taskSelection.filterTab"),
 			cls: "tah-tab-btn",
 		});
-		this.mobileSelectedBtn = mobileTabs.createEl("button", {
-			text: t("taskPicker.selectedPane", { count: 0 }),
+		this.mobileJoinedBtn = mobileTabs.createEl("button", {
+			text: t("taskSelection.joinedPane", { count: 0 }),
 			cls: "tah-tab-btn",
 		});
 		this.mobileFilterBtn.addEventListener("click", () => this.setMobilePane("filter"));
-		this.mobileSelectedBtn.addEventListener("click", () => this.setMobilePane("selected"));
+		this.mobileJoinedBtn.addEventListener("click", () => this.setMobilePane("joined"));
 
 		const layoutEl = container.createDiv({ cls: "tah-selection-layout" });
 
 		this.leftEl = layoutEl.createDiv({ cls: "tah-selection-pane tah-selection-left" });
 		const leftHeader = this.leftEl.createDiv({ cls: "tah-main-header" });
-		leftHeader.createEl("h3", { text: t("taskPicker.title") });
+		leftHeader.createEl("h3", { text: t("taskSelection.title") });
 
 		const tabBar = this.leftEl.createDiv({ cls: "tah-tab-bar tah-picker-tabs" });
 		this.timeTabBtn = tabBar.createEl("button", {
-			text: t("taskPicker.tabTime"),
+			text: t("taskSelection.tabTime"),
 			cls: "tah-tab-btn",
 		});
 		this.titleTabBtn = tabBar.createEl("button", {
-			text: t("taskPicker.tabTitle"),
+			text: t("taskSelection.tabTitle"),
 			cls: "tah-tab-btn",
 		});
 		this.timeTabBtn.addEventListener("click", () => this.changeTab("time"));
@@ -103,7 +103,7 @@ export class TaskSelectionView {
 		this.addableCountEl = actions.createDiv({ cls: "tah-range-label" });
 		this.addAllBtn = actions.createEl("button", {
 			cls: "tah-batch-remove-btn",
-			text: t("taskPicker.addAll", { count: 0 }),
+			text: t("taskSelection.addAll", { count: 0 }),
 		});
 		this.addAllBtn.addEventListener("click", () => this.update(addAllAddable));
 		this.leftListEl = this.leftEl.createDiv({ cls: "tah-task-list tah-selection-list" });
@@ -117,7 +117,7 @@ export class TaskSelectionView {
 			text: t("report.clear"),
 			cls: "tah-batch-remove-btn",
 		});
-		this.clearBtn.addEventListener("click", () => this.update(clearSelected));
+		this.clearBtn.addEventListener("click", () => this.update(clearJoined));
 		this.rightListEl = this.rightEl.createDiv({ cls: "tah-task-list tah-selection-list" });
 
 		this.setMobilePane("filter");
@@ -131,8 +131,8 @@ export class TaskSelectionView {
 	}
 
 	/** 右栏当前集合，供生成报告读取。 */
-	getSelectedTasks(): TaskInfo[] {
-		return this.session ? selectedTasks(this.session) : [];
+	getJoinedTasks(): TaskInfo[] {
+		return this.session ? joinedTasks(this.session) : [];
 	}
 
 	// ===== 状态推进 =====
@@ -161,9 +161,9 @@ export class TaskSelectionView {
 	private setMobilePane(pane: MobilePane): void {
 		this.mobilePane = pane;
 		this.leftEl.toggleClass("tah-selection-pane-hidden", pane !== "filter");
-		this.rightEl.toggleClass("tah-selection-pane-hidden", pane !== "selected");
+		this.rightEl.toggleClass("tah-selection-pane-hidden", pane !== "joined");
 		this.mobileFilterBtn.toggleClass("tah-tab-active", pane === "filter");
-		this.mobileSelectedBtn.toggleClass("tah-tab-active", pane === "selected");
+		this.mobileJoinedBtn.toggleClass("tah-tab-active", pane === "joined");
 	}
 
 	// ===== 渲染 =====
@@ -176,14 +176,14 @@ export class TaskSelectionView {
 	private renderActions(): void {
 		if (!this.session) return;
 		const addable = addableTasks(this.session).length;
-		const selected = selectedCount(this.session);
-		this.addableCountEl.setText(this.options.t("taskPicker.addableCount", { count: addable }));
-		this.addAllBtn.setText(this.options.t("taskPicker.addAll", { count: addable }));
+		const joined = joinedCount(this.session);
+		this.addableCountEl.setText(this.options.t("taskSelection.addableCount", { count: addable }));
+		this.addAllBtn.setText(this.options.t("taskSelection.addAll", { count: addable }));
 		this.addAllBtn.disabled = addable === 0;
-		this.rightTitleEl.setText(this.options.t("report.joinedTasks", { count: selected }));
-		this.clearBtn.disabled = selected === 0;
-		this.mobileSelectedBtn.setText(
-			this.options.t("taskPicker.selectedPane", { count: selected })
+		this.rightTitleEl.setText(this.options.t("report.joinedTasks", { count: joined }));
+		this.clearBtn.disabled = joined === 0;
+		this.mobileJoinedBtn.setText(
+			this.options.t("taskSelection.joinedPane", { count: joined })
 		);
 		this.timeTabBtn.toggleClass("tah-tab-active", this.session.tab === "time");
 		this.titleTabBtn.toggleClass("tah-tab-active", this.session.tab === "title");
@@ -211,12 +211,10 @@ export class TaskSelectionView {
 			const item = this.leftListEl.createDiv({ cls: "tah-task-item" });
 			const checkbox = item.createEl("input", { type: "checkbox" });
 			checkbox.addClass("tah-task-checkbox");
-			checkbox.setAttr("aria-label", this.options.t("taskPicker.addAria", { title: task.title }));
+			checkbox.setAttr("aria-label", this.options.t("taskSelection.addAria", { title: task.title }));
 			checkbox.addEventListener("change", () => this.update((session) => addTask(session, task)));
 
-			const info = item.createDiv({ cls: "tah-task-info" });
-			info.createDiv({ cls: "tah-task-title", text: task.title });
-			renderTaskMeta(info, task, this.options.t);
+			this.renderTaskInfo(item, task);
 		}
 	}
 
@@ -224,7 +222,7 @@ export class TaskSelectionView {
 		this.rightListEl.empty();
 		if (!this.session) return;
 
-		const tasks = selectedTasks(this.session);
+		const tasks = joinedTasks(this.session);
 		if (tasks.length === 0) {
 			this.rightListEl.createDiv({
 				text: this.options.t("report.empty"),
@@ -235,9 +233,7 @@ export class TaskSelectionView {
 
 		for (const task of tasks) {
 			const item = this.rightListEl.createDiv({ cls: "tah-task-item" });
-			const info = item.createDiv({ cls: "tah-task-info" });
-			info.createDiv({ cls: "tah-task-title", text: task.title });
-			renderTaskMeta(info, task, this.options.t);
+			this.renderTaskInfo(item, task);
 
 			const removeBtn = item.createEl("button", { text: "×", cls: "tah-task-remove" });
 			removeBtn.setAttr("aria-label", this.options.t("report.removeAria"));
@@ -247,14 +243,20 @@ export class TaskSelectionView {
 		}
 	}
 
+	private renderTaskInfo(parent: HTMLElement, task: TaskInfo): void {
+		const info = parent.createDiv({ cls: "tah-task-info" });
+		info.createDiv({ cls: "tah-task-title", text: task.title });
+		renderTaskMeta(info, task, this.options.t);
+	}
+
 	private emptyText(reason: Exclude<ReturnType<typeof leftEmptyReason>, null>): string {
 		switch (reason) {
 			case "no-range":
-				return this.options.t("taskPicker.emptyPickRange");
+				return this.options.t("taskSelection.emptyPickRange");
 			case "no-match":
-				return this.options.t("taskPicker.emptyNoTasks");
-			case "all-selected":
-				return this.options.t("taskPicker.allSelected");
+				return this.options.t("taskSelection.emptyNoTasks");
+			case "all-joined":
+				return this.options.t("taskSelection.allJoined");
 		}
 	}
 
@@ -281,13 +283,13 @@ export class TaskSelectionView {
 		const quickRow = this.filterEl.createDiv({ cls: "tah-quick-row" });
 		const quickButtons: Array<{ label: string; range: DateRange | null }> = [
 			{
-				label: t("taskPicker.quickThisWeek"),
+				label: t("taskSelection.quickThisWeek"),
 				range: getWeekRange(new Date(), this.options.weekStartsOnMonday),
 			},
-			{ label: t("taskPicker.quickThisMonth"), range: getMonthRange(new Date()) },
-			{ label: t("taskPicker.quickThisQuarter"), range: getQuarterRange(new Date()) },
-			{ label: t("taskPicker.quickThisYear"), range: getYearRange(new Date()) },
-			{ label: t("taskPicker.clearRange"), range: null },
+			{ label: t("taskSelection.quickThisMonth"), range: getMonthRange(new Date()) },
+			{ label: t("taskSelection.quickThisQuarter"), range: getQuarterRange(new Date()) },
+			{ label: t("taskSelection.quickThisYear"), range: getYearRange(new Date()) },
+			{ label: t("taskSelection.clearRange"), range: null },
 		];
 		for (const btn of quickButtons) {
 			const el = quickRow.createEl("button", { text: btn.label, cls: "tah-quick-btn" });
@@ -312,11 +314,11 @@ export class TaskSelectionView {
 	private updateRangeLabel(): void {
 		if (!this.rangeLabelEl || !this.session) return;
 		if (this.session.range === null) {
-			this.rangeLabelEl.setText(this.options.t("taskPicker.noDate"));
+			this.rangeLabelEl.setText(this.options.t("taskSelection.noDate"));
 			return;
 		}
 		this.rangeLabelEl.setText(
-			this.options.t("taskPicker.currentFilter", {
+			this.options.t("taskSelection.currentFilter", {
 				start: this.session.range.start,
 				end: this.session.range.end,
 			})
@@ -349,7 +351,7 @@ export class TaskSelectionView {
 		const searchRow = this.filterEl.createDiv({ cls: "tah-search-row" });
 		this.searchInput = searchRow.createEl("input", {
 			type: "text",
-			placeholder: t("taskPicker.searchPlaceholder"),
+			placeholder: t("taskSelection.searchPlaceholder"),
 			cls: "tah-search-input",
 		});
 		this.searchInput.value = this.session.query;
@@ -360,9 +362,9 @@ export class TaskSelectionView {
 		this.clearSearchBtn = searchRow.createEl("button", {
 			cls: "tah-search-clear",
 			text: "×",
-			attr: { "aria-label": t("taskPicker.clearSearch") },
+			attr: { "aria-label": t("taskSelection.clearSearch") },
 		});
-		this.clearSearchBtn.setAttr("title", t("taskPicker.clearSearch"));
+		this.clearSearchBtn.setAttr("title", t("taskSelection.clearSearch"));
 		this.clearSearchBtn.addEventListener("click", () => {
 			this.applyQuery("");
 			this.searchInput?.focus();
@@ -378,12 +380,12 @@ export class TaskSelectionView {
 		const t = this.options.t;
 		const parts: string[] = [];
 		if (query.keywords.length > 0)
-			parts.push(t("taskPicker.parseKeywords", { value: query.keywords.join(" ") }));
+			parts.push(t("taskSelection.parseKeywords", { value: query.keywords.join(" ") }));
 		if (query.tags.length > 0)
-			parts.push(t("taskPicker.parseTags", { value: query.tags.map((tag) => `#${tag}`).join(" ") }));
+			parts.push(t("taskSelection.parseTags", { value: query.tags.map((tag) => `#${tag}`).join(" ") }));
 		if (query.contexts.length > 0)
 			parts.push(
-				t("taskPicker.parseContexts", { value: query.contexts.map((c) => `@${c}`).join(" ") })
+				t("taskSelection.parseContexts", { value: query.contexts.map((c) => `@${c}`).join(" ") })
 			);
 		if (this.parseLabelEl) {
 			this.parseLabelEl.setText(parts.length > 0 ? parts.join("  ·  ") : "");

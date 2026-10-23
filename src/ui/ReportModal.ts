@@ -97,8 +97,8 @@ export class ReportModal extends Modal {
 	}
 
 	/** 右栏当前集合，即报告任务集合 */
-	private getSelectedTasks(): TaskInfo[] {
-		return this.selectionView?.getSelectedTasks() ?? [];
+	private getJoinedTasks(): TaskInfo[] {
+		return this.selectionView?.getJoinedTasks() ?? [];
 	}
 
 	// ===== 底部 =====
@@ -183,7 +183,7 @@ export class ReportModal extends Modal {
 			}));
 
 			const result = await generate({
-				tasks: this.getSelectedTasks(),
+				tasks: this.getJoinedTasks(),
 				templateId: this.selectedTemplateId,
 				extraRequirements: this.extraRequirementsInput?.value,
 			});

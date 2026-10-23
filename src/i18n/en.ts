@@ -71,10 +71,10 @@ export const en = {
 			"Fill in the Base URL and API key of the selected provider in the plugin settings first",
 		failureGeneric: "Generation failed: {{message}}",
 	},
-	taskPicker: {
+	taskSelection: {
 		title: "Select tasks",
 		filterTab: "Filter",
-		selectedPane: "Selected ({{count}})",
+		joinedPane: "Joined ({{count}})",
 		tabTime: "By date",
 		tabTitle: "By title",
 		quickThisWeek: "This week",
@@ -90,7 +90,7 @@ export const en = {
 		addableCount: "{{count}} addable",
 		addAll: "Add all ({{count}})",
 		addAria: "Add to report: {{title}}",
-		allSelected: "All filtered results are already in the report",
+		allJoined: "All filtered results are already in the report",
 		parseKeywords: "Keywords: {{value}}",
 		parseTags: "Tags: {{value}}",
 		parseContexts: "Contexts: {{value}}",
