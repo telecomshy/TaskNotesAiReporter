@@ -57,7 +57,6 @@ export class TaskSelectionView {
 
 	private rangeLabelEl: HTMLElement | null = null;
 	private calendarToggleBtn: HTMLButtonElement | null = null;
-	private calendarOpen = false;
 	private parseLabelEl: HTMLElement | null = null;
 	private searchInput: HTMLInputElement | null = null;
 	private clearSearchBtn: HTMLButtonElement | null = null;
@@ -104,7 +103,7 @@ export class TaskSelectionView {
 		const actions = this.leftEl.createDiv({ cls: "tah-picker-actions tah-selection-actions" });
 		this.addableCountEl = actions.createDiv({ cls: "tah-range-label" });
 		this.addAllBtn = actions.createEl("button", {
-			cls: "tah-batch-remove-btn",
+			cls: "tah-secondary-btn",
 			text: t("taskSelection.addAll", { count: 0 }),
 		});
 		this.addAllBtn.addEventListener("click", () => this.update(addAllAddable));
@@ -117,7 +116,7 @@ export class TaskSelectionView {
 		});
 		this.clearBtn = rightHeader.createEl("button", {
 			text: t("report.clear"),
-			cls: "tah-batch-remove-btn",
+			cls: "tah-secondary-btn",
 		});
 		this.clearBtn.addEventListener("click", () => this.update(clearJoined));
 		this.rightListEl = this.rightEl.createDiv({ cls: "tah-task-list tah-selection-list" });
@@ -313,27 +312,35 @@ export class TaskSelectionView {
 
 		this.calendarToggleBtn = rangeRow.createEl("button", {
 			text: t("taskSelection.customRange"),
-			cls: "tah-batch-remove-btn",
+			cls: "tah-secondary-btn",
 		});
+		this.calendarToggleBtn.setAttr("aria-controls", "tah-calendar-panel");
 		this.calendarToggleBtn.addEventListener("click", () => {
-			this.setCalendarOpen(!this.calendarOpen);
+			this.setCalendarOpen(!this.isCalendarOpen());
 		});
 
 		this.calendarContainer = this.filterEl.createDiv({ cls: "tah-calendar-container" });
-		this.renderCalendar();
+		this.calendarContainer.id = "tah-calendar-panel";
 		this.setCalendarOpen(false);
+		this.renderCalendar();
 	}
 
 	/** 展开 / 收起自定义日期面板；快捷按钮始终可见。 */
 	private setCalendarOpen(open: boolean): void {
-		this.calendarOpen = open;
 		this.calendarContainer?.toggleClass("tah-hidden", !open);
+		this.calendarContainer?.setAttr("aria-hidden", String(!open));
 		if (this.calendarToggleBtn) {
 			this.calendarToggleBtn.setText(
 				this.options.t(open ? "taskSelection.hideCalendar" : "taskSelection.customRange")
 			);
 			this.calendarToggleBtn.setAttr("aria-expanded", String(open));
 		}
+	}
+
+	private isCalendarOpen(): boolean {
+		return this.calendarContainer
+			? !this.calendarContainer.classList.contains("tah-hidden")
+			: false;
 	}
 
 	private updateRangeLabel(): void {
@@ -359,12 +366,12 @@ export class TaskSelectionView {
 			this.options.t,
 			this.options.lang,
 			this.session.range,
-			(range) => {
+			(range, complete) => {
 				if (!range || !this.session) return;
 				this.session = setRange(this.session, range);
 				this.updateRangeLabel();
-				// 区间选完即收起，把高度还给任务列表；想改再点「自定义日期」
-				this.setCalendarOpen(false);
+				// 两次点击选完区间才收起；单击只是单日区间，可能还在选起点
+				if (complete) this.setCalendarOpen(false);
 				this.renderAll();
 			}
 		);

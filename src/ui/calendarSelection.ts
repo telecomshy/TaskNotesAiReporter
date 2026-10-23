@@ -39,6 +39,11 @@ export function clearRange(_selection: CalendarSelection): CalendarSelection {
 	return { start: null, end: null };
 }
 
+/** 是否已完成两次点击的区间选择；单击得到的单日区间尚未完成。 */
+export function isRangeComplete(selection: CalendarSelection): boolean {
+	return selection.end !== null;
+}
+
 /** 归一化区间：仅起点时为单日区间，反向时升序；无起点时为 null。 */
 export function rangeOf(selection: CalendarSelection): DateRange | null {
 	if (selection.start === null) return null;

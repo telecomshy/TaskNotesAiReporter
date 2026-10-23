@@ -504,10 +504,9 @@
 	overflow-x: hidden;
 }
 
-/* 生成报告弹窗：固定高度，任务列表在内部滚动，不随任务数量伸缩 */
-.modal.tah-modal-root .tah-modal {
+/* 生成报告弹窗：加载完成后固定高度，任务列表在内部滚动，不随任务数量伸缩 */
+.modal.tah-modal-root .tah-modal.tah-report-ready {
 	height: min(78vh, 700px);
-	max-height: min(78vh, 700px);
 }
 
 /* 选择任务区：左筛选、右报告集合 */
@@ -708,13 +707,13 @@
 }
 
 /* 任务列表 */
-.tah-batch-remove-btn {
+.tah-secondary-btn {
 	padding: 0.2rem 0.6rem;
 	font-size: 0.8rem;
 	cursor: pointer;
 }
 
-.tah-batch-remove-btn:disabled {
+.tah-secondary-btn:disabled {
 	opacity: 0.5;
 	cursor: not-allowed;
 }

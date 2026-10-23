@@ -72,6 +72,8 @@ export class ReportModal extends Modal {
 			return;
 		}
 
+		// 任务就绪后锁定弹窗高度；加载 / 来源缺失态仍按内容自适应
+		this.contentEl.addClass("tah-report-ready");
 		this.bodyEl.empty();
 		this.selectionView = new TaskSelectionView({
 			container: this.bodyEl,

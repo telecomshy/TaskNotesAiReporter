@@ -15,6 +15,7 @@ import {
 	containsDay,
 	emptySelection,
 	isEdgeDay,
+	isRangeComplete,
 	rangeOf,
 	selectionFromRange,
 	type CalendarSelection,
@@ -24,7 +25,7 @@ export class CalendarWidget {
 	private viewYear: number;
 	private viewMonth: number; // 0-based
 	private selection: CalendarSelection;
-	private readonly onChange: (range: DateRange | null) => void;
+	private readonly onChange: (range: DateRange | null, complete: boolean) => void;
 	private readonly weekStartsOnMonday: boolean;
 	private readonly t: Translator;
 	private readonly language: UiLanguage;
@@ -36,7 +37,7 @@ export class CalendarWidget {
 		t: Translator,
 		language: UiLanguage,
 		initialRange: DateRange | null,
-		onChange: (range: DateRange | null) => void
+		onChange: (range: DateRange | null, complete: boolean) => void
 	) {
 		this.containerEl = containerEl;
 		this.weekStartsOnMonday = weekStartsOnMonday;
@@ -71,7 +72,8 @@ export class CalendarWidget {
 	private handleDayClick(date: Date): void {
 		this.selection = clickDay(this.selection, toDateString(date));
 		this.render();
-		this.onChange(rangeOf(this.selection));
+		// 单击只是单日区间（可能是区间选择的起点），两次点击才算完整区间
+		this.onChange(rangeOf(this.selection), isRangeComplete(this.selection));
 	}
 
 	/** 切换到上一月/下一月。只移动显示月份，不动选择。 */
