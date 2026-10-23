@@ -5,8 +5,10 @@
  * 弹窗（TaskPickerModal）只负责把会话渲染成 DOM，所有选择规则都住在这里。
  *
  * 勾选集合（`desiredIds`）表达「确认后希望保留在报告集合中的任务」：已加入任务初始勾选，
- * 取消勾选一个可见的已加入任务，确认后即从报告集合移除。
- * 确认只提交当前可见任务的差异——筛选之外的任务不受影响。
+ * 取消勾选一个已加入任务，确认后即从报告集合移除。
+ * 勾选只由用户操作改变：切 Tab / 改查询只改变呈现；改时间区间只追加当前可见的可加入任务
+ * （时间页的批量挑取），从不取消或重勾已加入任务。
+ * 确认提交 `desiredIds` 相对「已加入」的差异——跨筛选累计的勾选一并生效。
  */
 
 import {
@@ -38,11 +40,11 @@ export interface PickerSession {
 	dateFields: readonly DateField[];
 }
 
-/** 确认时要提交的差异（只覆盖当前可见任务）。 */
+/** 确认时要提交的差异：勾选集合相对「已加入」的差集。 */
 export interface PickerChanges {
-	/** 当前可见、勾选、且尚未加入的任务，按可见顺序。 */
+	/** 勾选、且尚未加入的任务，按任务顺序。 */
 	addedTasks: TaskInfo[];
-	/** 当前可见、未勾选、且已加入的任务 id。 */
+	/** 未勾选、且已加入的任务 id。 */
 	removeIds: string[];
 }
 
@@ -92,13 +94,13 @@ export function visibleTasks(session: PickerSession): TaskInfo[] {
 }
 
 /**
- * 当前待提交的差异：只检查当前可见任务。
- * 筛选之外的已加入任务既不加入也不移除。
+ * 当前待提交的差异：勾选集合相对「已加入」的差集。
+ * 筛选只影响呈现，因此筛选之外的勾选 / 取消也是用户意图，一并提交。
  */
 export function pendingChanges(session: PickerSession): PickerChanges {
 	const addedTasks: TaskInfo[] = [];
 	const removeIds: string[] = [];
-	for (const task of visibleTasks(session)) {
+	for (const task of session.tasks) {
 		const joined = session.candidateIds.has(task.id);
 		const desired = session.desiredIds.has(task.id);
 		if (desired && !joined) addedTasks.push(task);
@@ -148,22 +150,28 @@ export function selectAllState(session: PickerSession): SelectAllState {
 
 // ===== 具名转移 =====
 
-/** 切换 Tab，并按 Tab 默认重设勾选（时间页全选可见新增；标题页只保留已加入）。 */
+/** 切换 Tab：只改呈现，不改变勾选。 */
 export function switchTab(session: PickerSession, tab: PickerTab): PickerSession {
-	const next = { ...session, tab };
-	return { ...next, desiredIds: defaultSelection(next) };
+	return { ...session, tab };
 }
 
-/** 改时间区间，重算可见并全选可见新增。 */
+/**
+ * 改时间区间：保留既有勾选；可见的可加入任务按时间页规则自动勾选。
+ * 已加入任务不因区间变化被重新勾上（取消只能是用户操作）。
+ */
 export function setRange(session: PickerSession, range: DateRange | null): PickerSession {
 	const next = { ...session, range };
-	return { ...next, desiredIds: defaultSelection(next) };
+	if (next.tab !== "time") return next;
+	const desired = new Set(next.desiredIds);
+	for (const task of visibleTasks(next)) {
+		if (!next.candidateIds.has(task.id)) desired.add(task.id);
+	}
+	return { ...next, desiredIds: desired };
 }
 
-/** 改标题查询，重算可见；保留已加入勾选，清空未提交的新增勾选。 */
+/** 改标题查询：只改呈现，不改变勾选。 */
 export function setQuery(session: PickerSession, query: string): PickerSession {
-	const next = { ...session, query };
-	return { ...next, desiredIds: defaultSelection(next) };
+	return { ...session, query };
 }
 
 /** 勾选 / 取消单个任务（`id` 是任务标识，缝外不透明）。 */
@@ -194,18 +202,4 @@ export function clearSelection(session: PickerSession): PickerSession {
 /** 当前可见任务中是否还有勾选项（用于「清空选择」的禁用态）。 */
 export function hasDesiredVisible(session: PickerSession): boolean {
 	return visibleTasks(session).some((task) => session.desiredIds.has(task.id));
-}
-
-// ===== 内部 =====
-
-/**
- * 切 Tab / 改筛选后的默认勾选：已加入任务始终勾选；
- * 时间页额外全选可见的新任务，标题页只保留已加入。
- */
-function defaultSelection(session: PickerSession): Set<string> {
-	const desired = new Set(session.candidateIds);
-	if (session.tab === "time") {
-		for (const task of visibleTasks(session)) desired.add(task.id);
-	}
-	return desired;
 }

@@ -2,7 +2,7 @@
  * 选择任务窗口（任务集合编辑器）。
  * 分 Tab：按时间 / 按标题。两个 Tab 都是「筛选 → 勾选 → 应用更改」。
  * 按当前筛选呈现任务；已加入任务默认勾选，取消勾选并确认会将其从主列表移除。
- * 确认只提交当前可见任务的差异，筛选之外的任务不受影响。
+ * 筛选只改变呈现，不改变勾选；确认提交勾选集合相对已加入的差异。
  * 本类退化为渲染器：会话状态（Tab / 区间 / 查询 / 勾选）由 pickerSession 拥有。
  */
 
@@ -192,8 +192,30 @@ export class TaskPickerModal extends Modal {
 		});
 		this.searchInput.addClass("tah-search-input");
 		this.searchInput.value = this.session.query;
+
+		// 一键删除整个搜索词；只改查询、不动勾选
+		const clearSearchBtn = searchRow.createEl("button", {
+			cls: "tah-search-clear",
+			text: "×",
+			attr: { "aria-label": this.t("taskPicker.clearSearch") },
+		});
+		clearSearchBtn.setAttr("title", this.t("taskPicker.clearSearch"));
+		const updateClearSearch = (): void => {
+			clearSearchBtn.toggleClass("tah-hidden", this.searchInput.value === "");
+		};
+		updateClearSearch();
+
+		clearSearchBtn.addEventListener("click", () => {
+			this.searchInput.value = "";
+			this.session = setQuery(this.session, "");
+			updateClearSearch();
+			this.refresh();
+			this.searchInput.focus();
+		});
+
 		this.searchInput.addEventListener("input", () => {
 			this.session = setQuery(this.session, this.searchInput.value);
+			updateClearSearch();
 			this.refresh();
 		});
 

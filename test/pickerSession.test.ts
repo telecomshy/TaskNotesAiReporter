@@ -83,13 +83,13 @@ test("标题页默认只勾选已加入任务，不自动勾选新任务", () =>
 	assert.deepEqual(sorted(session.desiredIds), ["b"]);
 });
 
-test("switchTab：时间页全选可见新增，标题页保留已加入", () => {
+test("switchTab：只切 Tab，不改变勾选", () => {
 	const timed = setRange(createSession(tasks, dateFields, new Set(["b"])), march);
 	assert.deepEqual(sorted(timed.desiredIds), ["a", "b"]);
 
 	const title = switchTab(timed, "title");
 	assert.equal(title.tab, "title");
-	assert.deepEqual(sorted(title.desiredIds), ["b"]);
+	assert.deepEqual(sorted(title.desiredIds), ["a", "b"]);
 	assert.deepEqual(ids(visibleTasks(title)), ["a", "b", "c"]);
 
 	const backToTime = switchTab(title, "time");
@@ -97,17 +97,62 @@ test("switchTab：时间页全选可见新增，标题页保留已加入", () =>
 	assert.deepEqual(sorted(backToTime.desiredIds), ["a", "b"]);
 });
 
-test("setQuery：保留已加入勾选，清空未提交的新增勾选", () => {
+test("改时间区间：不取消、也不重新勾选已加入任务", () => {
+	const session = setRange(createSession(tasks, dateFields, new Set(["a"])), march);
+	const off = toggle(session, "a");
+
+	const april: DateRange = { start: "2024-04-01", end: "2024-04-30" };
+	const next = setRange(off, april);
+	// 手动取消的已加入任务不被区间变化重新勾上
+	assert.equal(next.desiredIds.has("a"), false);
+	// 新区间内的可加入任务仍按时间页规则自动勾选
+	assert.equal(next.desiredIds.has("c"), true);
+	assert.deepEqual(sorted(next.desiredIds), ["b", "c"]);
+});
+
+test("setQuery：改搜索词不改变勾选（新增与已加入都保留）", () => {
 	let session = switchTab(createSession(tasks, dateFields, new Set(["b"])), "title");
 	session = toggle(session, "a");
 	assert.deepEqual(sorted(session.desiredIds), ["a", "b"]);
 
 	const byKeyword = setQuery(session, "alpha");
-	assert.deepEqual(sorted(byKeyword.desiredIds), ["b"]);
+	assert.deepEqual(sorted(byKeyword.desiredIds), ["a", "b"]);
 	assert.deepEqual(ids(visibleTasks(byKeyword)), ["a"]);
 
 	const byTag = setQuery(session, "#work");
 	assert.deepEqual(ids(visibleTasks(byTag)), ["a", "c"]);
+	assert.deepEqual(sorted(byTag.desiredIds), ["a", "b"]);
+
+	// 「清除搜索词」按钮：查询清空，勾选不变
+	const cleared = setQuery(byTag, "");
+	assert.equal(isQueryEmpty(cleared), true);
+	assert.deepEqual(ids(visibleTasks(cleared)), ["a", "b", "c"]);
+	assert.deepEqual(sorted(cleared.desiredIds), ["a", "b"]);
+});
+
+test("改搜索词：先前勾选的搜索结果保持勾选，确认时一并加入", () => {
+	let session = switchTab(createSession(tasks, dateFields, new Set()), "title");
+	session = setQuery(session, "alpha");
+	session = toggle(session, "a");
+
+	session = setQuery(session, "beta");
+	session = toggle(session, "b");
+
+	const changes = pendingChanges(session);
+	assert.deepEqual(ids(changes.addedTasks), ["a", "b"]);
+	assert.deepEqual(changes.removeIds, []);
+	assert.deepEqual(summarizeChanges(changes), { added: 2, removed: 0, isEmpty: false });
+});
+
+test("改搜索词：手动取消的已加入任务保持取消", () => {
+	let session = switchTab(createSession(tasks, dateFields, new Set(["b"])), "title");
+	session = toggle(session, "b");
+	assert.deepEqual(pendingChanges(session).removeIds, ["b"]);
+
+	const other = setQuery(session, "alpha");
+	assert.deepEqual(sorted(other.desiredIds), []);
+	assert.equal(other.desiredIds.has("b"), false);
+	assert.deepEqual(pendingChanges(other).removeIds, ["b"]);
 });
 
 test("pendingChanges：无变化时为空", () => {
@@ -140,7 +185,7 @@ test("pendingChanges：同时新增与移除", () => {
 	assert.deepEqual(changes.removeIds, ["b"]);
 });
 
-test("pendingChanges：只提交当前可见任务的差异", () => {
+test("pendingChanges：只收集未勾选的已加入任务作为移除", () => {
 	const timed = setRange(createSession(tasks, dateFields, new Set(["a", "c"])), march);
 	assert.deepEqual(sorted(timed.desiredIds), ["a", "b", "c"]);
 	assert.deepEqual(ids(visibleTasks(timed)), ["a", "b"]);
@@ -150,7 +195,7 @@ test("pendingChanges：只提交当前可见任务的差异", () => {
 	const changes = pendingChanges(session);
 	assert.deepEqual(changes.addedTasks, []);
 	assert.deepEqual(changes.removeIds, ["a"]);
-	// 筛选外的已加入任务保持勾选，不参与本次差异
+	// 未触碰的已加入任务保持勾选，不参与本次差异
 	assert.equal(session.desiredIds.has("c"), true);
 });
 
@@ -317,14 +362,14 @@ test("连续转移序列", () => {
 	assert.deepEqual(sorted(session.desiredIds), ["a", "b"]);
 
 	session = switchTab(session, "title");
-	assert.deepEqual(sorted(session.desiredIds), ["b"]);
+	assert.deepEqual(sorted(session.desiredIds), ["a", "b"]);
 
 	session = setQuery(session, "#work");
 	assert.deepEqual(ids(visibleTasks(session)), ["a", "c"]);
 
 	session = toggle(session, "a");
-	assert.deepEqual(sorted(session.desiredIds), ["a", "b"]);
-	assert.deepEqual(ids(pendingChanges(session).addedTasks), ["a"]);
+	assert.deepEqual(sorted(session.desiredIds), ["b"]);
+	assert.deepEqual(ids(pendingChanges(session).addedTasks), []);
 
 	session = clearSelection(session);
 	assert.deepEqual(sorted(session.desiredIds), ["b"]);

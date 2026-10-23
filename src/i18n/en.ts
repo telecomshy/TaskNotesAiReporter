@@ -87,6 +87,7 @@ export const en = {
 		allTasks: "All tasks ({{count}})",
 		searchResult: "Search \"{{query}}\" ({{count}} matches)",
 		searchPlaceholder: "keyword #tag @context (space-separated)…",
+		clearSearch: "Clear search",
 
 		selectAll: "Select all",
 		parseKeywords: "Keywords: {{value}}",

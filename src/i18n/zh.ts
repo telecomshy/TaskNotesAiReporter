@@ -85,6 +85,7 @@ export const zh: Strings = {
 		allTasks: "全部任务（共 {{count}} 个）",
 		searchResult: "搜索「{{query}}」（匹配 {{count}} 个）",
 		searchPlaceholder: "关键字 #标签 @上下文（空格分隔）…",
+		clearSearch: "清除搜索词",
 
 		selectAll: "全选",
 		parseKeywords: "关键字：{{value}}",
