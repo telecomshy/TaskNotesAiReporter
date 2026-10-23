@@ -6,7 +6,7 @@
  */
 
 import { CalendarWidget } from "./Calendar";
-import { calendarInitialRange } from "./calendarSelection";
+import { customSelectionRange } from "./calendarSelection";
 import { renderTaskMeta } from "./taskMeta";
 import {
 	addAllAddable,
@@ -306,7 +306,7 @@ export class TaskSelectionView {
 				this.rangeSource = btn.range ? "preset" : null;
 				this.session = setRange(this.session, btn.range);
 				// 快捷周期永远不预选自定义日历
-				this.renderCalendar(null);
+				this.renderCalendar(customSelectionRange(this.session.range, false));
 				this.updateRangeLabel();
 				this.setCalendarOpen(false);
 				this.renderAll();
@@ -323,15 +323,33 @@ export class TaskSelectionView {
 		});
 		this.calendarToggleBtn.setAttr("aria-controls", "tah-calendar-panel");
 		this.calendarToggleBtn.addEventListener("click", () => {
-			this.setCalendarOpen(!this.isCalendarOpen());
+			const open = !this.isCalendarOpen();
+			if (open) this.beginCustomSelection();
+			this.setCalendarOpen(open);
 		});
 
 		this.calendarContainer = this.filterEl.createDiv({ cls: "tah-calendar-container" });
 		this.calendarContainer.id = "tah-calendar-panel";
 		this.setCalendarOpen(false);
 		this.renderCalendar(
-			calendarInitialRange(this.session.range, this.rangeSource === "custom")
+			customSelectionRange(this.session.range, this.rangeSource === "custom")
 		);
+	}
+
+	/**
+	 * 打开自定义选择：来自周期快捷按钮的区间不再占用任务列表；
+	 * 自定义来源的区间保留，避免重复挑选。
+	 */
+	private beginCustomSelection(): void {
+		if (!this.session) return;
+		const nextRange = customSelectionRange(this.session.range, this.rangeSource === "custom");
+		if (nextRange === this.session.range) return;
+
+		this.session = setRange(this.session, nextRange);
+		this.rangeSource = null;
+		this.calendar?.clearRange();
+		this.updateRangeLabel();
+		this.renderAll();
 	}
 
 	/** 展开 / 收起自定义日期面板；快捷按钮始终可见。 */

@@ -45,10 +45,11 @@ export function isRangeComplete(selection: CalendarSelection): boolean {
 }
 
 /**
- * 自定义日历打开时的初值。
- * 只有当前区间来自自定义选择时才回填；周期快捷按钮的区间不回填，避免误以为已选。
+ * 打开自定义选择时使用的区间。
+ * 只有当前区间来自自定义选择时才保留；周期快捷区间清空——
+ * 日历与任务列表共用这个值，避免「日历空白但列表仍是旧周期」。
  */
-export function calendarInitialRange(
+export function customSelectionRange(
 	activeRange: DateRange | null,
 	fromCustomSelection: boolean
 ): DateRange | null {
