@@ -2,7 +2,7 @@
  * 生成报告主弹窗里的「选择任务」区：左栏筛选结果，右栏报告集合。
  *
  * 本类是渲染器 + 交互接线：选择规则由 selectionSession 拥有。
- * 左栏勾选即加入右栏并从左侧消失；右栏是唯一的移除入口。
+ * 点击左栏任务即加入右栏并从左侧消失；右栏是唯一的移除入口。
  */
 
 import { CalendarWidget } from "./Calendar";
@@ -23,6 +23,7 @@ import {
 	joinedTasks,
 	setQuery,
 	switchTab,
+	type RangePick,
 	type SelectionSession,
 	type SelectionTab,
 } from "./selectionSession";
@@ -59,6 +60,7 @@ export class TaskSelectionView {
 
 	private rangeLabelEl: HTMLElement | null = null;
 	private calendarToggleBtn: HTMLButtonElement | null = null;
+	private clearRangeBtn: HTMLButtonElement | null = null;
 	private parseLabelEl: HTMLElement | null = null;
 	private searchInput: HTMLInputElement | null = null;
 	private clearSearchBtn: HTMLButtonElement | null = null;
@@ -210,14 +212,32 @@ export class TaskSelectionView {
 			return;
 		}
 
-		for (const task of addableTasks(this.session)) {
-			const item = this.leftListEl.createDiv({ cls: "tah-task-item" });
-			const checkbox = item.createEl("input", { type: "checkbox" });
-			checkbox.addClass("tah-task-checkbox");
-			checkbox.setAttr("aria-label", this.options.t("taskSelection.addAria", { title: task.title }));
-			checkbox.addEventListener("change", () => this.update((session) => addTask(session, task)));
+		const addable = addableTasks(this.session);
+		for (const task of addable) {
+			const item = this.leftListEl.createDiv({ cls: "tah-task-item tah-task-addable" });
+			item.setAttr("role", "button");
+			item.setAttr("tabindex", "0");
+			item.setAttr("aria-label", this.options.t("taskSelection.addAria", { title: task.title }));
+
+			// 键盘加入后把焦点交给同位置的下一条，避免焦点落回页面开头
+			const add = (refocus: boolean): void => {
+				const index = addable.indexOf(task);
+				this.update((session) => addTask(session, task));
+				if (!refocus) return;
+				const rows = this.leftListEl.querySelectorAll<HTMLElement>(".tah-task-addable");
+				if (rows.length === 0) return;
+				rows[Math.min(index, rows.length - 1)]?.focus();
+			};
+			item.addEventListener("click", () => add(false));
+			item.addEventListener("keydown", (event) => {
+				if (event.key !== "Enter" && event.key !== " ") return;
+				event.preventDefault();
+				add(true);
+			});
 
 			this.renderTaskInfo(item, task);
+			const hint = item.createSpan({ cls: "tah-task-add-hint", text: "＋" });
+			hint.setAttr("aria-hidden", "true");
 		}
 	}
 
@@ -271,6 +291,7 @@ export class TaskSelectionView {
 		this.calendarContainer = null;
 		this.rangeLabelEl = null;
 		this.calendarToggleBtn = null;
+		this.clearRangeBtn = null;
 		this.parseLabelEl = null;
 		this.searchInput = null;
 		this.clearSearchBtn = null;
@@ -285,7 +306,7 @@ export class TaskSelectionView {
 		const t = this.options.t;
 
 		const quickRow = this.filterEl.createDiv({ cls: "tah-quick-row" });
-		const quickButtons: Array<{ label: string; range: DateRange | null }> = [
+		const quickButtons: Array<{ label: string; range: DateRange }> = [
 			{
 				label: t("taskSelection.quickThisWeek"),
 				range: getWeekRange(new Date(), this.options.weekStartsOnMonday),
@@ -293,31 +314,18 @@ export class TaskSelectionView {
 			{ label: t("taskSelection.quickThisMonth"), range: getMonthRange(new Date()) },
 			{ label: t("taskSelection.quickThisQuarter"), range: getQuarterRange(new Date()) },
 			{ label: t("taskSelection.quickThisYear"), range: getYearRange(new Date()) },
-			{ label: t("taskSelection.clearRange"), range: null },
 		];
 		for (const btn of quickButtons) {
 			const el = quickRow.createEl("button", { text: btn.label, cls: "tah-quick-btn" });
-			el.addEventListener("click", () => {
-				if (!this.session) return;
-				this.session = chooseRange(
-					this.session,
-					btn.range ? { kind: "preset", range: btn.range } : { kind: "clear" }
-				);
-				// 快捷周期永远不预选自定义日历
-				this.renderCalendar(calendarSeed(this.session));
-				this.updateRangeLabel();
-				this.setCalendarOpen(false);
-				this.renderAll();
-			});
+			el.addEventListener("click", () =>
+				this.applyRangePick({ kind: "preset", range: btn.range })
+			);
 		}
 
-		const rangeRow = this.filterEl.createDiv({ cls: "tah-picker-range-row" });
-		this.rangeLabelEl = rangeRow.createDiv({ cls: "tah-range-label" });
-		this.updateRangeLabel();
-
-		this.calendarToggleBtn = rangeRow.createEl("button", {
+		// 自定义日期与周期快捷同属「选区间」，放在同一行
+		this.calendarToggleBtn = quickRow.createEl("button", {
 			text: t("taskSelection.customRange"),
-			cls: "tah-secondary-btn",
+			cls: "tah-quick-btn",
 		});
 		this.calendarToggleBtn.setAttr("aria-controls", "tah-calendar-panel");
 		this.calendarToggleBtn.addEventListener("click", () => {
@@ -336,10 +344,32 @@ export class TaskSelectionView {
 			this.setCalendarOpen(open);
 		});
 
+		const rangeRow = this.filterEl.createDiv({ cls: "tah-picker-range-row" });
+		this.rangeLabelEl = rangeRow.createDiv({ cls: "tah-range-label" });
+		this.clearRangeBtn = rangeRow.createEl("button", {
+			text: t("taskSelection.clearRange"),
+			cls: "tah-clear-range-btn",
+		});
+		this.clearRangeBtn.addEventListener("click", () =>
+			this.applyRangePick({ kind: "clear" })
+		);
+		this.updateRangeLabel();
+
 		this.calendarContainer = this.filterEl.createDiv({ cls: "tah-calendar-container" });
 		this.calendarContainer.id = "tah-calendar-panel";
 		this.setCalendarOpen(false);
 		this.renderCalendar(calendarSeed(this.session));
+	}
+
+	/** 应用一次区间选择：更新区间与来源，并同步日历、标签与列表。 */
+	private applyRangePick(pick: RangePick): void {
+		if (!this.session) return;
+		this.session = chooseRange(this.session, pick);
+		// 快捷周期与清空都不预选自定义日历
+		this.renderCalendar(calendarSeed(this.session));
+		this.updateRangeLabel();
+		this.setCalendarOpen(false);
+		this.renderAll();
 	}
 
 	/** 展开 / 收起自定义日期面板；快捷按钮始终可见。 */
@@ -350,6 +380,7 @@ export class TaskSelectionView {
 			this.calendarToggleBtn.setText(
 				this.options.t(open ? "taskSelection.hideCalendar" : "taskSelection.customRange")
 			);
+			this.calendarToggleBtn.toggleClass("tah-quick-btn-active", open);
 			this.calendarToggleBtn.setAttr("aria-expanded", String(open));
 		}
 	}
@@ -363,6 +394,7 @@ export class TaskSelectionView {
 	private updateRangeLabel(): void {
 		if (!this.rangeLabelEl || !this.session) return;
 		const range = filterRange(this.session);
+		this.clearRangeBtn?.toggleClass("tah-hidden", range === null);
 		if (range === null) {
 			this.rangeLabelEl.setText(this.options.t("taskSelection.noDate"));
 			return;
