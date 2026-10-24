@@ -57,7 +57,7 @@ export const zh: Strings = {
 		joinedTasks: "已加入任务（{{count}}）",
 		clear: "清空",
 		empty: "暂无任务。从左侧筛选并加入任务。",
-		removeAria: "从列表移除",
+		removeAria: "从报告移除：{{title}}",
 		noTemplate: "无模板（默认）",
 		extraRequirements: "附加要求",
 		extraRequirementsPlaceholder: "仅作用于本次报告的一次性指令（如语气、篇幅、侧重点）…",

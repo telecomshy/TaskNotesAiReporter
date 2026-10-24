@@ -57,7 +57,7 @@ export const en = {
 		joinedTasks: "Joined tasks ({{count}})",
 		clear: "Clear",
 		empty: "No tasks yet. Filter and add tasks from the left.",
-		removeAria: "Remove from list",
+		removeAria: "Remove from report: {{title}}",
 		noTemplate: "No template (default)",
 		extraRequirements: "Extra requirements",
 		extraRequirementsPlaceholder:

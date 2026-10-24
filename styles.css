@@ -650,7 +650,10 @@
 }
 
 /* 清除范围是「重置当前区间」，不是选区间：文本按钮，与周期按钮分开 */
-.tah-clear-range-btn {
+button.tah-clear-range-btn {
+	appearance: none;
+	-webkit-appearance: none;
+	height: auto;
 	margin: 0;
 	padding: 0.1rem 0.2rem;
 	background: transparent;
@@ -662,7 +665,7 @@
 	cursor: pointer;
 }
 
-.tah-clear-range-btn:hover {
+button.tah-clear-range-btn:hover {
 	background: transparent;
 	border: none;
 	box-shadow: none;
@@ -778,55 +781,37 @@
 	flex-shrink: 0;
 }
 
-/* 左栏任务：整行点击即加入右栏；右侧「＋」提示可加入 */
-.tah-task-addable {
+/* 左右两栏任务整行可点击：左加入、右移除；行尾「＋ / －」提示动作 */
+.tah-task-action {
 	cursor: pointer;
 }
 
-.tah-task-addable:hover,
-.tah-task-addable:focus-visible {
+.tah-task-action:hover,
+.tah-task-action:focus-visible {
 	background: var(--background-modifier-hover);
 	border-color: var(--background-modifier-border-hover);
 }
 
-.tah-task-addable:focus-visible {
+.tah-task-action:focus-visible {
 	outline: 2px solid var(--interactive-accent);
 	outline-offset: -2px;
 }
 
-.tah-task-add-hint {
+.tah-task-action-hint {
 	flex: 0 0 auto;
 	font-size: 1rem;
 	line-height: 1;
 	color: var(--text-faint);
 }
 
-.tah-task-addable:hover .tah-task-add-hint,
-.tah-task-addable:focus-visible .tah-task-add-hint {
+.tah-task-action:hover .tah-task-action-hint,
+.tah-task-action:focus-visible .tah-task-action-hint {
 	color: var(--text-accent);
 }
 
 .tah-task-info {
 	min-width: 0;
 	flex: 1;
-}
-
-/* 任务项右侧的删除按钮：始终显示，点击即从列表移除 */
-.tah-task-remove {
-	margin: 0;
-	flex-shrink: 0;
-	padding: 0 0.4rem;
-	font-size: 1rem;
-	line-height: 1;
-	cursor: pointer;
-	background: transparent;
-	border: none;
-	box-shadow: none;
-	color: var(--text-muted);
-}
-
-.tah-task-remove:hover {
-	color: var(--text-normal);
 }
 
 .tah-task-title {

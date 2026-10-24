@@ -214,30 +214,17 @@ export class TaskSelectionView {
 
 		const addable = addableTasks(this.session);
 		for (const task of addable) {
-			const item = this.leftListEl.createDiv({ cls: "tah-task-item tah-task-addable" });
-			item.setAttr("role", "button");
-			item.setAttr("tabindex", "0");
-			item.setAttr("aria-label", this.options.t("taskSelection.addAria", { title: task.title }));
-
-			// 键盘加入后把焦点交给同位置的下一条，避免焦点落回页面开头
-			const add = (refocus: boolean): void => {
-				const index = addable.indexOf(task);
-				this.update((session) => addTask(session, task));
-				if (!refocus) return;
-				const rows = this.leftListEl.querySelectorAll<HTMLElement>(".tah-task-addable");
-				if (rows.length === 0) return;
-				rows[Math.min(index, rows.length - 1)]?.focus();
-			};
-			item.addEventListener("click", () => add(false));
-			item.addEventListener("keydown", (event) => {
-				if (event.key !== "Enter" && event.key !== " ") return;
-				event.preventDefault();
-				add(true);
-			});
-
-			this.renderTaskInfo(item, task);
-			const hint = item.createSpan({ cls: "tah-task-add-hint", text: "＋" });
-			hint.setAttr("aria-hidden", "true");
+			this.createActionRow(
+				this.leftListEl,
+				task,
+				this.options.t("taskSelection.addAria", { title: task.title }),
+				"＋",
+				(refocus) => {
+					const index = addable.indexOf(task);
+					this.update((session) => addTask(session, task));
+					if (refocus) this.focusRowAt(this.leftListEl, index);
+				}
+			);
 		}
 	}
 
@@ -255,13 +242,16 @@ export class TaskSelectionView {
 		}
 
 		for (const task of tasks) {
-			const item = this.rightListEl.createDiv({ cls: "tah-task-item" });
-			this.renderTaskInfo(item, task);
-
-			const removeBtn = item.createEl("button", { text: "×", cls: "tah-task-remove" });
-			removeBtn.setAttr("aria-label", this.options.t("report.removeAria"));
-			removeBtn.addEventListener("click", () =>
-				this.update((session) => removeTask(session, task.id))
+			this.createActionRow(
+				this.rightListEl,
+				task,
+				this.options.t("report.removeAria", { title: task.title }),
+				"－",
+				(refocus) => {
+					const index = tasks.indexOf(task);
+					this.update((session) => removeTask(session, task.id));
+					if (refocus) this.focusRowAt(this.rightListEl, index);
+				}
 			);
 		}
 	}
@@ -270,6 +260,38 @@ export class TaskSelectionView {
 		const info = parent.createDiv({ cls: "tah-task-info" });
 		info.createDiv({ cls: "tah-task-title", text: task.title });
 		renderTaskMeta(info, task, this.options.t);
+	}
+
+	/** 可点击的任务行：点击 / Enter / Space 触发同一动作，行尾给出动作提示。 */
+	private createActionRow(
+		parent: HTMLElement,
+		task: TaskInfo,
+		ariaLabel: string,
+		hintText: string,
+		activate: (refocus: boolean) => void
+	): void {
+		const item = parent.createDiv({ cls: "tah-task-item tah-task-action" });
+		item.setAttr("role", "button");
+		item.setAttr("tabindex", "0");
+		item.setAttr("aria-label", ariaLabel);
+
+		item.addEventListener("click", () => activate(false));
+		item.addEventListener("keydown", (event) => {
+			if (event.key !== "Enter" && event.key !== " ") return;
+			event.preventDefault();
+			activate(true);
+		});
+
+		this.renderTaskInfo(item, task);
+		const hint = item.createSpan({ cls: "tah-task-action-hint", text: hintText });
+		hint.setAttr("aria-hidden", "true");
+	}
+
+	/** 键盘触发后把焦点交给同位置的下一条；越界时取最后一条。 */
+	private focusRowAt(listEl: HTMLElement, index: number): void {
+		const rows = listEl.querySelectorAll<HTMLElement>(".tah-task-action");
+		if (rows.length === 0) return;
+		rows[Math.min(index, rows.length - 1)]?.focus();
 	}
 
 	private emptyText(reason: Exclude<ReturnType<typeof leftEmptyReason>, null>): string {
