@@ -6,6 +6,7 @@ import {
 	containsDay,
 	emptySelection,
 	isEdgeDay,
+	isRangeComplete,
 	rangeOf,
 	selectionFromRange,
 } from "../src/ui/calendarSelection";
@@ -65,6 +66,20 @@ test("区间完成后再次点击：重新开始选择", () => {
 	assert.deepEqual(rangeOf(selection), { start: "2024-03-20", end: "2024-03-20" });
 	assert.equal(isEdgeDay(selection, "2024-03-20"), true);
 	assert.equal(isEdgeDay(selection, "2024-03-05"), false);
+});
+
+test("isRangeComplete：两次点击后才完成，单击仍可选择终点", () => {
+	assert.equal(isRangeComplete(emptySelection()), false);
+
+	const first = clickDay(emptySelection(), "2024-03-05");
+	assert.equal(isRangeComplete(first), false);
+
+	const second = clickDay(first, "2024-03-10");
+	assert.equal(isRangeComplete(second), true);
+
+	// 已完成区间后再次点击会重新开始，不应再视为完成
+	const restart = clickDay(second, "2024-03-20");
+	assert.equal(isRangeComplete(restart), false);
 });
 
 test("clearRange：清空为无区间、无包含、无边界", () => {

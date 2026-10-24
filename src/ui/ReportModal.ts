@@ -1,7 +1,7 @@
 /**
- * 生成报告主弹窗。
- * 只有一个任务列表区域：通过「选择任务」窗口加入或移除任务，列表中的任务全部送模型生成报告。
- * 每项右侧的小 × 直接从列表移除；工具栏的「清空」清空整个列表。
+ * 生成报告主弹窗：左侧筛选任务、右侧报告集合，底部模板 / 附加要求 / 生成。
+ * 「选择任务」不再单独开窗；点击左栏任务即加入右栏，右栏是唯一的移除入口。
+ * 列表中的任务全部送模型生成报告。
  */
 
 import { App, Modal, Notice, TFile } from "obsidian";
@@ -12,19 +12,16 @@ import { chatCompletion } from "../ai/client";
 import { saveReport } from "../report/writer";
 import { createGeneration, type GenerateSettings } from "../report/generate";
 import { describeReportFailure } from "../report/errorMessage";
-import { TaskPickerModal } from "./TaskPickerModal";
-import { summarizeChanges } from "./pickerSession";
-import { renderTaskMeta } from "./taskMeta";
+import { TaskSelectionView } from "./TaskSelectionView";
 import {
 	applyGenerateButtonState,
 	getGenerateButtonState,
 } from "./generateButton";
 
 export class ReportModal extends Modal {
-	private allTasks: TaskInfo[] = [];
-	private candidateTasks = new Map<string, TaskInfo>();
+	private selectionView: TaskSelectionView | null = null;
 
-	private listWrapEl!: HTMLElement;
+	private bodyEl!: HTMLElement;
 	private footerEl!: HTMLElement;
 	private generateBtn: HTMLButtonElement | null = null;
 	private extraRequirementsInput: HTMLTextAreaElement | null = null;
@@ -50,14 +47,12 @@ export class ReportModal extends Modal {
 		const { contentEl } = this;
 		contentEl.empty();
 		contentEl.addClass("tah-modal");
-		this.modalEl.addClass("tah-modal-root-narrow");
+		this.modalEl.addClass("tah-modal-root");
 		this.setTitle(this.plugin.t("report.title"));
 
 		// 一次性创建容器结构（后续 render* 只填充，不再新建）
-		this.listWrapEl = contentEl.createDiv({ cls: "tah-main" });
+		this.bodyEl = contentEl.createDiv({ cls: "tah-selection-body" });
 		this.footerEl = contentEl.createDiv({ cls: "tah-modal-footer" });
-
-		this.renderTaskList();
 		this.renderFooter();
 
 		// 打开任务仓库：来源判定只在此处做一次（仓库缺席即「来源缺失」，见 #45）
@@ -69,127 +64,43 @@ export class ReportModal extends Modal {
 		this.repository = repository;
 
 		// 加载任务
-		this.listWrapEl.empty();
-		this.listWrapEl.createDiv({ text: this.plugin.t("report.loading"), cls: "tah-loading" });
+		this.bodyEl.empty();
+		this.bodyEl.createDiv({ text: this.plugin.t("report.loading"), cls: "tah-loading" });
 		const tasks = await this.repository.list();
 		if (tasks === null) {
 			this.renderSourceMissing();
-
 			return;
 		}
-		this.allTasks = tasks;
-		this.renderTaskList();
+
+		// 任务就绪后锁定弹窗高度；加载 / 来源缺失态仍按内容自适应
+		this.contentEl.addClass("tah-report-ready");
+		this.bodyEl.empty();
+		this.selectionView = new TaskSelectionView({
+			container: this.bodyEl,
+			dateFields: this.plugin.settings.dateFields,
+			weekStartsOnMonday: this.plugin.settings.weekStartsOnMonday,
+			t: this.plugin.t,
+			lang: this.plugin.lang,
+		});
+		this.selectionView.setTasks(tasks);
 	}
 
 	onClose(): void {
 		this.contentEl.empty();
 	}
 
-	// ===== 任务列表 =====
-
 	/** 来源缺失的降级提示（文案键由「来源」深 module 一处陈述，见 #45）。 */
 	private renderSourceMissing(): void {
-		this.listWrapEl.empty();
-		this.listWrapEl.createEl("p", {
+		this.bodyEl.empty();
+		this.bodyEl.createEl("p", {
 			text: this.plugin.t("report.tasknotesMissing"),
 			cls: "tah-error",
 		});
 	}
 
-	/** 所有候选任务（按加入顺序），即报告任务集合 */
-	private getCandidateTasks(): TaskInfo[] {
-		return Array.from(this.candidateTasks.values());
-	}
-
-	private renderTaskList(): void {
-		this.listWrapEl.empty();
-
-		const tasks = this.getCandidateTasks();
-
-		// 页头：标题（含计数）在左，「清空」在右
-		const header = this.listWrapEl.createDiv({ cls: "tah-main-header" });
-		header.createEl("h3", {
-			text: this.plugin.t("report.joinedTasks", { count: tasks.length }),
-		});
-		const clearBtn = header.createEl("button", {
-			text: this.plugin.t("report.clear"),
-			cls: "tah-batch-remove-btn",
-		});
-		clearBtn.disabled = tasks.length === 0;
-		clearBtn.addEventListener("click", () => {
-			this.candidateTasks.clear();
-			this.renderTaskList();
-		});
-
-		// 任务列表
-		const listEl = this.listWrapEl.createDiv({ cls: "tah-task-list" });
-
-		if (tasks.length === 0) {
-			listEl.createDiv({
-				text: this.plugin.t("report.empty"),
-				cls: "tah-empty",
-			});
-		}
-
-		for (const task of tasks) {
-			const item = listEl.createDiv({ cls: "tah-task-item" });
-
-			const info = item.createDiv({ cls: "tah-task-info" });
-			const titleEl = info.createDiv({ cls: "tah-task-title" });
-			titleEl.setText(task.title);
-			renderTaskMeta(info, task, this.plugin.t);
-
-			const removeBtn = item.createEl("button", { text: "×", cls: "tah-task-remove" });
-			removeBtn.setAttr("aria-label", this.plugin.t("report.removeAria"));
-			removeBtn.addEventListener("click", () => {
-				this.candidateTasks.delete(task.id);
-				this.renderTaskList();
-			});
-		}
-
-		// 选择任务按钮
-		const addRow = this.listWrapEl.createDiv({ cls: "tah-add-row" });
-		const addBtn = addRow.createEl("button", { text: this.plugin.t("report.addTasks") });
-		addBtn.addClass("tah-add-btn");
-		addBtn.addEventListener("click", () => this.openTaskPicker());
-		if (tasks.length > 0) {
-			addRow.createDiv({
-				text: this.plugin.t("report.appendHint"),
-				cls: "tah-hint",
-			});
-		}
-	}
-
-	private openTaskPicker(): void {
-		new TaskPickerModal(
-			this.app,
-			this.allTasks,
-			this.plugin.settings.dateFields,
-			new Set(this.candidateTasks.keys()),
-			this.plugin.settings.weekStartsOnMonday,
-			this.plugin.t,
-			this.plugin.lang,
-			(changes) => {
-				for (const id of changes.removeIds) {
-					this.candidateTasks.delete(id);
-				}
-				for (const task of changes.addedTasks) {
-					this.candidateTasks.set(task.id, task);
-				}
-				this.renderTaskList();
-				const summary = summarizeChanges(changes);
-				if (summary.removed > 0) {
-					new Notice(
-						this.plugin.t("notice.updatedTasks", {
-							added: summary.added,
-							removed: summary.removed,
-						})
-					);
-				} else {
-					new Notice(this.plugin.t("notice.addedTasks", { count: summary.added }));
-				}
-			}
-		).open();
+	/** 右栏当前集合，即报告任务集合 */
+	private getJoinedTasks(): TaskInfo[] {
+		return this.selectionView?.getJoinedTasks() ?? [];
 	}
 
 	// ===== 底部 =====
@@ -274,7 +185,7 @@ export class ReportModal extends Modal {
 			}));
 
 			const result = await generate({
-				tasks: this.getCandidateTasks(),
+				tasks: this.getJoinedTasks(),
 				templateId: this.selectedTemplateId,
 				extraRequirements: this.extraRequirementsInput?.value,
 			});

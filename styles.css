@@ -495,12 +495,6 @@
 	width: min(92vw, 560px);
 }
 
-/* 选择任务窗口（筛选区 + 任务列表上下排列）窄宽度 */
-.modal.tah-modal-root-picker {
-	max-width: min(92vw, 520px);
-	width: min(92vw, 520px);
-}
-
 .tah-modal {
 	display: flex;
 	flex-direction: column;
@@ -510,12 +504,66 @@
 	overflow-x: hidden;
 }
 
-/* 主窗口单栏布局 */
-.tah-main {
+/* 生成报告弹窗：加载完成后固定高度，任务列表在内部滚动，不随任务数量伸缩 */
+.modal.tah-modal-root .tah-modal.tah-report-ready {
+	height: min(78vh, 700px);
+}
+
+/* 选择任务区：左筛选、右报告集合 */
+.tah-selection-body {
 	flex: 1 1 auto;
 	min-height: 0;
 	display: flex;
 	flex-direction: column;
+	overflow: hidden;
+}
+
+.tah-selection-layout {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	gap: 0.9rem;
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+.tah-selection-pane {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	padding: 0.6rem;
+}
+
+.tah-selection-actions {
+	margin-bottom: 0.4rem;
+}
+
+.tah-selection-list.tah-selection-list {
+	flex: 1 1 auto;
+	max-height: none;
+	min-height: 0;
+}
+
+.tah-selection-mobile-tabs {
+	display: none;
+	gap: 0.4rem;
+	margin-bottom: 0.5rem;
+}
+
+@media (max-width: 800px) {
+	.tah-selection-layout {
+		grid-template-columns: 1fr;
+	}
+
+	.tah-selection-mobile-tabs {
+		display: flex;
+	}
+
+	.tah-selection-pane-hidden {
+		display: none;
+	}
 }
 
 .tah-main-header {
@@ -530,36 +578,6 @@
 	margin: 0;
 	font-size: 1rem;
 	font-weight: 600;
-}
-
-.tah-modal-main {
-	flex: 1 1 auto;
-	min-height: 0;
-	display: flex;
-	gap: 1.25rem;
-	overflow-y: auto;
-	overflow-x: hidden;
-	align-items: stretch;
-	min-width: 0;
-}
-
-.tah-pane {
-	flex: 1;
-	min-width: 0;
-}
-
-.tah-pane-left {
-	flex: 0 0 18rem;
-	border-right: 1px solid var(--background-modifier-border);
-	padding-right: 1.25rem;
-	min-width: 0;
-}
-
-.tah-pane-right {
-	flex: 1;
-	display: flex;
-	flex-direction: column;
-	min-width: 0;
 }
 
 .tah-modal-footer {
@@ -598,6 +616,16 @@
 	min-width: 0;
 	box-sizing: border-box;
 	resize: vertical;
+	overflow-x: hidden;
+	border: 1px solid var(--background-modifier-border);
+	box-shadow: none;
+}
+
+/* 聚焦只换边框色：主题的焦点阴影会在失焦后留下一条底线 */
+.tah-extra-requirements-input:focus,
+.tah-extra-requirements-input:focus-visible {
+	border-color: var(--interactive-accent);
+	box-shadow: none;
 }
 
 /* 快捷按钮 */
@@ -612,6 +640,48 @@
 	padding: 0.3rem 0.7rem;
 	border-radius: 4px;
 	cursor: pointer;
+}
+
+/* 自定义日期展开：轻提示；当前选中的区间来源：实心高亮 */
+button.tah-quick-btn-open {
+	box-shadow: inset 0 0 0 1px var(--interactive-accent);
+	color: var(--text-accent);
+	background: var(--background-modifier-hover);
+}
+
+button.tah-quick-btn-selected {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	box-shadow: none;
+}
+
+button.tah-quick-btn-selected:hover {
+	background: var(--interactive-accent-hover);
+	color: var(--text-on-accent);
+}
+
+/* 清除范围是「重置当前区间」，不是选区间：文本按钮，与周期按钮分开 */
+button.tah-clear-range-btn {
+	appearance: none;
+	-webkit-appearance: none;
+	height: auto;
+	margin: 0;
+	padding: 0.1rem 0.2rem;
+	background: transparent;
+	border: none;
+	box-shadow: none;
+	color: var(--text-muted);
+	font-size: 0.85rem;
+	line-height: 1.2;
+	cursor: pointer;
+}
+
+button.tah-clear-range-btn:hover {
+	background: transparent;
+	border: none;
+	box-shadow: none;
+	color: var(--text-normal);
+	text-decoration: underline;
 }
 
 .tah-range-label {
@@ -689,28 +759,13 @@
 }
 
 /* 任务列表 */
-.tah-select-all {
-	display: flex;
-	align-items: center;
-	gap: 0.3rem;
-	font-size: 0.85rem;
-	cursor: pointer;
-	color: var(--text-muted);
-}
-
-.tah-select-all input[type="checkbox"] {
-	margin: 0;
-}
-
-.tah-batch-remove-btn,
-.tah-picker-clear {
+.tah-secondary-btn {
 	padding: 0.2rem 0.6rem;
 	font-size: 0.8rem;
 	cursor: pointer;
 }
 
-.tah-batch-remove-btn:disabled,
-.tah-picker-clear:disabled {
+.tah-secondary-btn:disabled {
 	opacity: 0.5;
 	cursor: not-allowed;
 }
@@ -737,9 +792,52 @@
 	flex-shrink: 0;
 }
 
-.tah-task-checkbox {
-	margin: 0;
-	flex-shrink: 0;
+/* 左右两栏任务整行可点击：左加入、右移除；行尾「＋ / －」提示动作 */
+.tah-task-action {
+	cursor: pointer;
+}
+
+.tah-task-action:hover,
+.tah-task-action:focus-visible {
+	background: var(--background-modifier-hover);
+	border-color: var(--background-modifier-border-hover);
+}
+
+.tah-task-action:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: -2px;
+}
+
+.tah-task-action-hint {
+	flex: 0 0 auto;
+	font-size: 1rem;
+	line-height: 1;
+	color: var(--text-faint);
+}
+
+.tah-task-action:hover .tah-task-action-hint,
+.tah-task-action:focus-visible .tah-task-action-hint {
+	color: var(--text-accent);
+}
+
+/* 已加入项：留在筛选结果原位，惰性、带标记 */
+.tah-task-joined {
+	cursor: default;
+}
+
+.tah-task-joined .tah-task-title {
+	color: var(--text-muted);
+}
+
+.tah-task-joined-badge {
+	flex: 0 0 auto;
+	padding: 0.05rem 0.45rem;
+	border-radius: 999px;
+	background: var(--background-modifier-hover);
+	color: var(--text-accent);
+	font-size: 0.75rem;
+	line-height: 1.4;
+	white-space: nowrap;
 }
 
 .tah-task-info {
@@ -747,65 +845,11 @@
 	flex: 1;
 }
 
-/* 任务项右侧的删除按钮：始终显示，点击即从列表移除 */
-.tah-task-remove {
-	margin: 0;
-	flex-shrink: 0;
-	padding: 0 0.4rem;
-	font-size: 1rem;
-	line-height: 1;
-	cursor: pointer;
-	background: transparent;
-	border: none;
-	box-shadow: none;
-	color: var(--text-muted);
-}
-
-.tah-task-remove:hover {
-	color: var(--text-normal);
-}
-
 .tah-task-title {
 	font-weight: 500;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
-}
-
-/* 选择任务窗口：标题行 + 已加入状态徽标 */
-.tah-task-title-row {
-	display: flex;
-	align-items: center;
-	gap: 0.4rem;
-	min-width: 0;
-}
-
-.tah-task-title-row .tah-task-title {
-	flex: 0 1 auto;
-	min-width: 0;
-}
-
-.tah-task-badge {
-	flex-shrink: 0;
-	padding: 0 0.35rem;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 3px;
-	background: var(--background-modifier-hover);
-	color: var(--text-muted);
-	font-size: 0.7rem;
-	line-height: 1.5;
-	white-space: nowrap;
-}
-
-.tah-task-badge-joined {
-	border-color: var(--interactive-accent, var(--background-modifier-border));
-	color: var(--text-accent, var(--text-normal));
-}
-
-.tah-task-badge-removing {
-	border-color: var(--text-warning, var(--background-modifier-border));
-	background: transparent;
-	color: var(--text-warning, var(--text-normal));
 }
 
 .tah-task-meta {
@@ -844,22 +888,9 @@
 	flex-shrink: 0;
 }
 
-.tah-add-row {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: 0.6rem;
-	margin-top: 0.75rem;
-}
-
 .tah-add-btn {
 	padding: 0.35rem 0.8rem;
 	cursor: pointer;
-}
-
-.tah-hint {
-	font-size: 0.75rem;
-	color: var(--text-muted);
 }
 
 .tah-generate-btn {
@@ -1024,14 +1055,7 @@
 	padding: 1rem 0;
 }
 
-/* ===== 选择任务窗口 ===== */
-
-/* 固定高度，任务列表内部滚动，整个窗口不滚动 */
-.tah-modal-root-picker .tah-modal {
-	height: min(80vh, 640px);
-	max-height: none;
-	overflow-y: hidden;
-}
+/* ===== 选择任务区 ===== */
 
 .tah-picker-tabs {
 	margin-bottom: 0.75rem;
@@ -1064,13 +1088,6 @@
 	justify-content: space-between;
 	gap: 0.6rem;
 	margin-bottom: 0.4rem;
-}
-
-.tah-picker-actions-left {
-	display: flex;
-	align-items: center;
-	gap: 0.6rem;
-	min-width: 0;
 }
 
 /* 时间页：范围信息一行，右侧留「清空选择」 */
@@ -1126,28 +1143,4 @@
 	flex-shrink: 0;
 }
 
-.tah-picker-list {
-	flex: 1 1 auto;
-	min-height: 0;
-	/* 覆盖 .tah-task-list 的 22rem 上限：列表填满弹窗，页脚贴底 */
-	max-height: none;
-	overflow-y: auto;
-	overflow-x: hidden;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 6px;
-	padding: 0.5rem;
-}
 
-.tah-picker-footer {
-	display: flex;
-	justify-content: flex-end;
-	gap: 0.5rem;
-	margin-top: 1rem;
-	padding-top: 0.75rem;
-	flex-shrink: 0;
-}
-
-.tah-picker-footer .tah-generate-btn:disabled {
-	opacity: 0.5;
-	cursor: not-allowed;
-}
