@@ -642,11 +642,22 @@
 	cursor: pointer;
 }
 
-/* 自定义日期展开时与周期按钮区分：同款外形，强调当前状态 */
-.tah-quick-btn-active {
+/* 自定义日期展开：轻提示；当前选中的区间来源：实心高亮 */
+button.tah-quick-btn-open {
 	box-shadow: inset 0 0 0 1px var(--interactive-accent);
 	color: var(--text-accent);
 	background: var(--background-modifier-hover);
+}
+
+button.tah-quick-btn-selected {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	box-shadow: none;
+}
+
+button.tah-quick-btn-selected:hover {
+	background: var(--interactive-accent-hover);
+	color: var(--text-on-accent);
 }
 
 /* 清除范围是「重置当前区间」，不是选区间：文本按钮，与周期按钮分开 */

@@ -63,6 +63,7 @@ export class TaskSelectionView {
 	private rangeLabelEl: HTMLElement | null = null;
 	private calendarToggleBtn: HTMLButtonElement | null = null;
 	private clearRangeBtn: HTMLButtonElement | null = null;
+	private presetButtons: Array<{ el: HTMLButtonElement; range: DateRange }> = [];
 	private parseLabelEl: HTMLElement | null = null;
 	private searchInput: HTMLInputElement | null = null;
 	private clearSearchBtn: HTMLButtonElement | null = null;
@@ -329,6 +330,7 @@ export class TaskSelectionView {
 		this.rangeLabelEl = null;
 		this.calendarToggleBtn = null;
 		this.clearRangeBtn = null;
+		this.presetButtons = [];
 		this.parseLabelEl = null;
 		this.searchInput = null;
 		this.clearSearchBtn = null;
@@ -354,6 +356,7 @@ export class TaskSelectionView {
 		];
 		for (const btn of quickButtons) {
 			const el = quickRow.createEl("button", { text: btn.label, cls: "tah-quick-btn" });
+			this.presetButtons.push({ el, range: btn.range });
 			el.addEventListener("click", () =>
 				this.applyRangePick({ kind: "preset", range: btn.range })
 			);
@@ -377,6 +380,7 @@ export class TaskSelectionView {
 					this.updateRangeLabel();
 					this.renderAll();
 				}
+				this.updateRangeButtons();
 			}
 			this.setCalendarOpen(open);
 		});
@@ -391,6 +395,7 @@ export class TaskSelectionView {
 			this.applyRangePick({ kind: "clear" })
 		);
 		this.updateRangeLabel();
+		this.updateRangeButtons();
 
 		this.calendarContainer = this.filterEl.createDiv({ cls: "tah-calendar-container" });
 		this.calendarContainer.id = "tah-calendar-panel";
@@ -402,11 +407,26 @@ export class TaskSelectionView {
 	private applyRangePick(pick: RangePick): void {
 		if (!this.session) return;
 		this.session = chooseRange(this.session, pick);
+		this.updateRangeButtons();
 		// 快捷周期与清空都不预选自定义日历
 		this.renderCalendar(calendarSeed(this.session));
 		this.updateRangeLabel();
 		this.setCalendarOpen(false);
 		this.renderAll();
+	}
+
+	/** 按区间来源高亮当前选中的快捷按钮；展开态由 setCalendarOpen 单独处理。 */
+	private updateRangeButtons(): void {
+		if (!this.session) return;
+		const range = filterRange(this.session);
+		for (const { el, range: presetRange } of this.presetButtons) {
+			const selected = this.session.rangeSource === "preset" && sameRange(range, presetRange);
+			el.toggleClass("tah-quick-btn-selected", selected);
+			el.setAttr("aria-pressed", String(selected));
+		}
+		const customSelected = this.session.rangeSource === "custom";
+		this.calendarToggleBtn?.toggleClass("tah-quick-btn-selected", customSelected);
+		this.calendarToggleBtn?.setAttr("aria-pressed", String(customSelected));
 	}
 
 	/** 展开 / 收起自定义日期面板；快捷按钮始终可见。 */
@@ -417,7 +437,7 @@ export class TaskSelectionView {
 			this.calendarToggleBtn.setText(
 				this.options.t(open ? "taskSelection.hideCalendar" : "taskSelection.customRange")
 			);
-			this.calendarToggleBtn.toggleClass("tah-quick-btn-active", open);
+			this.calendarToggleBtn.toggleClass("tah-quick-btn-open", open);
 			this.calendarToggleBtn.setAttr("aria-expanded", String(open));
 		}
 	}
@@ -456,6 +476,7 @@ export class TaskSelectionView {
 			(range, complete) => {
 				if (!range || !this.session) return;
 				this.session = chooseRange(this.session, { kind: "custom", range });
+				this.updateRangeButtons();
 				this.updateRangeLabel();
 				// 两次点击选完区间才收起；单击只是单日区间，可能还在选起点
 				if (complete) this.setCalendarOpen(false);
@@ -516,4 +537,9 @@ export class TaskSelectionView {
 			this.clearSearchBtn.toggleClass("tah-hidden", this.session.query === "");
 		}
 	}
+}
+
+/** 起止日相等；用于把会话区间映射回对应的周期快捷按钮。 */
+function sameRange(a: DateRange | null, b: DateRange): boolean {
+	return a !== null && a.start === b.start && a.end === b.end;
 }
