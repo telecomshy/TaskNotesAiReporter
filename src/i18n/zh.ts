@@ -87,10 +87,11 @@ export const zh: Strings = {
 		searchPlaceholder: "关键字 #标签 @上下文（空格分隔）…",
 		clearSearch: "清除搜索词",
 
-		addableCount: "可加入 {{count}} 个",
+		resultCount: "筛选结果 {{total}} 个 · 可加入 {{addable}} 个",
 		addAll: "全部加入（{{count}}）",
 		addAria: "加入报告：{{title}}",
-		allJoined: "当前筛选结果都已加入报告",
+		joinedBadge: "已加入",
+		joinedHint: "已在报告中，可在右侧移除",
 		parseKeywords: "关键字：{{value}}",
 		parseTags: "标签：{{value}}",
 		parseContexts: "上下文：{{value}}",

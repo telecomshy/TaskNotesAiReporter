@@ -89,10 +89,11 @@ export const en = {
 		searchPlaceholder: "keyword #tag @context (space-separated)…",
 		clearSearch: "Clear search",
 
-		addableCount: "{{count}} addable",
+		resultCount: "{{total}} results · {{addable}} addable",
 		addAll: "Add all ({{count}})",
 		addAria: "Add to report: {{title}}",
-		allJoined: "All filtered results are already in the report",
+		joinedBadge: "Added",
+		joinedHint: "Already in the report; remove it on the right",
 		parseKeywords: "Keywords: {{value}}",
 		parseTags: "Tags: {{value}}",
 		parseContexts: "Contexts: {{value}}",

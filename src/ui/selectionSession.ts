@@ -1,7 +1,7 @@
 /**
  * 「选择任务」会话：筛选结果与报告集合的唯一真源。
  *
- * 左栏是当前筛选命中、且尚未「已加入」的「可加入」任务；右栏是报告集合。
+ * 左栏是当前筛选命中的全部任务（筛选结果，含已加入）；右栏是报告集合。
  * 筛选（切 Tab / 改区间 / 改查询）只改变左栏呈现，绝不修改报告集合。
  * 加入、加入全部可见、移除、清空是仅有的集合转移。
  * 无 DOM、无 obsidian，可在 Node 单元测试。
@@ -17,8 +17,8 @@ import type { DateField, DateRange, TaskInfo } from "../types";
 
 export type SelectionTab = "time" | "title";
 
-/** 左栏为空的原因：未选区间 / 无命中 / 命中项都已加入。 */
-export type LeftEmptyReason = "no-range" | "no-match" | "all-joined" | null;
+/** 左栏为空的原因：未选区间 / 无命中；全部已加入仍有筛选结果，不算空态。 */
+export type LeftEmptyReason = "no-range" | "no-match" | null;
 
 /** 当前筛选区间的来源：快捷周期 / 自定义日历 / 无。 */
 export type RangeSource = "preset" | "custom" | null;
@@ -93,11 +93,11 @@ export function addableTasks(session: SelectionSession): TaskInfo[] {
 	return matchingTasks(session).filter((task) => !session.joined.has(task.id));
 }
 
-/** 左栏空态原因；有可加入任务时返回 null。 */
+/** 左栏空态原因；有筛选结果时返回 null（全部已加入也仍算有结果）。 */
 export function leftEmptyReason(session: SelectionSession): LeftEmptyReason {
 	if (session.tab === "time" && session.range === null) return "no-range";
 	if (matchingTasks(session).length === 0) return "no-match";
-	return addableTasks(session).length === 0 ? "all-joined" : null;
+	return null;
 }
 
 /** 标题查询的解析结果（关键字 / 标签 / 上下文）。 */

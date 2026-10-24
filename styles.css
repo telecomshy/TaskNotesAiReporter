@@ -809,6 +809,26 @@ button.tah-clear-range-btn:hover {
 	color: var(--text-accent);
 }
 
+/* 已加入项：留在筛选结果原位，惰性、带标记 */
+.tah-task-joined {
+	cursor: default;
+}
+
+.tah-task-joined .tah-task-title {
+	color: var(--text-muted);
+}
+
+.tah-task-joined-badge {
+	flex: 0 0 auto;
+	padding: 0.05rem 0.45rem;
+	border-radius: 999px;
+	background: var(--background-modifier-hover);
+	color: var(--text-accent);
+	font-size: 0.75rem;
+	line-height: 1.4;
+	white-space: nowrap;
+}
+
 .tah-task-info {
 	min-width: 0;
 	flex: 1;

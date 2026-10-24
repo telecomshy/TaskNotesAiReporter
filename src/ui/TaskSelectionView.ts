@@ -16,7 +16,9 @@ import {
 	clearJoined,
 	createSelectionSession,
 	filterRange,
+	isJoined,
 	leftEmptyReason,
+	matchingTasks,
 	parsedQuery,
 	removeTask,
 	joinedCount,
@@ -51,7 +53,7 @@ export class TaskSelectionView {
 	private readonly filterEl: HTMLElement;
 	private readonly leftListEl: HTMLElement;
 	private readonly rightListEl: HTMLElement;
-	private readonly addableCountEl: HTMLElement;
+	private readonly resultCountEl: HTMLElement;
 	private readonly addAllBtn: HTMLButtonElement;
 	private readonly rightTitleEl: HTMLElement;
 	private readonly clearBtn: HTMLButtonElement;
@@ -105,7 +107,7 @@ export class TaskSelectionView {
 
 		this.filterEl = this.leftEl.createDiv({ cls: "tah-picker-filter" });
 		const actions = this.leftEl.createDiv({ cls: "tah-picker-actions tah-selection-actions" });
-		this.addableCountEl = actions.createDiv({ cls: "tah-range-label" });
+		this.resultCountEl = actions.createDiv({ cls: "tah-range-label" });
 		this.addAllBtn = actions.createEl("button", {
 			cls: "tah-secondary-btn",
 			text: t("taskSelection.addAll", { count: 0 }),
@@ -181,8 +183,11 @@ export class TaskSelectionView {
 	private renderActions(): void {
 		if (!this.session) return;
 		const addable = addableTasks(this.session).length;
+		const total = matchingTasks(this.session).length;
 		const joined = joinedCount(this.session);
-		this.addableCountEl.setText(this.options.t("taskSelection.addableCount", { count: addable }));
+		this.resultCountEl.setText(
+			this.options.t("taskSelection.resultCount", { total, addable })
+		);
 		this.addAllBtn.setText(this.options.t("taskSelection.addAll", { count: addable }));
 		this.addAllBtn.disabled = addable === 0;
 		this.rightTitleEl.setText(this.options.t("report.joinedTasks", { count: joined }));
@@ -213,7 +218,19 @@ export class TaskSelectionView {
 		}
 
 		const addable = addableTasks(this.session);
-		for (const task of addable) {
+		for (const task of matchingTasks(this.session)) {
+			if (isJoined(this.session, task.id)) {
+				// 已加入项留在筛选结果原位，只加标记；不可点、不可聚焦、无手型
+				const item = this.leftListEl.createDiv({ cls: "tah-task-item tah-task-joined" });
+				item.setAttr("title", this.options.t("taskSelection.joinedHint"));
+				this.renderTaskInfo(item, task);
+				item.createSpan({
+					cls: "tah-task-joined-badge",
+					text: this.options.t("taskSelection.joinedBadge"),
+				});
+				continue;
+			}
+
 			this.createActionRow(
 				this.leftListEl,
 				task,
@@ -287,7 +304,7 @@ export class TaskSelectionView {
 		hint.setAttr("aria-hidden", "true");
 	}
 
-	/** 键盘触发后把焦点交给同位置的下一条；越界时取最后一条。 */
+	/** 键盘触发后把焦点交给下一条可操作行；越界时取最后一条。 */
 	private focusRowAt(listEl: HTMLElement, index: number): void {
 		const rows = listEl.querySelectorAll<HTMLElement>(".tah-task-action");
 		if (rows.length === 0) return;
@@ -300,8 +317,6 @@ export class TaskSelectionView {
 				return this.options.t("taskSelection.emptyPickRange");
 			case "no-match":
 				return this.options.t("taskSelection.emptyNoTasks");
-			case "all-joined":
-				return this.options.t("taskSelection.allJoined");
 		}
 	}
 

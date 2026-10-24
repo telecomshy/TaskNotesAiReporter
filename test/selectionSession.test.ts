@@ -143,7 +143,7 @@ test("筛选转移不改变报告集合：切 Tab / 改区间 / 改查询", () =
 	assert.deepEqual(addableTasks(session), []);
 });
 
-test("空态原因：未选区间 / 无命中 / 全部已加入", () => {
+test("空态原因：未选区间 / 无命中；全部已加入不算空态", () => {
 	let session = createSelectionSession(tasks, dateFields);
 	assert.equal(leftEmptyReason(session), "no-range");
 
@@ -153,14 +153,19 @@ test("空态原因：未选区间 / 无命中 / 全部已加入", () => {
 	session = preset(session, april);
 	assert.equal(leftEmptyReason(session), null);
 	session = addAllAddable(session);
-	assert.equal(leftEmptyReason(session), "all-joined");
+	assert.equal(leftEmptyReason(session), null);
+	assert.deepEqual(ids(matchingTasks(session)), ["c"]);
+	assert.deepEqual(addableTasks(session), []);
 
 	const title = setQuery(switchTab(createSelectionSession(tasks, dateFields), "title"), "zzz");
 	assert.equal(leftEmptyReason(title), "no-match");
 
 	const titleAll = switchTab(createSelectionSession(tasks, dateFields), "title");
 	assert.equal(leftEmptyReason(titleAll), null);
-	assert.equal(leftEmptyReason(addAllAddable(titleAll)), "all-joined");
+	const joinedTitleAll = addAllAddable(titleAll);
+	assert.equal(leftEmptyReason(joinedTitleAll), null);
+	assert.deepEqual(ids(matchingTasks(joinedTitleAll)), ["a", "b", "c"]);
+	assert.deepEqual(addableTasks(joinedTitleAll), []);
 });
 
 test("归档任务不进入筛选结果", () => {
