@@ -1,5 +1,7 @@
 # Publishing a third-party plugin to the Obsidian Community Plugin directory — exact process (primary sources)
 
+> **Status (2026-10-24): historical research.** The plugin is now listed in the community directory and has shipped releases through 0.7.0; `LICENSE`, the release workflow, and a consistent `versions.json` are in place. For the current operational steps, read [`docs/agents/releasing.md`](../agents/releasing.md). **F14, Gaps, and the checklist below describe the pre-submission state and are stale.**
+
 - **Question**: What is the exact, current end-to-end process for publishing a third-party plugin to the Obsidian Community Plugin directory (the in-app "Community plugins" browser), and what does `telecomshy/TaskNotesAiReporter` still need to satisfy it?
 - **Scope**: Investigation only. No source, config, test, build, or manifest file was changed. Only this Markdown file was created.
 - **Chosen notes path**: `docs/research/obsidian-community-plugin-submission.md`, matching the existing `docs/research/obsidian-plugin-i18n.md` convention (that sibling file already established `docs/research/` as the notes location).

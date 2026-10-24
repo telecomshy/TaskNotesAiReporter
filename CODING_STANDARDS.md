@@ -35,6 +35,22 @@ Rules a reviewer applies to the diff:
 - Line endings: `core.autocrlf = true`, so CRLF in the working tree is normal and
   normalises to LF in the repo. Don't flag it.
 
+## UI and CSS
+
+- Reset native Obsidian controls with `button.<class>` (or a doubled class), and
+  set `appearance`, `background`, `border`, and `box-shadow` explicitly; theme
+  selectors outrank a bare class. This is a judgement call: check the control in
+  the app.
+- There are no DOM or visual tests. A UI change is done only after manual
+  acceptance of hover, focus-visible, selected/expanded, disabled, and the state
+  after a filter or tab re-render.
+
+## Decision records
+
+- When a new ADR partially supersedes an existing one, add a short blockquote
+  banner at the top of every superseded ADR pointing to the new record (see
+  ADR-0011, 0018, 0019, 0020). Keep the superseded body as historical text.
+
 ## Indentation
 
 Tabs for `ts`/`js`/`mjs`/`json`, held by `.editorconfig`.
