@@ -1,0 +1,627 @@
+<!doctype html>
+<!--
+	PROTOTYPE，一次性草图，验证完即弃（勿并入 main；随实现分支保留在 throwaway 分支作一手记录）。
+
+	问题：「状态筛选」控件放在「选择任务」左栏的什么位置？
+	计划：三个结构不同的变体，经 ?variant=A|B|C 切换（← → 键也可切），仿真 TaskSelectionView 的左右分栏主弹窗。
+	仿真对象：src/ui/TaskSelectionView.ts（左栏筛选结果 / 右栏报告集合）。
+	运行：双击本文件即可（无依赖、无构建、无持久化）。
+
+	变体（结构差异，不是换色）：
+	  A 恒定 chips 行 —— 页签栏之下、两页筛选控件之上，跨页签共享、不重建。
+	  B 页内控件     —— 状态 chips 融进各页自己的筛选区（时间页贴快捷按钮行、标题页贴搜索框），随页签重建。
+	  C 漏斗下拉     —— 不放常驻控件；动作行放「筛选 ▾」漏斗按钮，点开 popover 勾选，带激活计数。
+-->
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>PROTOTYPE · 状态筛选放哪（A/B/C）</title>
+<style>
+	:root {
+		--bg-primary: #ffffff;
+		--bg-secondary: #f5f6f8;
+		--bg-modifier-hover: rgba(0, 0, 0, 0.06);
+		--bg-modifier-border: #e0e2e6;
+		--bg-modifier-border-hover: #b8bcc4;
+		--text-normal: #222222;
+		--text-muted: #6a6d73;
+		--text-faint: #9a9da3;
+		--text-accent: #7b6cd9;
+		--interactive-accent: #7b6cd9;
+	}
+	@media (prefers-color-scheme: dark) {
+		:root {
+			--bg-primary: #1e1e22;
+			--bg-secondary: #26262b;
+			--bg-modifier-hover: rgba(255, 255, 255, 0.08);
+			--bg-modifier-border: #3a3a41;
+			--bg-modifier-border-hover: #55555e;
+			--text-normal: #dcddde;
+			--text-muted: #9a9da3;
+			--text-faint: #6a6d73;
+			--text-accent: #a394f0;
+			--interactive-accent: #a394f0;
+		}
+	}
+	* { box-sizing: border-box; }
+	body {
+		margin: 0;
+		padding: 1.5rem 1.5rem 6rem;
+		background: var(--bg-secondary);
+		color: var(--text-normal);
+		font: 14px/1.5 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+	}
+
+	/* ===== 原型外壳（评估对象之外的说明文字） ===== */
+	.proto-caption {
+		max-width: 1080px;
+		margin: 0 auto 0.75rem;
+		padding: 0.6rem 0.9rem;
+		border: 1px dashed var(--text-faint);
+		border-radius: 8px;
+		background: var(--bg-primary);
+		font-size: 13px;
+	}
+	.proto-caption b { color: var(--text-accent); }
+	.proto-caption .tradeoff { color: var(--text-muted); }
+
+	/* ===== 仿真主弹窗 ===== */
+	.modal {
+		max-width: 1080px;
+		margin: 0 auto;
+		background: var(--bg-primary);
+		border: 1px solid var(--bg-modifier-border);
+		border-radius: 10px;
+		padding: 1rem;
+	}
+	.modal-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 0.75rem;
+	}
+	.modal-header h2 { margin: 0; font-size: 1.15rem; }
+	.layout {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 1rem;
+	}
+	.pane {
+		border: 1px solid var(--bg-modifier-border);
+		border-radius: 8px;
+		padding: 0.75rem;
+		min-height: 420px;
+		display: flex;
+		flex-direction: column;
+	}
+	.pane h3 { margin: 0 0 0.6rem; font-size: 1rem; }
+
+	/* 页签栏 */
+	.tab-bar { display: flex; gap: 0.5rem; margin-bottom: 0.6rem; }
+	.tab-btn {
+		flex: 1;
+		padding: 0.35rem 0.6rem;
+		border: 1px solid var(--bg-modifier-border);
+		border-radius: 6px;
+		background: var(--bg-primary);
+		color: var(--text-muted);
+		cursor: pointer;
+		font: inherit;
+	}
+	.tab-btn.tab-active {
+		background: var(--bg-modifier-hover);
+		color: var(--text-accent);
+		border-color: var(--bg-modifier-border-hover);
+		font-weight: 600;
+	}
+
+	/* 各页筛选控件（与 styles.css 同名，便于回映代码） */
+	.tah-quick-row { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.5rem; }
+	.tah-quick-btn {
+		padding: 0.25rem 0.65rem;
+		border: 1px solid var(--bg-modifier-border);
+		border-radius: 999px;
+		background: var(--bg-primary);
+		color: var(--text-muted);
+		cursor: pointer;
+		font: inherit;
+		font-size: 13px;
+	}
+	.tah-quick-btn:hover { background: var(--bg-modifier-hover); }
+	.tah-quick-btn-selected {
+		background: var(--bg-modifier-hover);
+		color: var(--text-accent);
+		border-color: var(--interactive-accent);
+		font-weight: 600;
+	}
+	.tah-picker-range-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+		margin-bottom: 0.5rem;
+	}
+	.tah-range-label { color: var(--text-muted); font-size: 13px; }
+	.tah-search-row { display: flex; gap: 0.4rem; margin-bottom: 0.5rem; }
+	.tah-search-input {
+		flex: 1;
+		padding: 0.35rem 0.6rem;
+		border: 1px solid var(--bg-modifier-border);
+		border-radius: 6px;
+		background: var(--bg-primary);
+		color: var(--text-normal);
+		font: inherit;
+	}
+	.tah-parse-label { margin-bottom: 0.5rem; }
+
+	/* 状态筛选 chips（三档） */
+	.status-chips { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+	.status-chips .dim-label { color: var(--text-faint); font-size: 12px; margin-right: 0.1rem; }
+	.status-chip {
+		padding: 0.25rem 0.75rem;
+		border: 1px solid var(--bg-modifier-border);
+		border-radius: 999px;
+		background: var(--bg-primary);
+		color: var(--text-muted);
+		cursor: pointer;
+		font: inherit;
+		font-size: 13px;
+	}
+	.status-chip:hover { background: var(--bg-modifier-hover); }
+	.status-chip.chip-on {
+		background: var(--bg-modifier-hover);
+		color: var(--text-accent);
+		border-color: var(--interactive-accent);
+		font-weight: 600;
+	}
+
+	/* 动作行（计数 + 加入全部） */
+	.tah-picker-actions {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+		margin: 0.5rem 0;
+	}
+	.tah-secondary-btn {
+		padding: 0.25rem 0.65rem;
+		border: 1px solid var(--bg-modifier-border);
+		border-radius: 6px;
+		background: var(--bg-primary);
+		color: var(--text-normal);
+		cursor: pointer;
+		font: inherit;
+		font-size: 13px;
+	}
+	.tah-secondary-btn:disabled { opacity: 0.5; cursor: default; }
+
+	/* 变体 C：漏斗按钮 + popover */
+	.filter-wrap { position: relative; }
+	.funnel-btn {
+		position: relative;
+		padding: 0.25rem 0.65rem;
+		border: 1px solid var(--bg-modifier-border);
+		border-radius: 6px;
+		background: var(--bg-primary);
+		color: var(--text-normal);
+		cursor: pointer;
+		font: inherit;
+		font-size: 13px;
+	}
+	.funnel-btn.funnel-on {
+		color: var(--text-accent);
+		border-color: var(--interactive-accent);
+		background: var(--bg-modifier-hover);
+	}
+	.funnel-count {
+		display: inline-block;
+		margin-left: 0.35rem;
+		padding: 0 0.4rem;
+		border-radius: 999px;
+		background: var(--interactive-accent);
+		color: var(--bg-primary);
+		font-size: 11px;
+	}
+	.popover {
+		position: absolute;
+		top: calc(100% + 4px);
+		right: 0;
+		z-index: 30;
+		min-width: 190px;
+		padding: 0.6rem 0.75rem;
+		border: 1px solid var(--bg-modifier-border-hover);
+		border-radius: 8px;
+		background: var(--bg-primary);
+		box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+	}
+	.popover label {
+		display: flex;
+		align-items: center;
+		gap: 0.45rem;
+		padding: 0.25rem 0;
+		cursor: pointer;
+	}
+	.popover .hint { color: var(--text-faint); font-size: 12px; margin-top: 0.35rem; }
+	.popover .clear { margin-top: 0.45rem; width: 100%; }
+
+	/* 任务列表 */
+	.tah-task-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+		overflow-y: auto;
+		flex: 1;
+	}
+	.tah-task-item {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.4rem 0.6rem;
+		border: 1px solid var(--bg-modifier-border);
+		border-radius: 6px;
+	}
+	.tah-task-action { cursor: pointer; }
+	.tah-task-action:hover {
+		background: var(--bg-modifier-hover);
+		border-color: var(--bg-modifier-border-hover);
+	}
+	.tah-task-joined { cursor: default; }
+	.tah-task-joined .tah-task-title { color: var(--text-muted); }
+	.tah-task-info { min-width: 0; flex: 1; }
+	.tah-task-title {
+		font-weight: 500;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.tah-task-meta {
+		font-size: 12px;
+		color: var(--text-muted);
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem 0.5rem;
+	}
+	.tah-task-joined-badge {
+		padding: 0.05rem 0.45rem;
+		border-radius: 999px;
+		background: var(--bg-modifier-hover);
+		color: var(--text-accent);
+		font-size: 11px;
+		white-space: nowrap;
+	}
+	.tah-task-action-hint { flex: 0 0 auto; color: var(--text-faint); }
+	.tah-empty { color: var(--text-faint); padding: 1rem 0.25rem; }
+
+	.unknown-hint {
+		margin-top: 0.45rem;
+		color: var(--text-faint);
+		font-size: 12px;
+	}
+
+	/* ===== 悬浮切换条（原型外壳，非评估对象） ===== */
+	#switcher {
+		position: fixed;
+		left: 50%;
+		bottom: 14px;
+		transform: translateX(-50%);
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.5rem 0.9rem;
+		border-radius: 999px;
+		background: #1b1b1f;
+		color: #f2f2f4;
+		box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+		z-index: 100;
+		font-size: 13px;
+	}
+	#switcher button {
+		border: 1px solid #4a4a52;
+		border-radius: 999px;
+		background: #2c2c32;
+		color: #f2f2f4;
+		cursor: pointer;
+		font: inherit;
+		width: 28px;
+		height: 28px;
+	}
+	#switcher button:hover { background: #3d3d45; }
+	#switcher #variant-label { font-weight: 600; white-space: nowrap; }
+	#switcher #state-readout { color: #b7b7bf; white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<div class="proto-caption" id="caption"></div>
+
+<div class="modal">
+	<div class="modal-header">
+		<h2>生成任务报告</h2>
+		<button class="tah-secondary-btn" disabled>生成报告</button>
+	</div>
+	<div class="layout">
+		<section class="pane" id="left-pane">
+			<h3>选择任务</h3>
+			<div class="tab-bar" id="tab-bar"></div>
+			<div id="filter-area"></div>
+			<div class="tah-picker-actions" id="actions-row"></div>
+			<div class="tah-task-list" id="left-list"></div>
+			<div class="unknown-hint" id="unknown-hint"></div>
+		</section>
+		<section class="pane">
+			<h3>报告集合 <span class="tah-range-label" id="joined-count"></span></h3>
+			<div class="tah-task-list" id="right-list"></div>
+		</section>
+	</div>
+</div>
+
+<div id="switcher">
+	<button id="prev" title="上一个变体（←）">←</button>
+	<span id="variant-label"></span>
+	<button id="next" title="下一个变体（→）">→</button>
+	<span id="state-readout"></span>
+</div>
+
+<script>
+	// ===== 仿真数据（无持久化，刷新即还原） =====
+	// statusClass 映射仿真状态目录：catalog 之外的值 → unknown（ADR-0015 第四档之牙）。
+	const CATALOG = { open: "todo", "in-progress": "in-progress", done: "completed" };
+	const TASKS = [
+		{ id: "t1", title: "写周报草稿", status: "in-progress", priority: "high", tags: ["报告"], contexts: ["工作"] },
+		{ id: "t2", title: "修复登录跳转", status: "open", priority: "high", tags: ["前端"], contexts: ["工作"] },
+		{ id: "t3", title: "调研 TaskNotes API", status: "done", priority: "medium", tags: ["调研"] },
+		{ id: "t4", title: "更新依赖版本", status: "open", priority: "low", tags: ["维护"] },
+		{ id: "t5", title: "撰写发布说明", status: "in-progress", priority: "medium", tags: ["发布"] },
+		{ id: "t6", title: "重构筛选逻辑", status: "done", priority: "medium", tags: ["前端"], contexts: ["工作"] },
+		{ id: "t7", title: "处理认不出状态的任务", status: "blocked", priority: "low", tags: ["杂务"] },
+		{ id: "t8", title: "翻译英文文档", status: "open", priority: "low", tags: ["翻译"], contexts: ["家"] },
+	];
+	const classOf = (task) => CATALOG[task.status] ?? "unknown";
+
+	// ===== 会话状态（内存） =====
+	const state = {
+		variant: "A",
+		tab: "title",          // 标题页更能暴露「搜索框 + 状态筛选」的拥挤问题
+		statuses: new Set(),   // 空 = 不过滤
+		query: "",
+		range: null,           // 时间页筛选区间（仅展示用）
+		joined: new Set(["t3", "t6"]),
+		popoverOpen: false,
+	};
+
+	const VARIANTS = {
+		A: { name: "A（恒定 chips 行）", caption: "页签栏之下、两页筛选控件之上，跨页签共享、切换不重建。", tradeoff: "赌的是：状态筛选是共享维度，常驻可见最顺手；代价是恒占一行高度，时间页的日历空间被挤。" },
+		B: { name: "B（页内控件）", caption: "chips 融进各页自己的筛选区：时间页贴快捷按钮行，标题页贴搜索框下。", tradeoff: "赌的是：筛选控件应该和它生效的语境长在一起；代价是切页签时控件重建、位置跳动，且状态筛选看似只属于当前页。" },
+		C: { name: "C（漏斗下拉）", caption: "不放常驻控件；动作行放「筛选 ▾」漏斗，点开 popover 勾选三档，带激活计数。", tradeoff: "赌的是：状态筛选是低频精修动作，不该常驻抢空间；代价是可发现性差、多一次点击，选项被藏起来。" },
+	};
+
+	// ===== URL 同步（?variant=，file:// 下失败则退化为 #variant=） =====
+	function readVariant() {
+		const q = new URLSearchParams(location.search).get("variant");
+		const h = new URLSearchParams(location.hash.replace(/^#/, "")).get("variant");
+		const v = (q || h || "A").toUpperCase();
+		return VARIANTS[v] ? v : "A";
+	}
+	function writeVariant(v) {
+		try {
+			history.replaceState(null, "", location.pathname + "?variant=" + v);
+		} catch {
+			location.hash = "variant=" + v;
+		}
+	}
+
+	// ===== 筛选语义（与需求草案一致：三档 OR，全不选 = 不过滤；未知只在全不选时出现） =====
+	function matchingTasks() {
+		const q = state.query.trim().toLowerCase();
+		return TASKS.filter((t) => {
+			if (q && !t.title.toLowerCase().includes(q)) return false;
+			if (state.statuses.size > 0) {
+				if (classOf(t) === "unknown") return false;
+				if (!state.statuses.has(classOf(t))) return false;
+			}
+			return true;
+		});
+	}
+
+	// ===== 渲染 =====
+	function chipsHtml(prefix) {
+		const cls = [["todo", "待办"], ["in-progress", "进行中"], ["completed", "已结束"]];
+		return `<div class="status-chips">
+			<span class="dim-label">状态</span>
+			${cls.map(([key, label]) => `<button class="status-chip ${state.statuses.has(key) ? "chip-on" : ""}"
+				data-act="toggle-status" data-value="${key}" aria-pressed="${state.statuses.has(key)}"
+				id="${prefix}-${key}">${label}</button>`).join("")}
+		</div>`;
+	}
+
+	function timeFilterHtml() {
+		const presets = ["本周", "本月", "本季度", "今年", "自定义…"];
+		return `
+			<div class="tah-quick-row">
+				${presets.map((p) => `<button class="tah-quick-btn ${state.range === p ? "tah-quick-btn-selected" : ""}"
+					data-act="pick-range" data-value="${p}">${p}</button>`).join("")}
+			</div>
+			<div class="tah-picker-range-row">
+				<span class="tah-range-label">${state.range ? "当前筛选：2026-10-26 ~ 2026-11-01（" + state.range + "）" : "未选区间"}</span>
+				${state.range ? `<button class="tah-quick-btn" data-act="clear-range">清除</button>` : ""}
+			</div>`;
+	}
+
+	function titleFilterHtml() {
+		return `
+			<div class="tah-search-row">
+				<input class="tah-search-input" id="search-input" type="text"
+					placeholder="关键字 #标签 @上下文" value="${state.query}">
+				${state.query ? `<button class="tah-quick-btn" data-act="clear-query">×</button>` : ""}
+			</div>`;
+	}
+
+	function renderFilterArea() {
+		const area = document.getElementById("filter-area");
+		const perTab = state.tab === "time" ? timeFilterHtml() : titleFilterHtml();
+		if (state.variant === "A") {
+			area.innerHTML = chipsHtml("a") + perTab;
+		} else if (state.variant === "B") {
+			// 页内：时间页贴在快捷行下、标题页贴在搜索框下；随页签重建
+			area.innerHTML = perTab + chipsHtml("b");
+		} else {
+			area.innerHTML = perTab;
+		}
+	}
+
+	function renderActions() {
+		const matched = matchingTasks();
+		const addable = matched.filter((t) => !state.joined.has(t.id));
+		const row = document.getElementById("actions-row");
+		if (state.variant === "C") {
+			const n = state.statuses.size;
+			row.innerHTML = `
+				<span class="tah-range-label">筛选结果 ${matched.length} · 可加入 ${addable.length}</span>
+				<div class="filter-wrap">
+					<button class="funnel-btn ${n > 0 ? "funnel-on" : ""}" data-act="toggle-popover"
+						aria-expanded="${state.popoverOpen}">筛选 ▾${n > 0 ? `<span class="funnel-count">${n}</span>` : ""}</button>
+					${state.popoverOpen ? `
+					<div class="popover">
+						${[["todo", "待办"], ["in-progress", "进行中"], ["completed", "已结束"]].map(([key, label]) => `
+							<label><input type="checkbox" data-act="toggle-status" data-value="${key}"
+								${state.statuses.has(key) ? "checked" : ""}> ${label}</label>`).join("")}
+						<div class="hint">认不出状态的任务只在全部不勾时出现</div>
+						<button class="tah-secondary-btn clear" data-act="clear-status">清除状态筛选</button>
+					</div>` : ""}
+				</div>
+				<button class="tah-secondary-btn" data-act="add-all" ${addable.length === 0 ? "disabled" : ""}>加入全部（${addable.length}）</button>`;
+		} else {
+			row.innerHTML = `
+				<span class="tah-range-label">筛选结果 ${matched.length} · 可加入 ${addable.length}</span>
+				<button class="tah-secondary-btn" data-act="add-all" ${addable.length === 0 ? "disabled" : ""}>加入全部（${addable.length}）</button>`;
+		}
+	}
+
+	function taskRowHtml(task, side) {
+		const joined = state.joined.has(task.id);
+		const meta = [`状态:${task.status}`, `优先级:${task.priority}`];
+		const tags = (task.tags || []).map((t) => "#" + t).join(" ");
+		const ctx = (task.contexts || []).map((c) => "@" + c).join(" ");
+		return `<div class="tah-task-item ${side === "left" && joined ? "tah-task-joined" : "tah-task-action"}"
+				${side === "left" && joined ? "" : `data-act="${side === "left" ? "join" : "remove"}" data-value="${task.id}"`}>
+			<div class="tah-task-info">
+				<div class="tah-task-title">${task.title}</div>
+				<div class="tah-task-meta"><span>${meta.join(" · ")}</span><span>${tags} ${ctx}</span></div>
+			</div>
+			${side === "left"
+				? (joined ? `<span class="tah-task-joined-badge">已加入</span>` : `<span class="tah-task-action-hint">＋</span>`)
+				: `<span class="tah-task-action-hint">－</span>`}
+		</div>`;
+	}
+
+	function renderLists() {
+		const matched = matchingTasks();
+		const left = document.getElementById("left-list");
+		left.innerHTML = matched.length === 0
+			? `<div class="tah-empty">没有匹配的任务</div>`
+			: matched.map((t) => taskRowHtml(t, "left")).join("");
+
+		const joinedTasks = TASKS.filter((t) => state.joined.has(t.id));
+		const right = document.getElementById("right-list");
+		right.innerHTML = joinedTasks.length === 0
+			? `<div class="tah-empty">还没有已加入的任务</div>`
+			: joinedTasks.map((t) => taskRowHtml(t, "right")).join("");
+		document.getElementById("joined-count").textContent = `（${joinedTasks.length}）`;
+
+		// 未知任务的「可见的消失」提示（Q2 推荐）
+		const hiddenUnknown = TASKS.filter((t) => classOf(t) === "unknown" && !state.joined.has(t.id)).length;
+		const hint = document.getElementById("unknown-hint");
+		hint.textContent = (state.statuses.size > 0 && hiddenUnknown > 0)
+			? `另有 ${hiddenUnknown} 条状态未知的任务未显示` : "";
+	}
+
+	function renderTabs() {
+		const bar = document.getElementById("tab-bar");
+		bar.innerHTML = [["time", "按时间"], ["title", "按标题"]].map(([key, label]) =>
+			`<button class="tab-btn ${state.tab === key ? "tab-active" : ""}" data-act="tab" data-value="${key}">${label}</button>`
+		).join("");
+	}
+
+	function renderCaption() {
+		const v = VARIANTS[state.variant];
+		document.getElementById("caption").innerHTML =
+			`<b>${v.name}</b> —— ${v.caption} <span class="tradeoff">${v.tradeoff}</span><br>
+			<span class="tradeoff">点任务行可加入/移除，chips、页签、搜索都可交互；底部悬浮条切换变体（← → 键）。</span>`;
+	}
+
+	function renderStateReadout() {
+		const matched = matchingTasks();
+		const sel = [...state.statuses].map((k) => ({ todo: "待办", "in-progress": "进行中", completed: "已结束" }[k])).join("+");
+		document.getElementById("state-readout").textContent =
+			`状态:${sel || "不过滤"} · 页签:${state.tab === "time" ? "按时间" : "按标题"} · 命中:${matched.length} · 已加入:${state.joined.size}`;
+		document.getElementById("variant-label").textContent = VARIANTS[state.variant].name;
+	}
+
+	function render() {
+		renderTabs();
+		renderFilterArea();
+		renderActions();
+		renderLists();
+		renderCaption();
+		renderStateReadout();
+	}
+
+	// ===== 交互 =====
+	document.addEventListener("click", (e) => {
+		const el = e.target.closest("[data-act]");
+		if (!el) {
+			if (state.popoverOpen && !e.target.closest(".filter-wrap")) { state.popoverOpen = false; render(); }
+			return;
+		}
+		const act = el.dataset.act;
+		const value = el.dataset.value;
+		switch (act) {
+			case "toggle-status":
+				state.statuses.has(value) ? state.statuses.delete(value) : state.statuses.add(value);
+				break;
+			case "clear-status": state.statuses.clear(); state.popoverOpen = false; break;
+			case "toggle-popover": state.popoverOpen = !state.popoverOpen; break;
+			case "tab": state.tab = value; state.popoverOpen = false; break;
+			case "pick-range": state.range = value; break;
+			case "clear-range": state.range = null; break;
+			case "clear-query": state.query = ""; break;
+			case "join": state.joined.add(value); break;
+			case "remove": state.joined.delete(value); break;
+			case "add-all":
+				matchingTasks().forEach((t) => state.joined.add(t.id));
+				break;
+		}
+		render();
+	});
+
+	document.addEventListener("input", (e) => {
+		if (e.target.id === "search-input") {
+			state.query = e.target.value;
+			renderFilterArea(); renderActions(); renderLists(); renderStateReadout();
+			document.getElementById("search-input")?.focus();
+		}
+	});
+
+	function cycle(dir) {
+		const keys = Object.keys(VARIANTS);
+		const i = keys.indexOf(state.variant);
+		state.variant = keys[(i + dir + keys.length) % keys.length];
+		state.popoverOpen = false;
+		writeVariant(state.variant);
+		render();
+	}
+	document.getElementById("prev").addEventListener("click", () => cycle(-1));
+	document.getElementById("next").addEventListener("click", () => cycle(1));
+	document.addEventListener("keydown", (e) => {
+		const tag = e.target.tagName;
+		if (tag === "INPUT" || tag === "TEXTAREA" || e.target.isContentEditable) return;
+		if (e.key === "ArrowLeft") cycle(-1);
+		if (e.key === "ArrowRight") cycle(1);
+	});
+
+	state.variant = readVariant();
+	writeVariant(state.variant);
+	render();
+</script>
+</body>
+</html>
