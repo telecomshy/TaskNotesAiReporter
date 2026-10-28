@@ -58,7 +58,17 @@
 
 `src/utils/taskInfoAssembly.ts:23-38`、`@tasknotes/model` 的 `mapping.ts`。
 
-## 5. 文档 / 参考
+## 5. 状态可增删改；改 value 不迁移任务（2026-10-27 复核）
+
+> 本节复核自本地 `tasknotes-main/` 检出（其 package.json 标 4.12.5），与文首 4.13.1 的固定调研并存；上游升级后一并复核。
+
+- **用户可增删改状态**：TaskNotes 设置的状态属性卡提供添加（`src/settings/tabs/taskProperties/statusPropertyCard.ts`，`addStatusButton`）、删除（同文件 `deleteStatus`）与逐字段编辑（`value` / `label` / `color` / `icon` / `isCompleted` / `nextStatus` / `autoArchive` / `delayMinutes` / `excludeFromCycle`）。配置存 `plugin.settings.customStatuses`，经 `StatusManager.updateStatuses`（`src/services/StatusManager.ts:174`）生效。
+- **改 `value`（值名）不迁移任务笔记**：`valueInput` 的 change 处理（`statusPropertyCard.ts:457-479`）只修正其它状态的 `nextStatus` 引用并重渲染设置页，不写任何任务文件。任务 frontmatter 里的旧值残留 → 对本插件即悬空状态值（`statusClassOf` 查不到 → 未知）。
+- 改 `label`（显示名）只影响显示，不影响 `task.status`（存的是 `value`）的匹配。
+- 状态配置有稳定 `id`（删除与 `nextStatus` 修正均按 `id` 关联）。若将来做「状态 → 归类」映射配置，应按 `id` 键而非 `value` 键，方可抗改名。
+- `StatusConfig` 字段比第 2 节记录的更丰富（另有 `nextStatus` / `autoArchive` / `delayMinutes` / `excludeFromCycle` / `icon` 等），但仍**没有**「进行中」语义标志——第 2 节结论不变。
+
+## 6. 文档 / 参考
 
 - 仓库：<https://github.com/callumalpass/tasknotes>
 - JavaScript API 文档：`docs/javascript-api.md`（`api.catalog.statuses()`、`api.tasks.*`）
