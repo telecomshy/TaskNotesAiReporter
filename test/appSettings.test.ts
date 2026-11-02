@@ -65,10 +65,7 @@ test("toggleDateField 对修改时间（dateModified）开关合法", () => {
 });
 
 test("默认日期口径 = 期间内发生或安排的活动（完成+修改+创建+计划，不含到期）", () => {
-	assert.deepEqual(
-		[...DEFAULT_SETTINGS.dateFields].sort(),
-		["completedDate", "dateCreated", "dateModified", "scheduled"]
-	);
+	assert.deepEqual(DEFAULT_SETTINGS.dateFields, ["completedDate", "dateModified", "dateCreated", "scheduled"]);
 });
 
 test("toggleDateField 打开：追加且不重复", () => {

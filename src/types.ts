@@ -185,7 +185,7 @@ export const DEFAULT_SETTINGS: TaskNotesAIHelperSettings = {
 	maxTokens: 8192,
 	timeoutSeconds: 60,
 	reportFolder: "TaskNotes/Reports",
-	dateFields: ["completedDate", "scheduled", "dateCreated", "dateModified"],
+	dateFields: ["completedDate", "dateModified", "dateCreated", "scheduled"],
 	weekStartsOnMonday: true,
 	language: "English",
 	uiLanguage: "auto",

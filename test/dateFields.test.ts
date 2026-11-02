@@ -67,10 +67,6 @@ test("无任何日期字段时回退到 now 所在周", () => {
 
 // ===== 修改时间（dateModified）口径（#80） =====
 
-test("「修改时间」是日期口径之一（设置页可勾选）", () => {
-	assert.ok(DATE_FIELDS.includes("dateModified"), "日期口径表应含 dateModified（修改时间）");
-});
-
 test("dateModified 的 ISO 时间戳（含毫秒与偏移）参与自动筛选", () => {
 	const inside = filterTasksByDateRange(
 		[makeTask({ id: "a", dateModified: "2026-09-05T09:15:42.123+08:00" })],
