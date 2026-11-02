@@ -114,6 +114,7 @@ export const en = {
 		dateFieldDue: "Due date (due)",
 		dateFieldScheduled: "Scheduled date (scheduled)",
 		dateFieldCreated: "Created date (dateCreated)",
+		dateFieldModified: "Modified date (dateModified)",
 		weekStartsMondayName: "Monday as week start",
 		weekStartsMondayDesc: "When enabled, a week starts on Monday; otherwise on Sunday.",
 		reportLanguageName: "Report language",

@@ -56,6 +56,21 @@ test("setReportFolder 去空白写入（变更侧规则；载入侧不 trim，�
 	assert.equal(s.reportFolder, "我的/报告");
 });
 
+test("toggleDateField 对修改时间（dateModified）开关合法", () => {
+	const s = state({ dateFields: [] });
+	toggleDateField(s, "dateModified", true);
+	assert.deepEqual(s.dateFields, ["dateModified"]);
+	toggleDateField(s, "dateModified", false);
+	assert.deepEqual(s.dateFields, []);
+});
+
+test("默认日期口径 = 期间内发生或安排的活动（完成+修改+创建+计划，不含到期）", () => {
+	assert.deepEqual(
+		[...DEFAULT_SETTINGS.dateFields].sort(),
+		["completedDate", "dateCreated", "dateModified", "scheduled"]
+	);
+});
+
 test("toggleDateField 打开：追加且不重复", () => {
 	const s = state({ dateFields: ["due"] });
 	toggleDateField(s, "due", true);

@@ -112,6 +112,7 @@ export const zh: Strings = {
 		dateFieldDue: "到期时间（due）",
 		dateFieldScheduled: "计划时间（scheduled）",
 		dateFieldCreated: "创建时间（dateCreated）",
+		dateFieldModified: "修改时间（dateModified）",
 		weekStartsMondayName: "周一作为一周起始日",
 		weekStartsMondayDesc: "开启后，周报的一周从周一开始；关闭则从周日开始。",
 		reportLanguageName: "报告语言",

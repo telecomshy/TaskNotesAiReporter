@@ -65,7 +65,7 @@ export interface TaskNotesPublicApi {
 }
 
 /** 日期字段口径（用于任务自动筛选） */
-export type DateField = "completedDate" | "due" | "scheduled" | "dateCreated";
+export type DateField = "completedDate" | "due" | "scheduled" | "dateCreated" | "dateModified";
 
 /** 日期范围（闭区间，YYYY-MM-DD） */
 export interface DateRange {
@@ -185,7 +185,7 @@ export const DEFAULT_SETTINGS: TaskNotesAIHelperSettings = {
 	maxTokens: 8192,
 	timeoutSeconds: 60,
 	reportFolder: "TaskNotes/Reports",
-	dateFields: ["completedDate", "scheduled", "due"],
+	dateFields: ["completedDate", "scheduled", "dateCreated", "dateModified"],
 	weekStartsOnMonday: true,
 	language: "English",
 	uiLanguage: "auto",

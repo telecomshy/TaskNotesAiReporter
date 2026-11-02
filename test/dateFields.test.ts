@@ -64,3 +64,33 @@ test("无任何日期字段时回退到 now 所在周", () => {
 	const range = getReportRange([makeTask({ id: "a" })], true, NOW);
 	assert.deepEqual(range, { start: "2026-01-05", end: "2026-01-11" });
 });
+
+// ===== 修改时间（dateModified）口径（#80） =====
+
+test("「修改时间」是日期口径之一（设置页可勾选）", () => {
+	assert.ok(DATE_FIELDS.includes("dateModified"), "日期口径表应含 dateModified（修改时间）");
+});
+
+test("dateModified 的 ISO 时间戳（含毫秒与偏移）参与自动筛选", () => {
+	const inside = filterTasksByDateRange(
+		[makeTask({ id: "a", dateModified: "2026-09-05T09:15:42.123+08:00" })],
+		RANGE,
+		["dateModified"]
+	);
+	assert.deepEqual(inside.map((t) => t.id), ["a"], "区间内的修改时间应命中");
+	const outside = filterTasksByDateRange(
+		[makeTask({ id: "b", dateModified: "2026-08-31T23:59:59.999+08:00" })],
+		RANGE,
+		["dateModified"]
+	);
+	assert.deepEqual(outside, [], "区间外的修改时间不应命中");
+});
+
+test("dateModified 参与日期范围推导", () => {
+	const range = getReportRange(
+		[makeTask({ id: "a", dateModified: "2026-09-05T09:15:42.123+08:00" })],
+		true,
+		NOW
+	);
+	assert.deepEqual(range, { start: "2026-09-05", end: "2026-09-05" });
+});

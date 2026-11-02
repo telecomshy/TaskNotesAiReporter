@@ -22,6 +22,7 @@ export const DATE_FIELD_TABLE: readonly DateFieldEntry[] = [
 	{ field: "due", labelKey: "settings.dateFieldDue" },
 	{ field: "scheduled", labelKey: "settings.dateFieldScheduled" },
 	{ field: "dateCreated", labelKey: "settings.dateFieldCreated" },
+	{ field: "dateModified", labelKey: "settings.dateFieldModified" },
 ];
 
 /** 表内的全部日期字段（顺序与表一致）。 */
