@@ -12,15 +12,15 @@
 
 import {
 	DEFAULT_SETTINGS,
+	DATE_FIELDS,
 	type DateField,
 	type ReportTemplate,
 } from "../types";
 import type { UiLanguageSetting } from "../i18n";
-import { DATE_FIELDS } from "../core/dateFields";
 
 /**
- * 日期口径的合法取值：来自「日期口径」表（`../core/dateFields`），与自动筛选、
- * 日期范围推导、设置页文案同源（见 #50）。
+ * 日期口径的合法取值：来自模型层清单（`../types` 的 `DATE_FIELDS`），与自动筛选、
+ * 日期范围推导、设置页文案同源（#50 的同源目标由单一真源以更强形式达成，见 #81）。
  */
 export const DATE_FIELD_VALUES: readonly DateField[] = DATE_FIELDS;
 

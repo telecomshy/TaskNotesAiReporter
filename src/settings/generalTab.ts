@@ -4,9 +4,9 @@
  */
 
 import { Setting } from "obsidian";
-import { DEFAULT_SETTINGS } from "../types";
+import { DATE_FIELDS, DEFAULT_SETTINGS } from "../types";
+import { dateFieldLabelKey } from "../i18n";
 import type { SettingsTabContext } from "./index";
-import { DATE_FIELD_TABLE } from "../core/dateFields";
 
 /** 渲染「常规配置」Tab */
 export function renderGeneralTab(container: HTMLElement, ctx: SettingsTabContext): void {
@@ -31,15 +31,15 @@ export function renderGeneralTab(container: HTMLElement, ctx: SettingsTabContext
 		cls: "setting-item-description",
 	});
 
-	// 日期口径逐项来自「日期口径」表（见 #50）：加一个口径只改那张表
-	for (const option of DATE_FIELD_TABLE) {
+	// 日期口径逐项来自模型层清单（见 #81）：加一个口径 = 清单一项 + 双语两个文案键
+	for (const field of DATE_FIELDS) {
 		new Setting(container)
-			.setName(t(option.labelKey))
+			.setName(t(dateFieldLabelKey(field)))
 			.addToggle((toggle) =>
 				toggle
-					.setValue(ctx.plugin.settings.dateFields.includes(option.field))
+					.setValue(ctx.plugin.settings.dateFields.includes(field))
 					.onChange((value) => {
-						void ctx.plugin.appSettings.toggleDateField(option.field, value);
+						void ctx.plugin.appSettings.toggleDateField(field, value);
 					})
 			);
 	}

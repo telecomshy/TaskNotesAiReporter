@@ -3,6 +3,7 @@
  * 纯逻辑，不依赖 Obsidian，可直接单元测试。
  */
 
+import type { DateField } from "../types";
 import { en, type Strings } from "./en";
 import { zh } from "./zh";
 
@@ -42,6 +43,16 @@ function resolve(source: unknown, key: string, plural: boolean): string | undefi
 /** 日历所需的数组型文案（月份、星期），按语言取。 */
 export function calendarLabels(language: UiLanguage): Strings["calendar"] {
 	return BUNDLES[language].calendar;
+}
+
+/**
+ * 「日期口径」文案键的命名约定（#81）：`settings.dateField` + 字段名去 `date` 前缀后首字母大写
+ * （如 `completedDate → settings.dateFieldCompletedDate`、`dateCreated → settings.dateFieldCreated`）。
+ * 约定本身不逐字符单测；由文案登记测试在双语 bundle 上间接兜底（漏登记即报红）。
+ */
+export function dateFieldLabelKey(field: DateField): string {
+	const suffix = field.replace(/^date/, "");
+	return `settings.dateField${suffix.charAt(0).toUpperCase()}${suffix.slice(1)}`;
 }
 
 /** 字符串表的深层可选类型：允许翻译器按部分目录构造（测试与渐进迁移）。 */

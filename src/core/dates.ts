@@ -3,9 +3,8 @@
  * 全部为纯函数，无 Obsidian 依赖，可单元测试。
  */
 
-import type { DateRange, TaskInfo } from "../types";
+import { DATE_FIELDS, type DateRange, type TaskInfo } from "../types";
 import { normalizeDateValue } from "./filter";
-import { DATE_FIELD_TABLE } from "./dateFields";
 
 /** 将 Date 格式化为本地时区的 YYYY-MM-DD */
 export function toDateString(date: Date): string {
@@ -48,11 +47,12 @@ export function getQuarterRange(anchor: Date): DateRange {
 }
 
 /**
- * 计算报告的「日期范围」：取所选任务在**日期口径表内全部字段**上的
+ * 计算报告的「日期范围」：取所选任务在**日期口径清单内全部字段**上的
  * 最早到最晚（均规范化为 YYYY-MM-DD）。创建日期恒存在，故范围恒有定义；
- * 仅当表内字段全缺时才回退到 now 所在周。
+ * 仅当清单内字段全缺时才回退到 now 所在周。
  *
- * 字段清单来自 `DATE_FIELD_TABLE`：表内字段都参与推导，加字段不会漏算 `{{range}}`（见 #50）。
+ * 字段清单来自模型层 `DATE_FIELDS`（单一真源，见 #81）：清单内字段都参与推导，
+ * 加字段不会漏算 `{{range}}`（#50 的同源目标由此以更强形式达成）。
  */
 export function getReportRange(
 	tasks: readonly TaskInfo[],
@@ -61,7 +61,7 @@ export function getReportRange(
 ): DateRange {
 	const dates: string[] = [];
 	for (const task of tasks) {
-		for (const { field } of DATE_FIELD_TABLE) {
+		for (const field of DATE_FIELDS) {
 			const normalized = normalizeDateValue(task[field]);
 			if (normalized) dates.push(normalized);
 		}

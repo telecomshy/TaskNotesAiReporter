@@ -1,6 +1,8 @@
 /**
  * 类型定义：TaskNotes 公开 API 的最小类型桩 + 本插件设置类型。
  * 这里只声明本插件实际用到的字段，避免依赖 TaskNotes 源码类型。
+ * 模型层数据常量（日期口径清单 `DATE_FIELDS`、`PRESET_PROVIDERS`、`DEFAULT_SETTINGS`）
+ * 与类型同居（`PRESET_PROVIDERS` 先例，见 #81）。
  * 设置相关的业务逻辑已迁移：归一化在 src/settings/logic.ts，
  * 供应商配置与当前模型解析在 src/settings/providerSettings.ts。
  */
@@ -64,8 +66,24 @@ export interface TaskNotesPublicApi {
 	};
 }
 
-/** 日期字段口径（用于任务自动筛选） */
-export type DateField = "completedDate" | "due" | "scheduled" | "dateCreated" | "dateModified";
+/**
+ * 「日期口径」清单：**单一真源**（见 #81），顺序即设置页展示顺序。
+ *
+ * 加一个日期口径 = 此处加一个字段名 + 双语各补一个文案键（键名按
+ * `i18n.dateFieldLabelKey` 的命名约定派生）；若默认勾选，另改 `DEFAULT_SETTINGS.dateFields`
+ * （默认集是产品决策、不从清单派生，原则见 ADR-0022）。
+ * 字段名写错或引用不存在的键 = 编译失败（`satisfies` 约束到 `TaskInfo` 的键）。
+ */
+export const DATE_FIELDS = [
+	"completedDate",
+	"due",
+	"scheduled",
+	"dateCreated",
+	"dateModified",
+] as const satisfies readonly (keyof TaskInfo)[];
+
+/** 日期字段口径（用于任务自动筛选）：从清单派生，类型与数据永不失同步。 */
+export type DateField = (typeof DATE_FIELDS)[number];
 
 /** 日期范围（闭区间，YYYY-MM-DD） */
 export interface DateRange {

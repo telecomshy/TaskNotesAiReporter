@@ -24,7 +24,8 @@ function inRange(value: string | undefined, range: DateRange): boolean {
 
 /**
  * 按日期范围自动筛选任务：任一选定的日期字段落在范围内即命中，按 id 去重，排除已归档任务。
- * 可选字段来自「日期口径」表（见 ./dateFields），与日期范围推导同源（见 #50）。
+ * 可选字段来自模型层「日期口径」清单（见 ../types 的 `DATE_FIELDS`），
+ * 与日期范围推导、设置页同源（#50；单一真源见 #81）。
  */
 export function filterTasksByDateRange(
 	tasks: readonly TaskInfo[],
