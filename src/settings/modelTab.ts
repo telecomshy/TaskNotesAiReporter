@@ -8,7 +8,7 @@ import type { ModelConfig, ModelProvider } from "../types";
 import type { Translator } from "../i18n";
 import { listModels, testConnection } from "../ai/client";
 import { describeAIError } from "../ai/errorMessage";
-import { modelsOf, isConfigured, isSelectable, isActiveModel } from "./providerSettings";
+import { modelsOf, isConfigured, isSelectable, isActiveModel, thinkingFor } from "./providerSettings";
 import type { SettingsTabContext } from "./index";
 
 /** 渲染「模型配置」Tab */
@@ -78,6 +78,51 @@ function renderActiveModelSection(container: HTMLElement, ctx: SettingsTabContex
 				ctx.refresh();
 			});
 		});
+
+	renderThinkingControl(container, ctx);
+}
+
+/**
+ * 「思考」三态控制（#84，ADR-0024）：作用于当前模型，偏好按模型持久化。
+ * 能力表判定驱动置灰与标注（强制思考 / 无思考 / 未知）；参数由能力表自动映射，界面不拼参数。
+ */
+function renderThinkingControl(container: HTMLElement, ctx: SettingsTabContext): void {
+	const t = ctx.plugin.t;
+	const settings = ctx.plugin.settings;
+	const provider = settings.providers.find((p) => p.id === settings.activeProviderId);
+	if (!provider || settings.activeModel === "") return;
+
+	const setting = provider.thinkingByModel?.[settings.activeModel] ?? "off";
+	const resolution = thinkingFor(provider, settings.activeModel);
+
+	const row = container.createDiv({ cls: "tah-provider-field tah-thinking-row" });
+	row.createSpan({ cls: "tah-provider-field-label", text: t("model.thinking") });
+	const group = row.createDiv({ cls: "tah-auth-group" });
+	const options = [
+		["auto", t("model.thinkingAuto")],
+		["on", t("model.thinkingOn")],
+		["off", t("model.thinkingOff")],
+	] as const;
+	for (const [value, label] of options) {
+		const btn = group.createEl("button", { text: label });
+		btn.addClass("tah-auth-btn");
+		btn.toggleClass("tah-auth-active", setting === value);
+		// 只有「强制思考」的模型置灰（关会 400）；无思考 / 能力未知只标注、不锁偏好（#84 口径）
+		btn.disabled = resolution.note === "forced";
+		btn.addEventListener("click", () => {
+			ctx.plugin.providers.setModelThinking(provider.id, settings.activeModel, value);
+			ctx.refresh();
+		});
+	}
+	if (resolution.note !== null) {
+		const noteText =
+			resolution.note === "forced"
+				? t("model.thinkingForced")
+				: resolution.note === "none"
+					? t("model.thinkingNone")
+					: t("model.thinkingUnknown");
+		row.createSpan({ cls: "tah-thinking-note", text: noteText });
+	}
 }
 
 /** 内置供应商卡片：仅需 api key，模型动态拉取 */

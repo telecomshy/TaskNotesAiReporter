@@ -274,3 +274,32 @@ test("normalizeSettings 不迁移非示例 id 的模板", () => {
 	assert.equal(settings.templates[0].name, LEGACY_EXAMPLE_NAME);
 	assert.equal(settings.templates[0].content, LEGACY_EXAMPLE_CONTENT);
 });
+
+// ===== 「思考」三态迁移（#84，ADR-0024） =====
+
+test("normalizeSettings 保留用户的「思考」偏好；非法三态值剔除（读取侧回退缺省关）", () => {
+	const raw = {
+		providers: [
+			{
+				id: "p",
+				name: "p",
+				type: "preset",
+				baseUrl: "https://x",
+				apiKeySecretId: "k",
+				models: ["a", "b"],
+				authType: "bearer",
+				thinkingByModel: { a: "on", b: "sometimes", c: "off" },
+			},
+		],
+	};
+	const settings = load(raw);
+	const p = settings.providers.find((x) => x.id === "p")!;
+	assert.deepEqual(p.thinkingByModel, { a: "on", c: "off" });
+});
+
+test("normalizeSettings 旧设置无思考偏好：不发明条目（每模型读取侧缺省＝关）", () => {
+	const settings = load({});
+	for (const p of settings.providers) {
+		assert.equal(p.thinkingByModel, undefined);
+	}
+});

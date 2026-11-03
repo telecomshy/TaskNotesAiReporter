@@ -11,6 +11,7 @@ import {
 import { fakeTaskRepository } from "./fakes/taskRepository";
 import { makeTask } from "./fakes/task";
 import type { AIClientConfig } from "../src/ai/client";
+import { AIClientError } from "../src/ai/errors";
 import type { DateRange } from "../src/types";
 
 function baseSettings(over: Partial<GenerateSettings> = {}): GenerateSettings {
@@ -54,12 +55,17 @@ function setup(
 		settings: () => baseSettings(),
 		resolveModel: () => ({
 			ok: true,
-			config: { baseUrl: "https://api.example.com", apiKey: "sk", model: "m" },
+			config: {
+				baseUrl: "https://api.example.com",
+				apiKey: "sk",
+				model: "m",
+				thinking: { setting: "off", param: null, note: "unknown" },
+			},
 		}),
 		chat: async (prompt, config) => {
 			captured.prompt = prompt;
 			captured.chatConfig = config;
-			return "生成的报告正文";
+			return { content: "生成的报告正文", hasReasoning: false };
 		},
 		save: async (folder, range, content, templateName) => {
 			captured.saved = { folder, range, content, templateName };
@@ -79,7 +85,7 @@ function failure(result: GenerateResult): GenerateFailure {
 test("成功：返回 path，并保存生成的正文", async () => {
 	const { deps, captured } = setup();
 	const result = await createGeneration(deps)(baseIntent());
-	assert.deepEqual(result, { ok: true, path: "TaskNotes/Reports/报告.md" });
+	assert.deepEqual(result, { ok: true, path: "TaskNotes/Reports/报告.md", fakeOff: false });
 	assert.equal(captured.saved?.content, "生成的报告正文");
 });
 
@@ -150,7 +156,13 @@ test("模型参数回退：该模型自带上限优先", async () => {
 	const { deps, captured } = setup({
 		resolveModel: () => ({
 			ok: true,
-			config: { baseUrl: "https://x", apiKey: "k", model: "m", maxTokens: 4096 },
+			config: {
+				baseUrl: "https://x",
+				apiKey: "k",
+				model: "m",
+				maxTokens: 4096,
+				thinking: { setting: "auto", param: null, note: null },
+			},
 		}),
 	});
 	await createGeneration(deps)(baseIntent());
@@ -195,7 +207,7 @@ test("重入守卫：进行中重入返回「生成中」，双击只产出一�
 	const { deps } = setup({
 		chat: async () => {
 			await gate;
-			return "正文";
+			return { content: "正文", hasReasoning: false };
 		},
 		save: async () => {
 			saves += 1;
@@ -262,4 +274,81 @@ test("附加要求：透传到被捕获的提示词", async () => {
 	const { deps, captured } = setup({ settings: settingsWithTemplate() });
 	await createGeneration(deps)(baseIntent({ templateId: "t1", extraRequirements: "请用轻松的语气。" }));
 	assert.ok(captured.prompt?.includes("请用轻松的语气。"));
+});
+
+// ===== 「思考」端到端（#84，ADR-0024） =====
+
+const thinkingOffParam = {
+	setting: "off" as const,
+	param: { name: "thinking", value: { type: "disabled" } },
+	note: null,
+};
+
+test("思考参数透传：当前模型的思考参数随 chat 配置交出（界面不拼参数）", async () => {
+	const { deps, captured } = setup({
+		resolveModel: () => ({
+			ok: true,
+			config: {
+				baseUrl: "https://api.example.com",
+				apiKey: "sk",
+				model: "m",
+				thinking: thinkingOffParam,
+			},
+		}),
+	});
+	await createGeneration(deps)(baseIntent());
+	assert.deepEqual(captured.chatConfig?.thinking, { name: "thinking", value: { type: "disabled" } });
+});
+
+test("假关告警：设关发参而响应仍带推理段 → 成功结果带 fakeOff", async () => {
+	const { deps } = setup({
+		resolveModel: () => ({
+			ok: true,
+			config: { baseUrl: "https://api.example.com", apiKey: "sk", model: "m", thinking: thinkingOffParam },
+		}),
+		chat: async () => ({ content: "生成的报告正文", hasReasoning: true }),
+	});
+	const result = await createGeneration(deps)(baseIntent());
+	assert.equal(result.ok, true);
+	assert.equal(result.ok && result.fakeOff, true);
+});
+
+test("假关不误报：未发参数（强制思考）或响应无推理段 → fakeOff false", async () => {
+	const forced = setup({
+		resolveModel: () => ({
+			ok: true,
+			config: {
+				baseUrl: "https://api.example.com",
+				apiKey: "sk",
+				model: "m",
+				thinking: { setting: "off", param: null, note: "forced" },
+			},
+		}),
+		chat: async () => ({ content: "正文", hasReasoning: true }),
+	});
+	const forcedResult = await createGeneration(forced.deps)(baseIntent());
+	assert.equal(forcedResult.ok === true && forcedResult.fakeOff, false);
+
+	const clean = setup({
+		resolveModel: () => ({
+			ok: true,
+			config: { baseUrl: "https://api.example.com", apiKey: "sk", model: "m", thinking: thinkingOffParam },
+		}),
+		chat: async () => ({ content: "正文", hasReasoning: false }),
+	});
+	const cleanResult = await createGeneration(clean.deps)(baseIntent());
+	assert.equal(cleanResult.ok === true && cleanResult.fakeOff, false);
+});
+
+test("400 拒收归 ai-error 上浮、不降级重试：chat 恰好调用一次", async () => {
+	let calls = 0;
+	const { deps } = setup({
+		chat: async () => {
+			calls++;
+			throw new AIClientError("chat.http", { status: 400, detail: "thinking param rejected" });
+		},
+	});
+	const result = failure(await createGeneration(deps)(baseIntent()));
+	assert.equal(result.reason, "ai-error");
+	assert.equal(calls, 1);
 });

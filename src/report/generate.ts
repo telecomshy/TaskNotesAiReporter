@@ -16,7 +16,8 @@ import type {
 	ReportTemplate,
 	TaskInfo,
 } from "../types";
-import type { AIClientConfig } from "../ai/client";
+import type { AIClientConfig, ChatResult } from "../ai/client";
+import { isThinkingFakeOff } from "../core/thinking";
 import { hydrateTasks, type TaskRepository } from "../tasks/repository";
 import { buildReportPrompt } from "../core/prompt";
 import { getReportRange } from "../core/dates";
@@ -50,8 +51,8 @@ export interface GenerateDeps {
 	settings(): GenerateSettings;
 	/** 供应商模块对当前模型 的解析结果（ADR-0010）。 */
 	resolveModel(): ActiveModelResolution;
-	/** 调用模型，返回生成正文。 */
-	chat(prompt: string, config: AIClientConfig): Promise<string>;
+	/** 调用模型，返回生成正文与推理段读面（假关判定用）。 */
+	chat(prompt: string, config: AIClientConfig): Promise<ChatResult>;
 	/** 保存报告，返回最终文件路径。 */
 	save(
 		folder: string,
@@ -73,7 +74,7 @@ export type GenerateFailureReason =
 	| "save-error";
 
 export type GenerateResult =
-	| { ok: true; path: string }
+	| { ok: true; path: string; fakeOff: boolean }
 	| { ok: "generating" }
 	| { ok: false; reason: GenerateFailureReason; error?: unknown };
 
@@ -118,6 +119,7 @@ async function runGeneration(intent: GenerateIntent, deps: GenerateDeps): Promis
 	const template = s.templates.find((t) => t.id === intent.templateId);
 
 	let content: string;
+	let fakeOff = false;
 	try {
 		// 任务水合：按 #48 一批补 详情；缺详情为空串、不中断生成，不重判 来源缺失（#49 修订一）。
 		const tasksWithDetails = await hydrateTasks(deps.repository, intent.tasks);
@@ -130,21 +132,27 @@ async function runGeneration(intent: GenerateIntent, deps: GenerateDeps): Promis
 			now,
 			statuses,
 		});
-		content = await deps.chat(prompt, {
+		const chatResult = await deps.chat(prompt, {
 			baseUrl: config.baseUrl,
 			apiKey: config.apiKey,
 			model: config.model,
 			temperature: s.temperature,
 			maxTokens: config.maxTokens ?? s.maxTokens,
 			timeoutSeconds: s.timeoutSeconds,
+			// 思考开关参数由能力表解析结果带出（一次只发一个，见 ADR-0024）。
+			thinking: config.thinking.param ?? undefined,
 		});
+		content = chatResult.content;
+		// 假关：设「关」、发出了关参数、响应仍带推理段——一次性非阻断告警由界面呈现（#84）。
+		fakeOff = isThinkingFakeOff(config.thinking, chatResult.hasReasoning);
 	} catch (error) {
+		// 400 拒收同样归 ai-error 上浮，不降级重试（避免双倍计费与「以为关了其实没关」）。
 		return { ok: false, reason: "ai-error", error };
 	}
 
 	try {
 		const path = await deps.save(s.reportFolder, range, content, template?.name);
-		return { ok: true, path };
+		return { ok: true, path, fakeOff };
 	} catch (error) {
 		return { ok: false, reason: "save-error", error };
 	}

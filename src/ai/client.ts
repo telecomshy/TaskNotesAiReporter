@@ -11,6 +11,7 @@ import { requestUrlTransport } from "./transport";
 import { buildChatCompletionsUrl, buildModelsUrl } from "../core/aiUrl";
 import { AIClientError } from "./errors";
 import { requestJson, type RequestFn } from "./request";
+import type { ThinkingParam } from "../types";
 
 export { AIClientError };
 export type { AIClientErrorCode, AIClientErrorDetails } from "./errors";
@@ -28,6 +29,14 @@ export interface AIClientConfig {
 	temperature: number;
 	maxTokens: number;
 	timeoutSeconds: number;
+	/** 思考开关参数（单键，一次只发一个，见 ADR-0024）；缺省不发思考参数。 */
+	thinking?: ThinkingParam;
+}
+
+/** 一次对话的结果：正文 + 是否残留推理段（假关判定读面，见 ADR-0024）。 */
+export interface ChatResult {
+	content: string;
+	hasReasoning: boolean;
 }
 
 const defaultRequest: RequestFn = requestUrlTransport;
@@ -59,13 +68,13 @@ export async function listModels(
 }
 
 /**
- * 调用 OpenAI 兼容的 chat/completions 接口，返回模型生成文本。
+ * 调用 OpenAI 兼容的 chat/completions 接口，返回模型生成正文与推理段读面。
  */
 export async function chatCompletion(
 	config: AIClientConfig,
 	messages: ChatMessage[],
 	request: RequestFn = defaultRequest
-): Promise<string> {
+): Promise<ChatResult> {
 	return requestJson(
 		{
 			op: "chat",
@@ -78,17 +87,36 @@ export async function chatCompletion(
 				temperature: config.temperature,
 				max_tokens: clampMaxTokens(config.maxTokens),
 				stream: false,
+				// 思考开关参数并入请求体顶层（一次只发一个，见 ADR-0024）
+				...(config.thinking ? { [config.thinking.name]: config.thinking.value } : {}),
 			}),
 			timeoutSeconds: config.timeoutSeconds,
 		},
 		(json) => {
-			const data = json as { choices?: Array<{ message?: { content?: string } }> };
+			const data = json as {
+				choices?: Array<{ message?: { content?: string; reasoning_content?: unknown } }>;
+				usage?: { completion_tokens_details?: { reasoning_tokens?: unknown } };
+			};
 			const content = data.choices?.[0]?.message?.content;
 			if (!content) throw new AIClientError("chat.empty");
-			return content;
+			return { content, hasReasoning: detectReasoning(data) };
 		},
 		request
 	);
+}
+
+/**
+ * 响应是否残留推理段：`reasoning_content` 非空或 `reasoning_tokens` 计量大于零。
+ * 假关判定的唯一读面——不看 HTTP 200（错误参数名会得到 200＋正常思考）。
+ */
+function detectReasoning(data: {
+	choices?: Array<{ message?: { reasoning_content?: unknown } }>;
+	usage?: { completion_tokens_details?: { reasoning_tokens?: unknown } };
+}): boolean {
+	const reasoningContent = data.choices?.[0]?.message?.reasoning_content;
+	if (typeof reasoningContent === "string" && reasoningContent.trim() !== "") return true;
+	const reasoningTokens = data.usage?.completion_tokens_details?.reasoning_tokens;
+	return typeof reasoningTokens === "number" && reasoningTokens > 0;
 }
 
 /** 测试连接：发送一条极简请求以校验配置是否可用。 */

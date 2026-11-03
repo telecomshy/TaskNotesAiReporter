@@ -13,7 +13,10 @@ import type {
 	ActiveModelResolution,
 	ModelConfig,
 	ModelProvider,
+	ThinkingResolution,
+	ThinkingSetting,
 } from "../types";
+import { resolveThinking } from "../core/thinking";
 import { resolveSecretValue } from "./secrets";
 import type { SettingsOwner } from "./owner";
 
@@ -47,6 +50,19 @@ export function modelsOf(provider: ModelProvider): string[] {
 			.filter((id) => id.trim() !== "");
 	}
 	return provider.models;
+}
+
+/**
+ * 读取某个模型的「思考」解析结果：该模型偏好（缺省＝关）经能力表映射，
+ * 请求参数与置灰标注一并带出（ADR-0024）。设置页与当前模型 解析共用这一个读面。
+ */
+export function thinkingFor(provider: ModelProvider, model: string): ThinkingResolution {
+	return resolveThinking({
+		providerType: provider.type,
+		providerId: provider.id,
+		model,
+		setting: provider.thinkingByModel?.[model] ?? "off",
+	});
 }
 
 /** 卡片状态：供应商是否「已配置」。预设看是否选了密钥；自定义看地址且有模型。 */
@@ -167,7 +183,7 @@ export function addModel(state: ProviderState, providerId: string): ProviderStat
 	return state;
 }
 
-/** 改写某个模型配置的模型 ID；若改的是当前模型，则清空当前模型。 */
+/** 改写某个模型配置的模型 ID；若改的是当前模型，则清空当前模型。思考偏好随模型改名迁移。 */
 export function renameModel(
 	state: ProviderState,
 	providerId: string,
@@ -176,7 +192,13 @@ export function renameModel(
 ): ProviderState {
 	const model = findModel(state, providerId, modelConfigId);
 	if (!model) return state;
+	const oldModelId = model.modelId;
 	model.modelId = newModelId.trim();
+	const provider = findProvider(state, providerId);
+	if (provider && provider.thinkingByModel && oldModelId in provider.thinkingByModel) {
+		provider.thinkingByModel[model.modelId] = provider.thinkingByModel[oldModelId];
+		deleteThinking(provider, oldModelId);
+	}
 	clearActiveIfModelGone(state);
 	return state;
 }
@@ -203,8 +225,24 @@ export function removeModel(
 ): ProviderState {
 	const provider = findProvider(state, providerId);
 	if (!provider || !provider.customModels) return state;
+	const target = provider.customModels.find((m) => m.id === modelConfigId);
+	if (target) deleteThinking(provider, target.modelId);
 	provider.customModels = provider.customModels.filter((m) => m.id !== modelConfigId);
 	clearActiveIfModelGone(state);
+	return state;
+}
+
+/** 写入某个模型的「思考」三态（按模型持久化，键＝模型 ID；见 ADR-0024）。 */
+export function setModelThinking(
+	state: ProviderState,
+	providerId: string,
+	model: string,
+	setting: ThinkingSetting
+): ProviderState {
+	const provider = findProvider(state, providerId);
+	if (!provider) return state;
+	if (!provider.thinkingByModel) provider.thinkingByModel = {};
+	provider.thinkingByModel[model] = setting;
 	return state;
 }
 
@@ -247,6 +285,9 @@ export function resolveActive(
 		baseUrl: provider.baseUrl,
 		apiKey,
 		model: state.activeModel,
+		// 「思考」解析（能力表映射 / 置灰标注）由纯模块产出（ADR-0024）；
+		// 自定义供应商的「思考参数名」随 #85 落地，此处暂不带。
+		thinking: thinkingFor(provider, state.activeModel),
 	};
 	if (provider.type === "custom" && Array.isArray(provider.customModels)) {
 		const model = provider.customModels.find((m) => m.modelId === state.activeModel);
@@ -273,6 +314,11 @@ function clearActiveIfModelGone(state: ProviderState): void {
 	const provider = findProvider(state, state.activeProviderId);
 	if (!provider) return;
 	if (!modelExists(provider, state.activeModel)) state.activeModel = "";
+}
+
+/** 删除某个模型的「思考」偏好条目。 */
+function deleteThinking(provider: ModelProvider, model: string): void {
+	if (provider.thinkingByModel) delete provider.thinkingByModel[model];
 }
 
 /** 模型 ID 是否非空且在该供应商的模型列表中。 */
@@ -316,6 +362,7 @@ export interface ProviderSettings {
 		params: Pick<ModelConfig, "contextLength" | "maxTokens">
 	): void;
 	removeModel(providerId: string, modelConfigId: string): void;
+	setModelThinking(providerId: string, model: string, setting: ThinkingSetting): void;
 	selectActiveModel(providerId: string, model: string): void;
 	resolveActive(): ActiveModelResolution;
 	secretValue(secretId: string): string;
@@ -347,6 +394,8 @@ export function createProviderSettings(deps: ProviderSettingsDeps): ProviderSett
 			run((s) => setModelParams(s, providerId, modelConfigId, params)),
 		removeModel: (providerId, modelConfigId) =>
 			run((s) => removeModel(s, providerId, modelConfigId)),
+		setModelThinking: (providerId, model, setting) =>
+			run((s) => setModelThinking(s, providerId, model, setting)),
 		selectActiveModel: (providerId, model) =>
 			run((s) => selectActiveModel(s, providerId, model)),
 		resolveActive: () => resolveActive(owner.get(), (id) => owner.readSecret(id)),

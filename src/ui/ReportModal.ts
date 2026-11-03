@@ -192,6 +192,8 @@ export class ReportModal extends Modal {
 
 			if (result.ok === true) {
 				new Notice(this.plugin.t("report.saved", { path: result.path }));
+				// 假关（设「关」而响应仍带推理段）：一次性非阻断告警（#84）
+				if (result.fakeOff) new Notice(this.plugin.t("report.thinkingFakeOff"));
 				const file = this.app.vault.getAbstractFileByPath(result.path);
 				if (file instanceof TFile) {
 					await this.app.workspace.getLeaf(false).openFile(file);

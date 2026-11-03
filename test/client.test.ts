@@ -132,8 +132,8 @@ test("listModels 响应无 data/models 时返回空数组", async () => {
 test("chatCompletion 正常返回模型内容", async () => {
 	await capture();
 	respond = () => ({ status: 200, json: { choices: [{ message: { content: "你好" } }] } });
-	const content = await client.chatCompletion(config, [{ role: "user", content: "hi" }]);
-	assert.equal(content, "你好");
+	const result = await client.chatCompletion(config, [{ role: "user", content: "hi" }]);
+	assert.equal(result.content, "你好");
 	const { url, method, body } = captured[0];
 	assert.equal(url, "https://api.deepseek.com/chat/completions");
 	assert.equal(method, "POST");
@@ -143,6 +143,62 @@ test("chatCompletion 正常返回模型内容", async () => {
 	assert.equal(payload.stream, false);
 	assert.equal(payload.max_tokens, 8192);
 	assert.equal(captured[0].headers.Authorization, "Bearer sk-test");
+});
+
+test("chatCompletion 携带思考开关参数：单键并入请求体（一次只发一个）", async () => {
+	await capture();
+	respond = () => ({ status: 200, json: { choices: [{ message: { content: "ok" } }] } });
+	await client.chatCompletion(
+		{ ...config, thinking: { name: "thinking", value: { type: "disabled" } } },
+		[{ role: "user", content: "hi" }]
+	);
+	const payload = JSON.parse(captured[0].body!);
+	assert.deepEqual(payload.thinking, { type: "disabled" });
+	const known = ["model", "messages", "temperature", "max_tokens", "stream", "thinking"];
+	assert.deepEqual(
+		Object.keys(payload).filter((k) => !known.includes(k)),
+		[],
+		"思考参数之外不再夹带其它开关字段"
+	);
+});
+
+test("chatCompletion 未带思考参数：请求体不含任何思考字段", async () => {
+	await capture();
+	respond = () => ({ status: 200, json: { choices: [{ message: { content: "ok" } }] } });
+	await client.chatCompletion(config, [{ role: "user", content: "hi" }]);
+	const payload = JSON.parse(captured[0].body!);
+	assert.equal("thinking" in payload, false);
+	assert.equal("enable_thinking" in payload, false);
+});
+
+test("假关读面：reasoning_content 残留 → hasReasoning", async () => {
+	await capture();
+	respond = () => ({
+		status: 200,
+		json: { choices: [{ message: { content: "ok", reasoning_content: "想了一堆" } }] },
+	});
+	const result = await client.chatCompletion(config, [{ role: "user", content: "hi" }]);
+	assert.equal(result.hasReasoning, true);
+});
+
+test("假关读面：reasoning_tokens 计量残留 → hasReasoning；两者皆无 → false", async () => {
+	await capture();
+	respond = () => ({
+		status: 200,
+		json: {
+			choices: [{ message: { content: "ok" } }],
+			usage: { completion_tokens_details: { reasoning_tokens: 12 } },
+		},
+	});
+	assert.equal(
+		(await client.chatCompletion(config, [{ role: "user", content: "hi" }])).hasReasoning,
+		true
+	);
+	respond = () => ({ status: 200, json: { choices: [{ message: { content: "ok" } }] } });
+	assert.equal(
+		(await client.chatCompletion(config, [{ role: "user", content: "hi" }])).hasReasoning,
+		false
+	);
 });
 
 test("chatCompletion 无 apiKey 时不带 Authorization 头", async () => {

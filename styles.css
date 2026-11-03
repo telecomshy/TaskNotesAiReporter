@@ -385,6 +385,22 @@
 	font-weight: 500;
 }
 
+/* 「思考」三态：强制思考模型的开关置灰（显式声明盖过原生禁用外观，见 CODING_STANDARDS「UI and CSS」） */
+button.tah-auth-btn:disabled {
+	appearance: none;
+	opacity: 0.5;
+	cursor: not-allowed;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	box-shadow: none;
+}
+
+/* 「思考」能力标注（强制思考 / 无思考 / 能力未知） */
+.tah-thinking-note {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
 /* 自定义供应商：模型列表与单行配置 */
 .tah-custom-models-list {
 	display: flex;

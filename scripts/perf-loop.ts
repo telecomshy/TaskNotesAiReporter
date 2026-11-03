@@ -19,6 +19,7 @@ import { hydrateTasks } from "../src/tasks/repository";
 import { buildReportPrompt } from "../src/core/prompt";
 import { getReportRange } from "../src/core/dates";
 import { buildChatCompletionsUrl } from "../src/core/aiUrl";
+import { resolveThinking } from "../src/core/thinking";
 import { fakeTaskRepository } from "../test/fakes/taskRepository";
 import { makeTask } from "../test/fakes/task";
 import type { TaskInfo } from "../src/types";
@@ -45,6 +46,8 @@ let maxTokens = 8192;
 let timeoutSeconds = 60;
 let baseUrl = process.env.PERF_BASE_URL ?? "https://api.deepseek.com";
 let model = process.env.PERF_MODEL ?? "deepseek-flash";
+let providerId = "deepseek";
+let providerType: "preset" | "custom" = "preset";
 if (existsSync(dataPath)) {
 	const data = JSON.parse(readFileSync(dataPath, "utf8"));
 	language = data.language ?? language;
@@ -57,6 +60,8 @@ if (existsSync(dataPath)) {
 		(p: { id: string }) => p.id === data.activeProviderId
 	);
 	if (provider?.baseUrl && !process.env.PERF_BASE_URL) baseUrl = provider.baseUrl;
+	if (provider?.id) providerId = provider.id;
+	if (provider?.type === "custom") providerType = "custom";
 	model = process.env.PERF_MODEL ?? data.activeModel ?? model;
 }
 console.log(`配置：model=${model} maxTokens=${maxTokens} temperature=${temperature}（密钥 <REDACTED>）`);
@@ -134,9 +139,16 @@ async function main(): Promise<void> {
 		}),
 		resolveModel: () => ({
 			ok: true,
-			config: { baseUrl, apiKey: "", model, temperature, maxTokens, timeoutSeconds },
+			config: {
+				baseUrl,
+				apiKey: "",
+				model,
+				maxTokens,
+				// chat 为桩，参数被桩吞掉；不夹带特定厂商的开关参数
+				thinking: { setting: "auto", param: null, note: null },
+			},
 		}),
-		chat: async () => "（桩）",
+		chat: async () => ({ content: "（桩）", hasReasoning: false }),
 		save: async () => "stub.md",
 		now: () => now,
 	};
@@ -212,6 +224,10 @@ async function main(): Promise<void> {
 
 		const half = tasks.slice(0, Math.ceil(taskCount / 2));
 		const tiny = tasks.slice(0, 1);
+		// baseline 载荷与插件发运默认一致（每模型「思考」缺省＝关，ADR-0024）：
+		// 按能力表带出该（供应商, 模型）的关参数，--budget 量的就是「关思考生成」。
+		const shipped = resolveThinking({ providerType, providerId, model, setting: "off" });
+		const shippedExtra = shipped.param ? { [shipped.param.name]: shipped.param.value } : {};
 		const probes: Array<[string, string]> = [
 			[`baseline ${taskCount} 任务`, promptFor(tasks, bodies)],
 			[`半量输入 ${half.length} 任务`, promptFor(half, bodies)],
@@ -219,9 +235,12 @@ async function main(): Promise<void> {
 			[`baseline 复测（方差）`, promptFor(tasks, bodies)],
 		];
 		console.log(`\n[LIVE] <REDACTED> · ${model} · 超时 ${timeoutSeconds}s`);
+		console.log(
+			`  baseline 载荷随发运默认（思考＝关）：${shipped.param ? `${shipped.param.name}=${JSON.stringify(shipped.param.value)}` : "不发思考参数"}`
+		);
 		const results: LiveResult[] = [];
 		for (const [label, prompt] of probes) {
-			const r = await timed(label, prompt);
+			const r = await timed(label, prompt, shippedExtra);
 			results.push(r);
 			console.log(
 				`  ${r.label}：${r.ms.toFixed(0)} ms · 输出 ${r.chars} 字符 · 推理痕迹 ${r.reasonChars} 字符 · tokens 入 ${r.promptTokens} / 出 ${r.completionTokens}（含推理 ${r.reasoningTokens}）`

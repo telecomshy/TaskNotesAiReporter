@@ -17,6 +17,7 @@ import {
 	setModelParams,
 	removeModel,
 	selectActiveModel,
+	setModelThinking,
 	resolveActive,
 	isSecretMissing,
 	createProviderSettings,
@@ -292,7 +293,12 @@ test("resolveActive 成功：解析出地址与密钥值", () => {
 	const result = resolveActive(s, (id) => (id === "my-key" ? "sk" : null));
 	assert.deepEqual(result, {
 		ok: true,
-		config: { baseUrl: "https://api.example.com", apiKey: "sk", model: "m" },
+		config: {
+			baseUrl: "https://api.example.com",
+			apiKey: "sk",
+			model: "m",
+			thinking: { setting: "off", param: null, note: "unknown" },
+		},
 	});
 });
 
@@ -388,4 +394,63 @@ test("门面：resolveActive 与 isSecretMissing 用注入的密钥读取", () =
 	assert.equal(facade.isSecretMissing("gone"), true);
 	assert.equal(facade.secretValue("k"), "sk");
 	assert.equal(facade.secretValue("gone"), "");
+});
+
+// ===== 「思考」三态（#84，ADR-0024） =====
+
+test("setModelThinking：写入该模型的「思考」三态（偏好跟模型走）", () => {
+	const p = provider({ id: "p", type: "preset", models: ["m"] });
+	const s = state({ providers: [p] });
+	setModelThinking(s, "p", "m", "auto");
+	assert.deepEqual(p.thinkingByModel, { m: "auto" });
+});
+
+test("模型「思考」缺省＝关：无偏好条目时解析出关参数（既有设置迁移后缺省关）", () => {
+	const p = provider({
+		id: "deepseek",
+		type: "preset",
+		authType: "bearer",
+		apiKeySecretId: "k",
+		models: ["deepseek-v4-pro"],
+	});
+	const s = state({ providers: [p], activeProviderId: "deepseek", activeModel: "deepseek-v4-pro" });
+	const result = resolveActive(s, () => "sk");
+	assert.equal(result.ok, true);
+	assert.equal(result.ok && result.config.thinking.setting, "off");
+	assert.deepEqual(result.ok && result.config.thinking.param, {
+		name: "thinking",
+		value: { type: "disabled" },
+	});
+});
+
+test("resolveActive 带出思考解析结果：「开」发开参数（能力表映射随行）", () => {
+	const p = provider({
+		id: "deepseek",
+		type: "preset",
+		authType: "bearer",
+		apiKeySecretId: "k",
+		models: ["deepseek-v4-pro"],
+		thinkingByModel: { "deepseek-v4-pro": "on" },
+	});
+	const s = state({ providers: [p], activeProviderId: "deepseek", activeModel: "deepseek-v4-pro" });
+	const result = resolveActive(s, () => "sk");
+	assert.deepEqual(result.ok && result.config.thinking.param, {
+		name: "thinking",
+		value: { type: "enabled" },
+	});
+});
+
+test("renameModel 迁移该模型的思考偏好；removeModel 清理偏好", () => {
+	const p = provider({
+		id: "c",
+		type: "custom",
+		authType: "none",
+		customModels: [{ id: "1", modelId: "m" }],
+		thinkingByModel: { m: "on" },
+	});
+	const s = state({ providers: [p], activeProviderId: "c", activeModel: "m" });
+	renameModel(s, "c", "1", "m2");
+	assert.deepEqual(p.thinkingByModel, { m2: "on" });
+	removeModel(s, "c", "1");
+	assert.deepEqual(p.thinkingByModel, {});
 });

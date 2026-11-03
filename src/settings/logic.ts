@@ -9,6 +9,7 @@ import {
 	type ModelProvider,
 	type ReportTemplate,
 	type TaskNotesAIHelperSettings,
+	type ThinkingSetting,
 } from "../types";
 import type { PendingSecret } from "./secrets";
 import {
@@ -107,6 +108,10 @@ export function normalizeSettings(raw: unknown): NormalizedSettings {
 					type,
 					authType,
 				} as unknown as ModelProvider & { apiKey?: string };
+				// 「思考」三态：保留合法值、剔除非法项；无合法条目即整块不发明（读取侧缺省＝关，见 ADR-0024）。
+				const thinkingByModel = normalizeThinkingByModel(providerRaw.thinkingByModel);
+				if (thinkingByModel) provider.thinkingByModel = thinkingByModel;
+				else delete provider.thinkingByModel;
 				const legacy = providerRaw.apiKey;
 				delete provider.apiKey; // 不再持久化明文密钥
 				if (typeof legacy === "string" && legacy.trim() !== "" && typeof provider.id === "string") {
@@ -192,6 +197,16 @@ function readApiKeySecretId(
 		apiKeySecretId:
 			typeof providerRaw.apiKeySecretId === "string" ? providerRaw.apiKeySecretId : "",
 	};
+}
+
+/** 归一「思考」三态映射：只保留合法三态值；无合法条目返回 undefined（＝不发明，读取侧缺省关）。 */
+function normalizeThinkingByModel(raw: unknown): Record<string, ThinkingSetting> | undefined {
+	if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined;
+	const out: Record<string, ThinkingSetting> = {};
+	for (const [model, value] of Object.entries(raw as Record<string, unknown>)) {
+		if (value === "auto" || value === "on" || value === "off") out[model] = value;
+	}
+	return Object.keys(out).length > 0 ? out : undefined;
 }
 
 /** 把未被用户改动的旧中文示例模板迁移为当前英文默认版；改过的模板原样保留。 */

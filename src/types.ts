@@ -108,6 +108,12 @@ export interface ModelProvider {
 	models: string[]; // 可用模型 ID 列表（预设为动态拉取的真实存储；自定义请用 provider.modelsOf 读取，勿直接依赖）
 	authType: "none" | "bearer"; // 认证方式（自定义供应商使用）
 	customModels?: ModelConfig[]; // 仅自定义供应商：手动维护的模型配置（每模型含 contextLength/maxTokens）
+	/**
+	 * 每模型「思考」三态（键＝模型 ID；缺省＝「关」），随模型持久化，见 ADR-0024。
+	 * 改名 / 删除模型时由命令迁移或清理条目；模型从列表中消失留下的残键无害——
+	 * 偏好在该模型回来时复得（「偏好跟模型走」）。
+	 */
+	thinkingByModel?: Record<string, ThinkingSetting>;
 }
 
 /** 单个模型配置（自定义供应商手动维护，每模型可独立设置参数） */
@@ -118,6 +124,34 @@ export interface ModelConfig {
 	maxTokens?: number; // 输出上限
 }
 
+/**
+ * 「思考」三态（见 ADR-0024）：自动＝不发参数（保持服务端默认）；开＝显式请求思考；关＝请求不思考。
+ * 出厂与迁移缺省均为「关」。
+ */
+export type ThinkingSetting = "auto" | "on" | "off";
+
+/**
+ * 思考开关参数：一个键值对，一次请求只发一个
+ * （DashScope 的 `thinking_budget` 与 `reasoning_effort` 互斥，同发报错）。
+ */
+export interface ThinkingParam {
+	name: string;
+	value: unknown;
+}
+
+/** 思考能力的 UI 标注（置灰 + 说明）：强制思考 / 无思考 / 能力未知（不发参数）。 */
+export type ThinkingNote = "forced" | "none" | "unknown";
+
+/** 思考解析结果（core/thinking 产出）：请求参数 + UI 标注。 */
+export interface ThinkingResolution {
+	/** 生效的三态（缺省＝关）。 */
+	setting: ThinkingSetting;
+	/** 请求体追加参数；null＝不发思考参数。 */
+	param: ThinkingParam | null;
+	/** UI 置灰标注；null＝正常可交互。 */
+	note: ThinkingNote | null;
+}
+
 /** 当前生效的模型配置（由设置解析而来）：供应商接口 + 选中模型 + 该模型参数。 */
 export interface ActiveModelConfig {
 	baseUrl: string;
@@ -125,6 +159,8 @@ export interface ActiveModelConfig {
 	model: string;
 	maxTokens?: number;
 	contextLength?: number;
+	/** 「思考」三态与能力表解析结果（ADR-0024）。 */
+	thinking: ThinkingResolution;
 }
 
 /** 当前模型无法解析的原因：没有当前供应商 / 没有当前模型 / 缺必填配置或凭据。 */
