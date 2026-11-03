@@ -1,6 +1,6 @@
 ## Plain language (白话)
 
-Every explanation aimed at the user — grilling questions, spec walkthroughs, review reports, term definitions — carries a **白话** pass: after the precise wording, one short paragraph restating the point in everyday words a non-programmer can follow. Keep both: the precise wording stays exact, the 白话 pass adds the everyday restatement.
+While running a mattpocock skill (grilling, to-spec, implement, code-review, …), user-facing explanations carry a **白话** pass: after the precise wording, one short paragraph restating the point in everyday words a non-programmer can follow. Keep both: the precise wording stays exact, the 白话 pass adds the everyday restatement.
 
 ## Agent skills
 
