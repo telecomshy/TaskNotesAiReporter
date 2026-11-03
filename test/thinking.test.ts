@@ -170,34 +170,17 @@ test("一次请求只发一个开关参数：全表 × 全三态解析，非空�
 	}
 });
 
-test("自定义供应商：思考参数名发布尔参数（关=false / 开=true），自动不发", () => {
-	const input = {
-		providerType: "custom" as const,
-		providerId: "custom_x",
-		model: "my-model",
-		customParamName: "enable_thinking",
-	};
-	assert.deepEqual(resolveThinking({ ...input, setting: "off" }).param, {
-		name: "enable_thinking",
-		value: false,
-	});
-	assert.deepEqual(resolveThinking({ ...input, setting: "on" }).param, {
-		name: "enable_thinking",
-		value: true,
-	});
-	assert.equal(resolveThinking({ ...input, setting: "auto" }).param, null);
-});
-
-test("自定义供应商思考参数名留空：不发参数（不猜参数名）", () => {
-	const r = resolveThinking({
-		providerType: "custom",
-		providerId: "custom_x",
-		model: "my-model",
-		setting: "off",
-		customParamName: "  ",
-	});
-	assert.equal(r.param, null);
-	assert.equal(r.note, null);
+test("自定义供应商：不提供思考开关——三态皆不发参数，标注 unsupported（ADR-0025）", () => {
+	for (const setting of ["auto", "on", "off"] as const) {
+		const r = resolveThinking({
+			providerType: "custom",
+			providerId: "custom_x",
+			model: "my-model",
+			setting,
+		});
+		assert.equal(r.param, null, setting);
+		assert.equal(r.note, "unsupported", setting);
+	}
 });
 
 test("假关判定：设关且发出关参数、响应仍带推理段 → 假关", () => {

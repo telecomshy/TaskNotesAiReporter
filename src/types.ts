@@ -139,8 +139,8 @@ export interface ThinkingParam {
 	value: unknown;
 }
 
-/** 思考能力的 UI 标注（置灰 + 说明）：强制思考 / 无思考 / 能力未知（不发参数）。 */
-export type ThinkingNote = "forced" | "none" | "unknown";
+/** 思考能力的 UI 标注（置灰 + 说明）：强制思考 / 无思考 / 能力未知（不发参数）/ 自定义供应商不提供开关。 */
+export type ThinkingNote = "forced" | "none" | "unknown" | "unsupported";
 
 /** 思考解析结果（core/thinking 产出）：请求参数 + UI 标注。 */
 export interface ThinkingResolution {

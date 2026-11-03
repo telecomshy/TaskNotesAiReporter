@@ -140,6 +140,7 @@ export const zh: Strings = {
 		thinkingForced: "此模型强制思考，无法关闭",
 		thinkingNone: "此模型无思考",
 		thinkingUnknown: "此模型思考能力未知，不发送思考参数",
+		thinkingUnsupported: "自定义供应商不支持思考开关",
 		configured: "已配置",
 		notConfigured: "未配置",
 		fetchModels: "获取模型列表",

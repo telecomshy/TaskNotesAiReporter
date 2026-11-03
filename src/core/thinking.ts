@@ -1,8 +1,9 @@
 /**
- * 「思考」参数解析纯模块（#84，ADR-0024）：输入（供应商类型 + 模型 + 思考三态 + 能力表
- * + 自定义参数名），输出请求体追加参数 / 不可关原因 / UI 标注 / 假关判定。
+ * 「思考」参数解析纯模块（#84，ADR-0024 / ADR-0025）：输入（供应商类型 + 模型 + 思考三态
+ * + 能力表），输出请求体追加参数 / 不可关原因 / UI 标注 / 假关判定。
  * 能力表是插件内置数据（随 docs/research/thinking-toggle-apis.md 维护），非用户配置面；
  * 新增模型只改表，不改代码路径。一次请求只发一个开关参数（互斥参数同发会 400）。
+ * 自定义供应商不提供思考开关（ADR-0025）：能力表按网关分派、自定义 URL 猜不得。
  */
 
 import type {
@@ -11,14 +12,12 @@ import type {
 	ThinkingSetting,
 } from "../types";
 
-/** 解析输入。自定义供应商走「思考参数名」；预设供应商查能力表。 */
+/** 解析输入。预设供应商查能力表；自定义供应商不提供思考开关（恒标注 unsupported）。 */
 export interface ThinkingInput {
 	providerType: "preset" | "custom";
 	providerId: string;
 	model: string;
 	setting: ThinkingSetting;
-	/** 自定义供应商的思考参数名（留空＝不发参数）。 */
-	customParamName?: string;
 }
 
 /** 一个（供应商, 模型）的思考能力。 */
@@ -111,7 +110,7 @@ export const THINKING_CAPABILITIES: readonly ThinkingCapabilityRow[] = [
  * - 「自动」不发参数（保持服务端默认）；「开」发开参数（无开参数等同「自动」）；「关」发关参数；
  * - 强制思考 / 无思考模型无论三态都不发参数，给出置灰标注；
  * - 能力表未知模型不发参数、标注未知（对未知模型降级，见研究笔记 9.6）；
- * - 自定义供应商按「思考参数名」发布尔参数（留空＝不发）。
+ * - 自定义供应商不提供思考开关（ADR-0025）：恒不发参数、标注 unsupported。
  */
 export function resolveThinking(
 	input: ThinkingInput,
@@ -120,13 +119,7 @@ export function resolveThinking(
 	const setting = input.setting;
 
 	if (input.providerType === "custom") {
-		const name = input.customParamName?.trim() ?? "";
-		if (name === "" || setting === "auto") return { setting, param: null, note: null };
-		return {
-			setting,
-			param: { name, value: setting === "on" },
-			note: null,
-		};
+		return { setting, param: null, note: "unsupported" };
 	}
 
 	const row = table.find(

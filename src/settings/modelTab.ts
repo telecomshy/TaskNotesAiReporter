@@ -107,21 +107,24 @@ function renderThinkingControl(container: HTMLElement, ctx: SettingsTabContext):
 		const btn = group.createEl("button", { text: label });
 		btn.addClass("tah-auth-btn");
 		btn.toggleClass("tah-auth-active", setting === value);
-		// 只有「强制思考」的模型置灰（关会 400）；无思考 / 能力未知只标注、不锁偏好（#84 口径）
-		btn.disabled = resolution.note === "forced";
+		// 置灰＝发不出 / 不该发思考参数：强制思考（关会 400）与自定义供应商（不提供开关，ADR-0025）；
+		// 无思考 / 能力未知只标注、不锁偏好（#84 口径）
+		btn.disabled = resolution.note === "forced" || resolution.note === "unsupported";
 		btn.addEventListener("click", () => {
 			ctx.plugin.providers.setModelThinking(provider.id, settings.activeModel, value);
 			ctx.refresh();
 		});
 	}
 	if (resolution.note !== null) {
-		const noteText =
+		const noteKey =
 			resolution.note === "forced"
-				? t("model.thinkingForced")
+				? "model.thinkingForced"
 				: resolution.note === "none"
-					? t("model.thinkingNone")
-					: t("model.thinkingUnknown");
-		row.createSpan({ cls: "tah-thinking-note", text: noteText });
+					? "model.thinkingNone"
+					: resolution.note === "unsupported"
+						? "model.thinkingUnsupported"
+						: "model.thinkingUnknown";
+		row.createSpan({ cls: "tah-thinking-note", text: t(noteKey) });
 	}
 }
 

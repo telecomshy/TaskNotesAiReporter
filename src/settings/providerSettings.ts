@@ -286,7 +286,7 @@ export function resolveActive(
 		apiKey,
 		model: state.activeModel,
 		// 「思考」解析（能力表映射 / 置灰标注）由纯模块产出（ADR-0024）；
-		// 自定义供应商的「思考参数名」随 #85 落地，此处暂不带。
+		// 自定义供应商不提供思考开关（ADR-0025），解析恒为 unsupported。
 		thinking: thinkingFor(provider, state.activeModel),
 	};
 	if (provider.type === "custom" && Array.isArray(provider.customModels)) {

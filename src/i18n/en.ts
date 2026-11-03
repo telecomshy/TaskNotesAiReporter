@@ -144,6 +144,7 @@ export const en = {
 		thinkingForced: "This model always thinks and cannot be turned off",
 		thinkingNone: "This model has no thinking",
 		thinkingUnknown: "Thinking capability unknown — no thinking parameter is sent",
+		thinkingUnsupported: "Custom providers do not support the thinking switch",
 		configured: "Configured",
 		notConfigured: "Not configured",
 		fetchModels: "Fetch models",
