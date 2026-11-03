@@ -10,22 +10,16 @@ import { renderTaskMeta } from "./taskMeta";
 import {
 	addAllAddable,
 	addTask,
-	addableTasks,
-	calendarSeed,
 	chooseRange,
 	clearJoined,
 	createSelectionSession,
-	filterRange,
-	isJoined,
-	leftEmptyReason,
-	matchingTasks,
-	parsedQuery,
+	frame,
 	removeTask,
-	joinedCount,
-	joinedTasks,
 	setQuery,
 	switchTab,
+	type LeftEmptyReason,
 	type RangePick,
+	type SelectionFrame,
 	type SelectionSession,
 	type SelectionTab,
 } from "./selectionSession";
@@ -134,36 +128,45 @@ export class TaskSelectionView {
 	/** 注入任务快照并回到初始状态。 */
 	setTasks(tasks: TaskInfo[]): void {
 		this.session = createSelectionSession(tasks, this.options.dateFields);
-		this.renderFilter();
-		this.renderAll();
+		const f = frame(this.session);
+		this.renderFilter(f);
+		this.renderAll(f);
 	}
 
 	/** 右栏当前集合，供生成报告读取。 */
 	getJoinedTasks(): TaskInfo[] {
-		return this.session ? joinedTasks(this.session) : [];
+		return this.session ? frame(this.session).right.rows : [];
 	}
 
 	// ===== 状态推进 =====
 
 	private update(transition: (session: SelectionSession) => SelectionSession): void {
 		if (!this.session) return;
-		this.session = transition(this.session);
-		this.renderAll();
+		const next = transition(this.session);
+		if (next === this.session) return;
+		this.session = next;
+		this.renderAll(frame(next));
 	}
 
 	private applyQuery(value: string): void {
 		if (!this.session) return;
 		if (this.searchInput) this.searchInput.value = value;
-		this.session = setQuery(this.session, value);
-		this.updateTitleMeta();
-		this.renderAll();
+		const next = setQuery(this.session, value);
+		if (next === this.session) return;
+		this.session = next;
+		const f = frame(next);
+		this.updateTitleMeta(f);
+		this.renderAll(f);
 	}
 
 	private changeTab(tab: SelectionTab): void {
-		if (!this.session || this.session.tab === tab) return;
-		this.session = switchTab(this.session, tab);
-		this.renderFilter();
-		this.renderAll();
+		if (!this.session) return;
+		const next = switchTab(this.session, tab);
+		if (next === this.session) return;
+		this.session = next;
+		const f = frame(next);
+		this.renderFilter(f);
+		this.renderAll(f);
 	}
 
 	private setMobilePane(pane: MobilePane): void {
@@ -176,18 +179,16 @@ export class TaskSelectionView {
 
 	// ===== 渲染 =====
 
-	private renderAll(): void {
-		this.renderActions();
-		this.renderLists();
+	private renderAll(f: SelectionFrame): void {
+		this.renderActions(f);
+		this.renderLeftList(f);
+		this.renderRightList(f);
 	}
 
-	private renderActions(): void {
-		if (!this.session) return;
-		const addable = addableTasks(this.session).length;
-		const total = matchingTasks(this.session).length;
-		const joined = joinedCount(this.session);
+	private renderActions(f: SelectionFrame): void {
+		const { matching, addable, joined } = f.counts;
 		this.resultCountEl.setText(
-			this.options.t("taskSelection.resultCount", { total, addable })
+			this.options.t("taskSelection.resultCount", { total: matching, addable })
 		);
 		this.addAllBtn.setText(this.options.t("taskSelection.addAll", { count: addable }));
 		this.addAllBtn.disabled = addable === 0;
@@ -196,31 +197,25 @@ export class TaskSelectionView {
 		this.mobileJoinedBtn.setText(
 			this.options.t("taskSelection.joinedPane", { count: joined })
 		);
-		this.timeTabBtn.toggleClass("tah-tab-active", this.session.tab === "time");
-		this.titleTabBtn.toggleClass("tah-tab-active", this.session.tab === "title");
+		this.timeTabBtn.toggleClass("tah-tab-active", f.filter.tab === "time");
+		this.titleTabBtn.toggleClass("tah-tab-active", f.filter.tab === "title");
 	}
 
-	private renderLists(): void {
-		this.renderLeftList();
-		this.renderRightList();
-	}
-
-	private renderLeftList(): void {
+	private renderLeftList(f: SelectionFrame): void {
 		this.leftListEl.empty();
-		if (!this.session) return;
 
-		const reason = leftEmptyReason(this.session);
-		if (reason) {
+		if (f.left.empty) {
 			this.leftListEl.createDiv({
-				text: this.emptyText(reason),
+				text: this.emptyText(f.left.empty),
 				cls: "tah-empty",
 			});
 			return;
 		}
 
-		const addable = addableTasks(this.session);
-		for (const task of matchingTasks(this.session)) {
-			if (isJoined(this.session, task.id)) {
+		let actionIndex = 0;
+		for (const row of f.left.rows) {
+			const task = row.task;
+			if (row.state === "joined") {
 				// 已加入项留在筛选结果原位，只加标记；不可点、不可聚焦、无手型
 				const item = this.leftListEl.createDiv({ cls: "tah-task-item tah-task-joined" });
 				item.setAttr("title", this.options.t("taskSelection.joinedHint"));
@@ -232,13 +227,13 @@ export class TaskSelectionView {
 				continue;
 			}
 
+			const index = actionIndex++;
 			this.createActionRow(
 				this.leftListEl,
 				task,
 				this.options.t("taskSelection.addAria", { title: task.title }),
 				"＋",
 				(refocus) => {
-					const index = addable.indexOf(task);
 					this.update((session) => addTask(session, task));
 					if (refocus) this.focusRowAt(this.leftListEl, index);
 				}
@@ -246,11 +241,10 @@ export class TaskSelectionView {
 		}
 	}
 
-	private renderRightList(): void {
+	private renderRightList(f: SelectionFrame): void {
 		this.rightListEl.empty();
-		if (!this.session) return;
 
-		const tasks = joinedTasks(this.session);
+		const tasks = f.right.rows;
 		if (tasks.length === 0) {
 			this.rightListEl.createDiv({
 				text: this.options.t("report.empty"),
@@ -259,14 +253,13 @@ export class TaskSelectionView {
 			return;
 		}
 
-		for (const task of tasks) {
+		for (const [index, task] of tasks.entries()) {
 			this.createActionRow(
 				this.rightListEl,
 				task,
 				this.options.t("report.removeAria", { title: task.title }),
 				"－",
 				(refocus) => {
-					const index = tasks.indexOf(task);
 					this.update((session) => removeTask(session, task.id));
 					if (refocus) this.focusRowAt(this.rightListEl, index);
 				}
@@ -312,7 +305,7 @@ export class TaskSelectionView {
 		rows[Math.min(index, rows.length - 1)]?.focus();
 	}
 
-	private emptyText(reason: Exclude<ReturnType<typeof leftEmptyReason>, null>): string {
+	private emptyText(reason: Exclude<LeftEmptyReason, null>): string {
 		switch (reason) {
 			case "no-range":
 				return this.options.t("taskSelection.emptyPickRange");
@@ -323,7 +316,7 @@ export class TaskSelectionView {
 
 	// ===== 筛选区 =====
 
-	private renderFilter(): void {
+	private renderFilter(f: SelectionFrame): void {
 		this.filterEl.empty();
 		this.calendar = null;
 		this.calendarContainer = null;
@@ -334,14 +327,12 @@ export class TaskSelectionView {
 		this.parseLabelEl = null;
 		this.searchInput = null;
 		this.clearSearchBtn = null;
-		if (!this.session) return;
 
-		if (this.session.tab === "time") this.renderTimeFilter();
-		else this.renderTitleFilter();
+		if (f.filter.tab === "time") this.renderTimeFilter(f);
+		else this.renderTitleFilter(f);
 	}
 
-	private renderTimeFilter(): void {
-		if (!this.session) return;
+	private renderTimeFilter(f: SelectionFrame): void {
 		const t = this.options.t;
 
 		const quickRow = this.filterEl.createDiv({ cls: "tah-quick-row" });
@@ -374,13 +365,15 @@ export class TaskSelectionView {
 				// 打开自定义：周期快捷来源的区间不再占用任务列表，日历与列表一起清空；
 				// 自定义来源的区间保留，避免重复挑选。
 				const next = chooseRange(this.session, { kind: "open-custom" });
-				if (next !== this.session) {
-					this.session = next;
+				const changed = next !== this.session;
+				this.session = next;
+				const nextFrame = frame(next);
+				if (changed) {
 					this.calendar?.clearRange();
-					this.updateRangeLabel();
-					this.renderAll();
+					this.updateRangeLabel(nextFrame);
+					this.renderAll(nextFrame);
 				}
-				this.updateRangeButtons();
+				this.updateRangeButtons(nextFrame);
 			}
 			this.setCalendarOpen(open);
 		});
@@ -394,37 +387,39 @@ export class TaskSelectionView {
 		this.clearRangeBtn.addEventListener("click", () =>
 			this.applyRangePick({ kind: "clear" })
 		);
-		this.updateRangeLabel();
-		this.updateRangeButtons();
+		this.updateRangeLabel(f);
+		this.updateRangeButtons(f);
 
 		this.calendarContainer = this.filterEl.createDiv({ cls: "tah-calendar-container" });
 		this.calendarContainer.id = "tah-calendar-panel";
 		this.setCalendarOpen(false);
-		this.renderCalendar(calendarSeed(this.session));
+		this.renderCalendar(f.filter.calendarSeed);
 	}
 
 	/** 应用一次区间选择：更新区间与来源，并同步日历、标签与列表。 */
 	private applyRangePick(pick: RangePick): void {
 		if (!this.session) return;
-		this.session = chooseRange(this.session, pick);
-		this.updateRangeButtons();
+		const next = chooseRange(this.session, pick);
+		if (next === this.session) return;
+		this.session = next;
+		const f = frame(next);
+		this.updateRangeButtons(f);
 		// 快捷周期与清空都不预选自定义日历
-		this.renderCalendar(calendarSeed(this.session));
-		this.updateRangeLabel();
+		this.renderCalendar(f.filter.calendarSeed);
+		this.updateRangeLabel(f);
 		this.setCalendarOpen(false);
-		this.renderAll();
+		this.renderAll(f);
 	}
 
 	/** 按区间来源高亮当前选中的快捷按钮；展开态由 setCalendarOpen 单独处理。 */
-	private updateRangeButtons(): void {
-		if (!this.session) return;
-		const range = filterRange(this.session);
+	private updateRangeButtons(f: SelectionFrame): void {
+		const range = f.filter.range;
 		for (const { el, range: presetRange } of this.presetButtons) {
-			const selected = this.session.rangeSource === "preset" && sameRange(range, presetRange);
+			const selected = f.filter.rangeSource === "preset" && sameRange(range, presetRange);
 			el.toggleClass("tah-quick-btn-selected", selected);
 			el.setAttr("aria-pressed", String(selected));
 		}
-		const customSelected = this.session.rangeSource === "custom";
+		const customSelected = f.filter.rangeSource === "custom";
 		this.calendarToggleBtn?.toggleClass("tah-quick-btn-selected", customSelected);
 		this.calendarToggleBtn?.setAttr("aria-pressed", String(customSelected));
 	}
@@ -448,9 +443,9 @@ export class TaskSelectionView {
 			: false;
 	}
 
-	private updateRangeLabel(): void {
-		if (!this.rangeLabelEl || !this.session) return;
-		const range = filterRange(this.session);
+	private updateRangeLabel(f: SelectionFrame): void {
+		if (!this.rangeLabelEl) return;
+		const range = f.filter.range;
 		this.clearRangeBtn?.toggleClass("tah-hidden", range === null);
 		if (range === null) {
 			this.rangeLabelEl.setText(this.options.t("taskSelection.noDate"));
@@ -475,19 +470,21 @@ export class TaskSelectionView {
 			initialRange,
 			(range, complete) => {
 				if (!range || !this.session) return;
-				this.session = chooseRange(this.session, { kind: "custom", range });
-				this.updateRangeButtons();
-				this.updateRangeLabel();
+				const next = chooseRange(this.session, { kind: "custom", range });
+				if (next === this.session) return;
+				this.session = next;
+				const f = frame(next);
+				this.updateRangeButtons(f);
+				this.updateRangeLabel(f);
 				// 两次点击选完区间才收起；单击只是单日区间，可能还在选起点
 				if (complete) this.setCalendarOpen(false);
-				this.renderAll();
+				this.renderAll(f);
 			}
 		);
 		this.calendar.render();
 	}
 
-	private renderTitleFilter(): void {
-		if (!this.session) return;
+	private renderTitleFilter(f: SelectionFrame): void {
 		const t = this.options.t;
 
 		const searchRow = this.filterEl.createDiv({ cls: "tah-search-row" });
@@ -496,7 +493,7 @@ export class TaskSelectionView {
 			placeholder: t("taskSelection.searchPlaceholder"),
 			cls: "tah-search-input",
 		});
-		this.searchInput.value = this.session.query;
+		this.searchInput.value = f.filter.query;
 		this.searchInput.addEventListener("input", () => {
 			if (this.searchInput) this.applyQuery(this.searchInput.value);
 		});
@@ -513,12 +510,11 @@ export class TaskSelectionView {
 		});
 
 		this.parseLabelEl = this.filterEl.createDiv({ cls: "tah-parse-label tah-range-label" });
-		this.updateTitleMeta();
+		this.updateTitleMeta(f);
 	}
 
-	private updateTitleMeta(): void {
-		if (!this.session) return;
-		const query = parsedQuery(this.session);
+	private updateTitleMeta(f: SelectionFrame): void {
+		const query = f.filter.parsedQuery;
 		const t = this.options.t;
 		const parts: string[] = [];
 		if (query.keywords.length > 0)
@@ -534,7 +530,7 @@ export class TaskSelectionView {
 			this.parseLabelEl.toggleClass("tah-hidden", parts.length === 0);
 		}
 		if (this.clearSearchBtn) {
-			this.clearSearchBtn.toggleClass("tah-hidden", this.session.query === "");
+			this.clearSearchBtn.toggleClass("tah-hidden", f.filter.query === "");
 		}
 	}
 }
