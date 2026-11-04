@@ -280,26 +280,29 @@ function renderPresetProviderCard(
 	const body = card.createDiv({ cls: "tah-provider-body" });
 	body.addClass("tah-hidden");
 
-	// API 密钥（「获取模型列表」移至「启用模型」标签行，与自定义卡同一语法）
+	// API 密钥 + 获取模型列表按钮（同一行，选好密钥即可点击）
 	const keyRow = body.createDiv({ cls: "tah-provider-field" });
 	keyRow.createSpan({ cls: "tah-provider-field-label", text: t("model.apiKeyLabel") });
 	const keyHost = keyRow.createDiv({ cls: "tah-provider-input" });
 	attachSecretControl(ctx, keyHost, provider, (value) =>
 		onPresetSecretChange(card, provider, value, showEnabled, ctx)
 	);
-
-	// 「启用模型」标签行：标签居左，「获取模型列表」居右（本区半自动入口，拉取 → 挑选）。
-	// 标签行常驻：启用集为空时恰是最需要拉取的时刻，按钮不可随标签一起隐藏
-	const modelsLabel = body.createDiv({ cls: "tah-provider-models-label" });
-	modelsLabel.createSpan({ text: t("model.enabledModels") });
-	const fetchBtn = modelsLabel.createEl("button", { text: t("model.fetchModels") });
+	const fetchBtn = keyRow.createEl("button", { text: t("model.fetchModels") });
 	fetchBtn.addClass("tah-fetch-models-btn");
 	fetchBtn.addEventListener("click", () => void fetchModels(provider, ctx));
+
+	// 启用模型容器（默认隐藏，启用集为空时隐藏）
+	const modelsLabel = body.createDiv({
+		cls: "tah-provider-models-label",
+		text: t("model.enabledModels"),
+	});
+	modelsLabel.addClass("tah-hidden");
 	const modelsRow = body.createDiv({ cls: "tah-provider-models" });
 
 	const showEnabled = () => {
 		const enabled = modelsOf(provider);
 		modelsRow.empty();
+		modelsLabel.toggleClass("tah-hidden", enabled.length === 0);
 		if (enabled.length > 0) renderModelTags(modelsRow, enabled, provider, ctx);
 		updateModelCount(card, provider, t);
 	};
