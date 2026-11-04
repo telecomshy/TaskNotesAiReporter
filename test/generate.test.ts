@@ -55,6 +55,7 @@ function setup(
 		settings: () => baseSettings(),
 		resolveModel: () => ({
 			ok: true,
+			providerId: "p",
 			config: {
 				baseUrl: "https://api.example.com",
 				apiKey: "sk",
@@ -156,6 +157,7 @@ test("模型参数回退：该模型自带上限优先", async () => {
 	const { deps, captured } = setup({
 		resolveModel: () => ({
 			ok: true,
+			providerId: "p",
 			config: {
 				baseUrl: "https://x",
 				apiKey: "k",
@@ -289,6 +291,7 @@ test("思考参数透传：当前模型的思考参数随 chat 配置交出（�
 	const { deps, captured } = setup({
 		resolveModel: () => ({
 			ok: true,
+			providerId: "p",
 			config: {
 				baseUrl: "https://api.example.com",
 				apiKey: "sk",
@@ -305,6 +308,7 @@ test("假关告警：设关发参而响应仍带推理段 → 成功结果带 fa
 	const { deps } = setup({
 		resolveModel: () => ({
 			ok: true,
+			providerId: "p",
 			config: { baseUrl: "https://api.example.com", apiKey: "sk", model: "m", thinking: thinkingOffParam },
 		}),
 		chat: async () => ({ content: "生成的报告正文", hasReasoning: true }),
@@ -318,6 +322,7 @@ test("假关不误报：未发参数（强制思考）或响应无推理段 → 
 	const forced = setup({
 		resolveModel: () => ({
 			ok: true,
+			providerId: "p",
 			config: {
 				baseUrl: "https://api.example.com",
 				apiKey: "sk",
@@ -333,6 +338,7 @@ test("假关不误报：未发参数（强制思考）或响应无推理段 → 
 	const clean = setup({
 		resolveModel: () => ({
 			ok: true,
+			providerId: "p",
 			config: { baseUrl: "https://api.example.com", apiKey: "sk", model: "m", thinking: thinkingOffParam },
 		}),
 		chat: async () => ({ content: "正文", hasReasoning: false }),

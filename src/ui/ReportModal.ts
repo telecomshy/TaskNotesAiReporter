@@ -222,7 +222,8 @@ export class ReportModal extends Modal {
 	 */
 	private showFakeOffWarning(): void {
 		const t = this.plugin.t;
-		const notice = new Notice(t("report.thinkingFakeOff"), 0);
+		// 一次性告警（US29）：默认时长自动消失；重测出路另有设置页常驻入口（ADR-0026）
+		const notice = new Notice(t("report.thinkingFakeOff"));
 		const retestBtn = notice.messageEl.createEl("button", {
 			text: t("report.thinkingFakeOffRetest"),
 		});
@@ -232,19 +233,17 @@ export class ReportModal extends Modal {
 		});
 	}
 
-	/** 假关告警的「重新测试」（#89）：走共享流程——解析失败不动习得；清习得并重跑；中断不留结论。 */
+	/**
+	 * 假关告警的「重新测试」（#89）：走共享流程——解析失败不动习得；清习得并重跑；中断不留结论。
+	 * 解析失败同样提示「请先选择模型」（与设置页测试入口一致，不留静默路径）。
+	 */
 	private async retestThinking(): Promise<void> {
 		const t = this.plugin.t;
-		const providerId = this.plugin.settings.activeProviderId;
-		const model = this.plugin.settings.activeModel;
 		const result = await runThinkingTestFlow(
 			this.plugin.providers,
 			this.plugin.settings.timeoutSeconds,
-			providerId,
-			model,
 			true
 		);
-		if (!result) return;
-		new Notice(t(thinkingVerdictNoticeKey(result.verdict)));
+		new Notice(result ? t(thinkingVerdictNoticeKey(result.verdict)) : t("model.thinkingTestNeedModel"));
 	}
 }

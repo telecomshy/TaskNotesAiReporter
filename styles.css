@@ -366,15 +366,22 @@
 	gap: 0.4rem;
 }
 
-.tah-auth-btn {
+button.tah-auth-btn {
+	appearance: none;
 	padding: 0.3rem 0.8rem;
 	border: 1px solid var(--background-modifier-border);
 	border-radius: 6px;
 	cursor: pointer;
 	background: var(--background-primary);
+	box-shadow: none;
 }
 
-.tah-auth-active {
+button.tah-auth-btn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+button.tah-auth-btn.tah-auth-active {
 	background: rgba(var(--interactive-accent-rgb), 0.15);
 	border-color: var(--interactive-accent);
 	color: var(--interactive-accent);
@@ -533,7 +540,7 @@ button.tah-thinking-switch:disabled {
 	color: #6b5ce7;
 }
 
-/* 「实测」徽标（习得能力，#89）：本票留位 */
+/* 「实测」徽标（习得能力，#89）：习得档徽标，随测试时间戳呈现 */
 .tah-thinking-badge-learned {
 	background: rgba(44, 122, 68, 0.16);
 	color: #2c7a44;

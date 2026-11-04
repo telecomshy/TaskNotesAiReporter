@@ -5,7 +5,9 @@
  * PowerShell's `Set-Content -Encoding UTF8` picks up a BOM, and Chinese
  * round-tripped through a GBK pipe arrives as invalid UTF-8. Both defects
  * are byte-level, so this check reads bytes and never asks the OS what
- * encoding it thinks text is.
+ * encoding it thinks text is. The third defect is textual: U+FFFD
+ * replacement characters record upstream corruption that re-encoded into
+ * valid UTF-8 — see CODING_STANDARDS.md § Encoding.
  *
  * Usage:
  *   node scripts/check-encoding.mjs staged            # pre-commit: index blobs
@@ -67,10 +69,14 @@ function defects(name, buf) {
 		return [`${name}: starts with a UTF-8 BOM (EF BB BF)`];
 	}
 	if (isBinary(buf)) return [];
+	let text;
 	try {
-		utf8.decode(buf);
+		text = utf8.decode(buf);
 	} catch {
 		return [`${name}: not valid UTF-8 (looks like codepage-936 corruption)`];
+	}
+	if (text.includes("\uFFFD")) {
+		return [`${name}: contains U+FFFD replacement character (corrupted text)`];
 	}
 	return [];
 }

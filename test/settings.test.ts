@@ -284,7 +284,7 @@ test("normalizeSettings 不迁移非示例 id 的模板", () => {
 
 // ===== 「思考」两档迁移（#88，ADR-0026） =====
 
-test("normalizeSettings 保留用户的「思考」偏好；存量「自动」迁移为「开」；非法值剔除", () => {
+test("normalizeSettings 保留用户的「思考开关」；存量「自动」迁移为「开」；非法值剔除", () => {
 	const raw = {
 		providers: [
 			{
@@ -326,7 +326,7 @@ test("normalizeSettings 思考迁移幂等：迁移后的取值再载入原样�
 	assert.deepEqual(p2.thinkingByModel, { a: "on" }, "迁移幂等");
 });
 
-test("normalizeSettings 旧设置无思考偏好：不发明条目（每模型读取侧缺省＝关）", () => {
+test("normalizeSettings 旧设置无「思考开关」：不发明条目（每模型读取侧缺省＝关）", () => {
 	const settings = load({});
 	for (const p of settings.providers) {
 		assert.equal(p.thinkingByModel, undefined);

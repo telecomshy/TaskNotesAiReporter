@@ -14,6 +14,9 @@
 
 ## 外部接口（最终）
 
+> 接口清单随 #87 / #88 / #89 / #90 / #92 演进（2026-11-04 对齐现状）：`applyFetchedModels` 废除于 #87
+> （拉取不再整体替换启用集，改为「刷新清单 + 挑选确认」），#90 再废除静默拉取；思考类命令随 #88 / #89 补入。
+
 命令：
 
 - `addProvider()`
@@ -22,18 +25,22 @@
 - `setProviderBaseUrl(providerId, baseUrl)`
 - `setSecretId(providerId, secretId)`
 - `setAuthType(providerId, authType)`
-- `applyFetchedModels(providerId, models)`
+- `refreshModelCatalog(providerId, models)`（#87：只刷「模型清单」；空表照实记账，#92）
+- `applyPickedModels(providerId, picked)`（#87：挑选确认＝「启用模型」）
+- `isModelProtected(providerId, model)`（#87：「当前模型」受保护判定）
 - `addModel(providerId)`
 - `renameModel(providerId, modelConfigId, newModelId)`
 - `setModelParams(providerId, modelConfigId, { contextLength?, maxTokens? })`
 - `removeModel(providerId, modelConfigId)`
+- `setModelThinking(providerId, model, setting)`（#88）
+- `recordThinkingTest(providerId, model, entry)` / `clearLearnedThinking(providerId, model)`（#89）
 - `selectActiveModel(providerId, model)`
 
 读取：
 
-- `resolveActive()` → `{ ok: true, config } | { ok: false, reason: 'no-provider' | 'no-model' | 'missing-credentials' }`
+- `resolveActive()` → `{ ok: true, providerId, config } | { ok: false, reason: 'no-provider' | 'no-model' | 'missing-credentials' }`（（供应商, 模型）键以解析结果为单一来源）
 - 密钥可用性：`secretValue(secretId)`、`isSecretMissing(secretId)`
-- 判定谓词（纯函数，视图直接导入）：`modelsOf` / `isConfigured` / `isSelectable` / `isActiveModel`
+- 判定谓词（纯函数，视图直接导入）：`modelsOf` / `catalogOf` / `isConfigured` / `isSelectable` / `isActiveModel` / `isModelStale` / `requiresSecret` / `thinkingFor`
 
 > 设计时商定的命令是 8 条；实现时补齐了 `setProviderName` / `setProviderBaseUrl` / `addModel` / `setModelParams`，使视图不再有任何直接写 `settings.providers` 的路径。`setSecret` 定名为 `setSecretId`，对齐 `CONTEXT.md` 的「密钥名（Secret id）」。
 
@@ -42,7 +49,8 @@
 - `activeProviderId` 恒存在于 `providers`；`selectActiveModel` 对不存在的供应商不改现状；删供应商时重置到首个。
 - 删除/重命名模型、删除供应商 → 清空 `activeModel`。
 - 切换认证方式为 `none` → 清空 `apiKeySecretId`。
-- 清空预设供应商的密钥名 → 清空其 `models`（并因之清空 `activeModel`）。
+- 清空预设供应商的密钥名 → 清空其 `models`（并因之清空 `activeModel`）；载入迁移只清存量启用集，悬空 `activeModel` 依 ADR-0010「载入不校验」留给解析层报 `no-model`（#90）。
+- 「模型清单」只由 `refreshModelCatalog` 整体替换；「已失效」＝已启用 ∧ 清单已拉取 ∧ 不在清单——空清单是正常状态（#92），与「从未拉取」（清单缺失）区分对待。
 - `resolveActive()`：模型不在 `modelsOf` 中 → `no-model`；`authType: "none"` 不要求密钥；需要却缺失 → `missing-credentials`；`baseUrl` 为空归入 `missing-credentials`。
 - **载入时不校验 `activeModel`**，`normalizeSettings` 维持只保证 `activeProviderId` 存在（见 ADR-0010）。
 - 密钥访问只经注入的 `getSecret`；不再直接访问 `app.secretStorage`。

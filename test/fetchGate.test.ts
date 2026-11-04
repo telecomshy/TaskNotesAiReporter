@@ -198,6 +198,7 @@ test("模型列表为空（如 Kimi For Coding 密钥）：提示「密钥下无
 
 	assert.equal(requests.length, 1);
 	assert.equal(Modal.opened.length, 0, "空列表不弹挑选框");
+	assert.deepEqual(h.provider.modelCatalog, [], "空表照实记账：清单刷为空（#92 定性，空表是正常状态）");
 	assert.ok(
 		notices.some((n) => n.includes("没有可用模型") && n.includes("Kimi")),
 		`应提示「该密钥下没有可用模型」并带供应商名，实际：${JSON.stringify(notices)}`

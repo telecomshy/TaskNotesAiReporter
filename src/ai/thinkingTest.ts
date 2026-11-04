@@ -43,25 +43,31 @@ export interface ThinkingTestStateSlice {
 
 /**
  * 思考测试流程（#89）：解析当前模型 →（重测先清习得：清习得并重跑）→ 基线 → 逐字段 → 落习得。
+ * （供应商, 模型）键**单一来源**取自解析结果——探测与落 / 清习得用同一对键，
+ * 不收调用方另传的键，渲染后切换模型也不会记到错的模型名下（双源漂移已收敛）。
  * 解析失败**不动**习得数据（不清也不跑）；「中断」不留结论（entry 为 null，可完整重测）。
  * 返回 null ＝ 当前模型不可用，调用方自陈原因。
  */
 export async function runThinkingTestFlow(
 	slice: ThinkingTestStateSlice,
 	timeoutSeconds: number,
-	providerId: string,
-	model: string,
-	retest: boolean
+	retest: boolean,
+	request?: RequestFn
 ): Promise<ThinkingTestResult | null> {
 	const resolved = slice.resolveActive();
 	if (!resolved.ok) return null;
+	const providerId = resolved.providerId;
+	const model = resolved.config.model;
 	if (retest) slice.clearLearnedThinking(providerId, model);
-	const result = await runThinkingTest({
-		baseUrl: resolved.config.baseUrl,
-		apiKey: resolved.config.apiKey,
-		model: resolved.config.model,
-		timeoutSeconds,
-	});
+	const result = await runThinkingTest(
+		{
+			baseUrl: resolved.config.baseUrl,
+			apiKey: resolved.config.apiKey,
+			model,
+			timeoutSeconds,
+		},
+		request
+	);
 	if (result.entry) slice.recordThinkingTest(providerId, model, result.entry);
 	return result;
 }

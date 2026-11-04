@@ -20,6 +20,7 @@ import {
 	isSelectable,
 	isActiveModel,
 	isModelStale,
+	requiresSecret,
 	thinkingFor,
 } from "./providerSettings";
 import { openModelPicker } from "./modelPicker";
@@ -63,7 +64,7 @@ function cardRow(card: HTMLElement, name: string, desc: string): HTMLElement {
 
 /**
  * 顶部「当前模型」区：「选择模型」卡（#88，P1 同卡第二行摆放）。
- * 卡内第一行选择模型；分隔线下第二行「思考」两档滑动开关（偏好跟模型走）；
+ * 卡内第一行选择模型；分隔线下第二行「思考开关」两档滑动开关（开关跟模型走）；
  * 卡脚注行放能力徽标 ＋ 备注 ＋ 右对齐测试入口位。
  */
 function renderActiveModelSection(container: HTMLElement, ctx: SettingsTabContext): void {
@@ -101,7 +102,7 @@ function renderActiveModelSection(container: HTMLElement, ctx: SettingsTabContex
 		const sepIndex = value.indexOf("::");
 		if (sepIndex < 0) return;
 		ctx.plugin.providers.selectActiveModel(value.slice(0, sepIndex), value.slice(sepIndex + 2));
-		// 刷新以更新思考行（偏好与能力随模型而变）
+		// 刷新以更新思考行（「思考开关」与能力随模型而变）
 		ctx.refresh();
 	});
 
@@ -151,7 +152,7 @@ function footnoteText(
 }
 
 /**
- * 「思考」两档滑动开关（#88）：作用于当前模型，偏好按模型持久化。
+ * 「思考开关」两档滑动开关（#88）：作用于当前模型，取值按模型持久化。
  * 显示矩阵（开关可用性 / 徽标 / 备注 / 测试入口）由 core/thinking 产出，本函数只做呈现。
  * 测试入口（#89）：未知＝「测试思考能力」按钮；习得档＝「重新测试」文字入口（清习得并重跑）；
  * 已知（内置）＝置灰「已知，无需测试」。
@@ -209,7 +210,7 @@ function renderThinkingRow(card: HTMLElement, ctx: SettingsTabContext): void {
 		if (!provider || activeModel === "") return;
 		btn.setAttribute("disabled", "true");
 		btn.setText(t("model.thinkingTestRunning"));
-		void startThinkingTestFlow(ctx, provider.id, activeModel, retest);
+		void startThinkingTestFlow(ctx, retest);
 	};
 
 	if (display.testEntry === "available") {
@@ -238,20 +239,13 @@ function renderThinkingRow(card: HTMLElement, ctx: SettingsTabContext): void {
 
 /**
  * 思考测试入口（#89）：按钮进入「测试中…」，流程走 ai/thinkingTest 的共享编排
- * （解析 → 重测先清习得 → 基线 → 逐字段 → 落习得），结束刷��呈现并结论文案上浮。
+ * （解析 → 重测先清习得 → 基线 → 逐字段 → 落习得），结束后刷新设置页呈现，结论文案以提示上浮。
  */
-async function startThinkingTestFlow(
-	ctx: SettingsTabContext,
-	providerId: string,
-	model: string,
-	retest: boolean
-): Promise<void> {
+async function startThinkingTestFlow(ctx: SettingsTabContext, retest: boolean): Promise<void> {
 	const t = ctx.plugin.t;
 	const result = await runThinkingTestFlow(
 		ctx.plugin.providers,
 		ctx.plugin.settings.timeoutSeconds,
-		providerId,
-		model,
 		retest
 	);
 	new Notice(result ? t(thinkingVerdictNoticeKey(result.verdict)) : t("model.thinkingTestNeedModel"));
@@ -309,7 +303,7 @@ function renderPresetProviderCard(
 		const enabled = modelsOf(provider);
 		modelsRow.empty();
 		modelsLabel.toggleClass("tah-hidden", enabled.length === 0);
-		if (enabled.length > 0) renderModelTags(modelsRow, enabled, provider, card, ctx);
+		if (enabled.length > 0) renderModelTags(modelsRow, enabled, provider, ctx);
 		updateModelCount(card, provider, t);
 	};
 
@@ -435,7 +429,6 @@ function renderModelTags(
 	container: HTMLElement,
 	models: string[],
 	provider: ModelProvider,
-	card: HTMLElement,
 	ctx: SettingsTabContext
 ): void {
 	const t = ctx.plugin.t;
@@ -495,8 +488,9 @@ function renderAllModelTags(
 }
 
 /**
- * 「获取模型列表」（手动点击，#87）：拉取成功后弹出挑选对话框，确认才改动启用集；
- * 预设与自定义供应商共用。取消对话框即什么也不发生。
+ * 「获取模型列表」（手动点击，#87）：拉取成功后刷「模型清单」并弹出挑选对话框，确认才改动启用集；
+ * 预设与自定义供应商共用。取消对话框即什么也不发生。空表（#92）＝正常状态：照实刷为空清单
+ * （启用模型标「已失效」），给解释性提示且不弹挑选框。
  */
 async function fetchModels(provider: ModelProvider, ctx: SettingsTabContext): Promise<void> {
 	const t = ctx.plugin.t;
@@ -504,24 +498,25 @@ async function fetchModels(provider: ModelProvider, ctx: SettingsTabContext): Pr
 		new Notice(t("model.testNeedUrl"));
 		return;
 	}
-	const needsSecret = provider.authType !== "none";
-	if (needsSecret && provider.apiKeySecretId.trim() === "") {
+	const secretRequired = requiresSecret(provider);
+	if (secretRequired && provider.apiKeySecretId.trim() === "") {
 		new Notice(t("model.fetchNeedKey"));
 		return;
 	}
-	const apiKey = needsSecret ? ctx.plugin.providers.secretValue(provider.apiKeySecretId) : "";
-	if (needsSecret && apiKey === "") {
+	const apiKey = secretRequired ? ctx.plugin.providers.secretValue(provider.apiKeySecretId) : "";
+	if (secretRequired && apiKey === "") {
 		new Notice(t("model.fetchSecretMissing"));
 		return;
 	}
 	new Notice(t("model.fetching", { name: provider.name }));
 	try {
 		const models = await listModels(provider.baseUrl, apiKey);
+		ctx.plugin.providers.refreshModelCatalog(provider.id, models);
 		if (models.length === 0) {
 			new Notice(t("model.fetchEmpty", { name: provider.name }));
+			ctx.refresh();
 			return;
 		}
-		ctx.plugin.providers.refreshModelCatalog(provider.id, models);
 		openModelPicker(ctx, provider);
 	} catch (error) {
 		new Notice(t("model.fetchFailed", { error: describeAIError(error, t) }));

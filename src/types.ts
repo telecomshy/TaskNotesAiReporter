@@ -111,6 +111,8 @@ export interface ModelProvider {
 	 * 「模型清单」（#87）：「获取模型列表」从供应商接口取回的模型全集，供挑选对话框呈现；
 	 * 「启用模型」从中挑选，挑选与否不影响清单本身。缺失（未迁移的旧数据）由迁移补齐，
 	 * 读取侧经 `catalogOf` 兜底为空清单。
+	 * 空清单是**正常状态**（#92：上游确实没有可用模型），照实记账，与「从未拉取」（缺失）
+	 * 区分对待——「已失效」判定只认「已拉取」的清单（见 providerSettings.isModelStale）。
 	 */
 	modelCatalog?: string[];
 	customModels?: ModelConfig[]; // 仅自定义供应商：手动维护的模型配置（每模型含 contextLength/maxTokens）
@@ -118,7 +120,7 @@ export interface ModelProvider {
 	 * 每模型「思考」两态（键＝模型 ID；缺省＝「关」），随模型持久化，见 ADR-0024 / ADR-0026。
 	 * 存量三态「自动」在载入归一化处迁移为「开」（幂等）。
 	 * 改名 / 删除模型时由命令迁移或清理条目；模型从列表中消失留下的残键无害——
-	 * 偏好在该模型回来时复得（「偏好跟模型走」）。
+	 * 「思考开关」在该模型回来时复得（开关跟模型走）。
 	 */
 	thinkingByModel?: Record<string, ThinkingSetting>;
 	/**
@@ -204,9 +206,13 @@ export interface ActiveModelConfig {
 /** 当前模型无法解析的原因：没有当前供应商 / 没有当前模型 / 缺必填配置或凭据。 */
 export type ActiveModelFailureReason = "no-provider" | "no-model" | "missing-credentials";
 
-/** 当前模型解析结果：成功给出配置，失败给出原因（由供应商模块产出，见 ADR-0010）。 */
+/**
+ * 当前模型解析结果：成功给出（供应商, 模型）键与配置，失败给出原因（由供应商模块产出，见 ADR-0010）。
+ * `providerId` 与 `config.model` 合成（供应商, 模型）键——落习得条目等按模型键的写入
+ * 以解析结果为**单一来源**，不另收调用方传键（见 ai/thinkingTest 的测试流程）。
+ */
 export type ActiveModelResolution =
-	| { ok: true; config: ActiveModelConfig }
+	| { ok: true; providerId: string; config: ActiveModelConfig }
 	| { ok: false; reason: ActiveModelFailureReason };
 
 /** 预设供应商（内置，仅需 api key，baseUrl 固定，模型动态拉取） */

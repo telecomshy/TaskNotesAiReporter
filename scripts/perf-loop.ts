@@ -137,6 +137,7 @@ async function main(): Promise<void> {
 		}),
 		resolveModel: () => ({
 			ok: true,
+			providerId,
 			config: {
 				baseUrl,
 				apiKey: "",

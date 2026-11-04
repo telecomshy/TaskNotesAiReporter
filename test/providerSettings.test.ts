@@ -279,11 +279,11 @@ test("refreshModelCatalog 自定义供应商同样只刷清单：模型行不动
 	assert.deepEqual(p.customModels, [{ id: "mc1", modelId: "m", contextLength: 4096 }]);
 });
 
-test("refreshModelCatalog 空列表视为拉取异常：清单不变", () => {
+test("refreshModelCatalog 空列表照实刷为空清单（#92 定性：空表是正常状态）", () => {
 	const p = provider({ id: "p", type: "preset", models: ["a"], modelCatalog: ["a"] });
 	const s = state({ providers: [p] });
 	refreshModelCatalog(s, "p", []);
-	assert.deepEqual(p.modelCatalog, ["a"]);
+	assert.deepEqual(p.modelCatalog, [], "拉取到空照实记账，不再视为拉取异常");
 });
 
 test("refreshModelCatalog 清洗清单：去空白、去重、剔除非字符串", () => {
@@ -331,7 +331,7 @@ test("applyPickedModels 自定义：新挑选的模型补出空参数模型行",
 	assert.equal(p.customModels![0].contextLength, undefined);
 });
 
-test("applyPickedModels 停用模型不清思考偏好：重新添加后原样生效（AC4）", () => {
+test("applyPickedModels 停用模型不清「思考开关」：重新添加后原样生效（AC4）", () => {
 	const p = provider({
 		id: "c",
 		type: "custom",
@@ -341,7 +341,7 @@ test("applyPickedModels 停用模型不清思考偏好：重新添加后原样�
 	const s = state({ providers: [p] });
 	applyPickedModels(s, "c", []);
 	assert.deepEqual(p.customModels, [], "已停用");
-	assert.deepEqual(p.thinkingByModel, { m: "on" }, "思考偏好保留");
+	assert.deepEqual(p.thinkingByModel, { m: "on" }, "「思考开关」保留");
 	applyPickedModels(s, "c", ["m"]);
 	assert.deepEqual(modelsOf(p), ["m"]);
 	assert.equal(thinkingFor(p, "m").setting, "on", "重新添加后原样生效");
@@ -378,11 +378,17 @@ test("isModelStale 已启用但不在模型清单 → 已失效（上游消失�
 	assert.equal(isModelStale(p, "a"), false, "仍在清单内不失效");
 });
 
-test("isModelStale 清单为空（无上游信息）不标失效；未启用的模型不谈失效", () => {
+test("isModelStale 从未拉取（清单缺失）不标失效；未启用的模型不谈失效", () => {
 	const p = provider({ id: "c", type: "custom", customModels: [{ id: "1", modelId: "hand" }] });
 	assert.equal(isModelStale(p, "hand"), false, "从未拉取过清单，手填模型不失效");
 	const q = provider({ id: "p", type: "preset", models: ["a"], modelCatalog: ["a"] });
 	assert.equal(isModelStale(q, "b"), false, "未启用的模型不谈失效");
+});
+
+test("isModelStale 拉取到空清单（#92）：启用模型照实标「已失效」", () => {
+	const p = provider({ id: "p", type: "preset", models: ["a", "b"], modelCatalog: [] });
+	assert.equal(isModelStale(p, "a"), true);
+	assert.equal(isModelStale(p, "b"), true);
 });
 
 test("addModel 追加一个空模型配置", () => {
@@ -461,6 +467,7 @@ test("resolveActive 成功：解析出地址与密钥值", () => {
 	const result = resolveActive(s, (id) => (id === "my-key" ? "sk" : null));
 	assert.deepEqual(result, {
 		ok: true,
+		providerId: "p",
 		config: {
 			baseUrl: "https://api.example.com",
 			apiKey: "sk",
@@ -586,7 +593,7 @@ test("门面：resolveActive 与 isSecretMissing 用注入的密钥读取", () =
 
 // ===== 「思考」两档（#84 / #88，ADR-0024 / ADR-0026） =====
 
-test("setModelThinking：写入该模型的「思考」两档（偏好跟模型走）", () => {
+test("setModelThinking：写入该模型的「思考」两档（开关跟模型走）", () => {
 	const p = provider({ id: "p", type: "preset", models: ["m"] });
 	const s = state({ providers: [p] });
 	setModelThinking(s, "p", "m", "on");
@@ -595,7 +602,7 @@ test("setModelThinking：写入该模型的「思考」两档（偏好跟模型�
 	assert.deepEqual(p.thinkingByModel, { m: "off" });
 });
 
-test("模型「思考」缺省＝关：无偏好条目时解析出关参数（既有设置迁移后缺省关）", () => {
+test("模型「思考」缺省＝关：无「思考开关」条目时解析出关参数（既有设置迁移后缺省关）", () => {
 	const p = provider({
 		id: "deepseek",
 		type: "preset",
@@ -630,7 +637,7 @@ test("resolveActive 带出思考解析结果：「开」发开参数（能力表
 	});
 });
 
-test("renameModel 迁移该模型的思考偏好；removeModel 移除不清偏好（AC4）", () => {
+test("renameModel 迁移该模型的「思考开关」；removeModel 移除不清「思考开关」（AC4）", () => {
 	const p = provider({
 		id: "c",
 		type: "custom",
@@ -643,7 +650,7 @@ test("renameModel 迁移该模型的思考偏好；removeModel 移除不清偏�
 	assert.deepEqual(p.thinkingByModel, { m2: "on" });
 	removeModel(s, "c", "1");
 	assert.deepEqual(p.customModels, []);
-	assert.deepEqual(p.thinkingByModel, { m2: "on" }, "移除模型不清除思考偏好");
+	assert.deepEqual(p.thinkingByModel, { m2: "on" }, "移除模型不清除「思考开关」");
 });
 
 // ===== 习得能力（#89，思考测试落档） =====
@@ -676,7 +683,7 @@ test("习得盖过内置能力表（#89）：内置可关模型实测「未能�
 	assert.equal(r.learned?.verdict, "not-switchable");
 });
 
-test("clearLearnedThinking（#89）：假关告警「重新测试」先清习得；思考偏好与其它模型条目不动", () => {
+test("clearLearnedThinking（#89）：假关告警「重新测试」先清习得；「思考开关」与其它模型条目不动", () => {
 	const p = provider({
 		id: "p",
 		type: "preset",
@@ -694,7 +701,7 @@ test("clearLearnedThinking（#89）：假关告警「重新测试」先清习得
 		{ n: { verdict: "not-detected", testedAt: "2026-11-04T08:00:00.000Z" } },
 		"只清目标模型的习得"
 	);
-	assert.deepEqual(p.thinkingByModel, { m: "on" }, "思考偏好不动");
+	assert.deepEqual(p.thinkingByModel, { m: "on" }, "「思考开关」不动");
 	assert.equal(thinkingFor(p, "m").learned, null, "清后回落内置/未知");
 	assert.equal(thinkingFor(p, "m").setting, "on");
 });
@@ -721,7 +728,7 @@ test("习得能力门面（#89）：recordThinkingTest 落档并落盘，clearLe
 	assert.deepEqual(p.learnedByModel, {});
 });
 
-test("renameModel 迁移习得条目（#89，与思考偏好同门）；removeModel 移除不清习得", () => {
+test("renameModel 迁移习得条目（#89，与「思考开关」同门）；removeModel 移除不清习得", () => {
 	const p = provider({
 		id: "c",
 		type: "custom",

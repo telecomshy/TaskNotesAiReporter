@@ -61,17 +61,18 @@ export function catalogOf(provider: ModelProvider): string[] {
 
 /**
  * 「已失效」（#87）：已启用但不在「模型清单」中（上游已消失），保留可移除。
- * 清单为空＝没有上游信息（如从未拉取），不标失效。
+ * 判定区分「从未拉取」（清单缺失＝没有上游信息，不标）与「拉取到空」（#92 定性：
+ * 空表是正常状态，照实记账——全部启用模型标「已失效」，可移除，拉回即消）。
  */
 export function isModelStale(provider: ModelProvider, model: string): boolean {
-	const catalog = catalogOf(provider);
+	const catalog = provider.modelCatalog;
 	return (
-		catalog.length > 0 && modelsOf(provider).includes(model) && !catalog.includes(model)
+		catalog !== undefined && modelsOf(provider).includes(model) && !catalog.includes(model)
 	);
 }
 
 /**
- * 读取某个模型的「思考」解析结果：该模型偏好（缺省＝关）经能力层映射，
+ * 读取某个模型的「思考」解析结果：该模型的「思考开关」取值（缺省＝关）经能力层映射，
  * 请求参数与置灰标注一并带出（ADR-0024）。设置页与当前模型 解析共用这一个读面。
  * 能力层优先级（#89）：习得能力 ＞ 内置能力表 ＞ 未知——自定义供应商与预设同路（ADR-0026）。
  */
@@ -91,9 +92,18 @@ export function isConfigured(provider: ModelProvider): boolean {
 		: provider.baseUrl.trim() !== "" && modelsOf(provider).length > 0;
 }
 
+/**
+ * 认证是否要求密钥（#90 教训：放行条件只此一家，防两套条件分叉）：
+ * 「无认证」（authType none）不要求，其余都要。拉取守卫 / 可选判定 / 当前模型
+ * 解析 / 清空联动共用它。
+ */
+export function requiresSecret(provider: ModelProvider): boolean {
+	return provider.authType !== "none";
+}
+
 /** 能否作为「当前模型」来源：有地址、有模型，且认证满足（无认证不要求密钥）。 */
 export function isSelectable(provider: ModelProvider): boolean {
-	const credentialed = provider.authType === "none" || provider.apiKeySecretId.trim() !== "";
+	const credentialed = !requiresSecret(provider) || provider.apiKeySecretId.trim() !== "";
 	return provider.baseUrl.trim() !== "" && modelsOf(provider).length > 0 && credentialed;
 }
 
@@ -196,7 +206,7 @@ export function clearUnconfiguredPresetModels(state: ProviderState): boolean {
 
 /** 「未配置 ⇒ 无启用模型」的适用对象：要求密钥的预设供应商（无认证供应商不要求密钥名）。 */
 function needsSecretForModels(provider: ModelProvider): boolean {
-	return provider.type === "preset" && provider.authType !== "none";
+	return provider.type === "preset" && requiresSecret(provider);
 }
 
 /** 设置认证方式；切到「无」时清空密钥名。 */
@@ -214,10 +224,9 @@ export function setAuthType(
 
 /**
  * 挑选确认（#87）：挑选集成为「启用模型」，取消挑选即移出。
- * 自定义供应商连带同步模型行：保留行（id 与上下文长度 / 最大输出参数）不换行，
- * 新挑选的补出空参数行，空白行（编辑中的草稿）不动。
  * 「当前模型」受保护：挑选集不含它也强制保留（真正移除需先切换模型）。
- * 移出只动启用集本身——该模型的「思考」偏好与习得能力一并保留（重新添加后原样生效）。
+ * 移出只动启用集本身——该模型的「思考开关」与习得能力一并保留（重新添加后原样生效）。
+ * 自定义供应商的模型行同步是另一摊事，见 `syncCustomModelRows`。
  */
 export function applyPickedModels(
 	state: ProviderState,
@@ -236,23 +245,7 @@ export function applyPickedModels(
 		wanted.push(active);
 	}
 	if (provider.type === "custom") {
-		const kept: ModelConfig[] = [];
-		const seen = new Set<string>();
-		for (const row of provider.customModels ?? []) {
-			const id = row.modelId.trim();
-			if (id === "") {
-				kept.push(row);
-				continue;
-			}
-			if (wanted.includes(id) && !seen.has(id)) {
-				seen.add(id);
-				kept.push(row);
-			}
-		}
-		for (const id of wanted) {
-			if (!seen.has(id)) kept.push({ id: makeModelConfigId(), modelId: id });
-		}
-		provider.customModels = kept;
+		syncCustomModelRows(provider, wanted);
 	} else {
 		provider.models = wanted;
 	}
@@ -260,19 +253,43 @@ export function applyPickedModels(
 }
 
 /**
+ * 自定义供应商的模型行同步（挑选确认的行级副作用）：保留行（id 与上下文长度 /
+ * 最大输出参数）不换行，新挑选的补出空参数行，空白行（编辑中的草稿）不动。
+ */
+function syncCustomModelRows(provider: ModelProvider, wanted: string[]): void {
+	const kept: ModelConfig[] = [];
+	const seen = new Set<string>();
+	for (const row of provider.customModels ?? []) {
+		const id = row.modelId.trim();
+		if (id === "") {
+			kept.push(row);
+			continue;
+		}
+		if (wanted.includes(id) && !seen.has(id)) {
+			seen.add(id);
+			kept.push(row);
+		}
+	}
+	for (const id of wanted) {
+		if (!seen.has(id)) kept.push({ id: makeModelConfigId(), modelId: id });
+	}
+	provider.customModels = kept;
+}
+
+/**
  * 刷新「模型清单」（#87，手动拉取后调用）：只替换清单本身，
- * 不动启用集、不动当前模型。空列表视为拉取异常，不刷清单。
+ * 不动启用集、不动当前模型。空列表照实刷为空清单（#92 定性：空表是正常状态），
+ * 「已失效」判定据此区分「从未拉取」与「拉取到空」。
  */
 export function refreshModelCatalog(
 	state: ProviderState,
 	providerId: string,
 	models: string[]
-): void {
+): ProviderState {
 	const provider = findProvider(state, providerId);
-	if (!provider) return;
-	const cleaned = coerceModelIds(models);
-	if (cleaned.length === 0) return;
-	provider.modelCatalog = cleaned;
+	if (!provider) return state;
+	provider.modelCatalog = coerceModelIds(models);
+	return state;
 }
 
 /** 为自定义供应商追加一个空模型配置。 */
@@ -291,7 +308,7 @@ export function addModel(state: ProviderState, providerId: string): ProviderStat
  * 改写某个模型配置的模型 ID；若改的是当前模型，则清空当前模型。
  * 重命名改变模型身份，走 ADR-0010 的变更命令清理；与 removeModel 的
  * 「受保护、先切换后移除」（ADR-0026）不对称是刻意的——删除可逆，改名不可逆。
- * 思考偏好随模型改名迁移。
+ * 「思考开关」随模型改名迁移。
  */
 export function renameModel(
 	state: ProviderState,
@@ -305,7 +322,7 @@ export function renameModel(
 	model.modelId = newModelId.trim();
 	const provider = findProvider(state, providerId);
 	if (provider) {
-		// 思考偏好与习得能力都「跟模型走」（#89）：改名迁移条目，残键不留。
+		// 「思考开关」与习得能力都「跟模型走」（#89）：改名迁移条目，残键不留。
 		migrateModelKey(provider.thinkingByModel, oldModelId, model.modelId);
 		migrateModelKey(provider.learnedByModel, oldModelId, model.modelId);
 	}
@@ -327,7 +344,7 @@ export function setModelParams(
 	return state;
 }
 
-/** 删除某个模型配置；「当前模型」受保护（需先切换模型）；移除不清「思考」偏好（#87）。 */
+/** 删除某个模型配置；「当前模型」受保护（需先切换模型）；移除不清「思考开关」（#87）。 */
 export function removeModel(
 	state: ProviderState,
 	providerId: string,
@@ -415,10 +432,9 @@ export function resolveActive(
 		return { ok: false, reason: "no-model" };
 	}
 
-	const requiresSecret = provider.authType !== "none";
 	const apiKey = resolveSecretValue(provider.apiKeySecretId, getSecret);
 	// 地址缺失属配置不完整，与缺凭据归为同一类失败。
-	if (provider.baseUrl.trim() === "" || (requiresSecret && apiKey === "")) {
+	if (provider.baseUrl.trim() === "" || (requiresSecret(provider) && apiKey === "")) {
 		return { ok: false, reason: "missing-credentials" };
 	}
 
@@ -437,7 +453,7 @@ export function resolveActive(
 			config.contextLength = model.contextLength;
 		}
 	}
-	return { ok: true, config };
+	return { ok: true, providerId: state.activeProviderId, config };
 }
 
 /** 所选密钥名在存储中缺失（区别于存在但值为空）。 */
@@ -457,7 +473,7 @@ function clearActiveIfModelGone(state: ProviderState): void {
 	if (!modelExists(provider, state.activeModel)) state.activeModel = "";
 }
 
-/** 模型改名时迁移按模型键的条目（「思考」偏好与习得能力同门，#89）。 */
+/** 模型改名时迁移按模型键的条目（「思考开关」与习得能力同门，#89）。 */
 function migrateModelKey<T>(map: Record<string, T> | undefined, oldKey: string, newKey: string): void {
 	if (map && oldKey in map) {
 		map[newKey] = map[oldKey];
@@ -502,9 +518,9 @@ export interface ProviderSettings {
 	setProviderBaseUrl(providerId: string, baseUrl: string): void;
 	setSecretId(providerId: string, secretId: string): void;
 	setAuthType(providerId: string, authType: ModelProvider["authType"]): void;
-	/** 刷新「模型清单」（不动启用集；#87）。 */
+	/** 刷新「模型清单」（不动启用集；空表照实记账，#87 / #92）。 */
 	refreshModelCatalog(providerId: string, models: string[]): void;
-	/** 挑选确认：挑选集成为启用集（当前模型受保护，移除不清思考偏好；#87）。 */
+	/** 挑选确认：挑选集成为启用集（当前模型受保护，移除不清「思考开关」；#87）。 */
 	applyPickedModels(providerId: string, picked: string[]): void;
 	/** 「当前模型」是否受保护（不可被移除，需先切换模型；#87）。 */
 	isModelProtected(providerId: string, model: string): boolean;
