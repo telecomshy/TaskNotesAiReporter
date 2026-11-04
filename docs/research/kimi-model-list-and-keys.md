@@ -39,7 +39,7 @@ Kimi 系「按量 / 会员 / 海外」的准确映射（Kimi Code 文档 FAQ 原
 - Kimi for Coding（会员线）与开放平台按量 Key **购买途径不同、Base URL 不同**，会员线不走 `/v1/models`（kimi-cli 社区同证）；
 - 国内与海外 Key 互不通用（`platform.kimi.com` 与 `platform.kimi.ai` Keys 不可混用）；
 - 判别一把 Key 归属哪条线：`GET /v1/users/me/balance`（开放平台特有）200+余额 JSON＝按量 Key；401/404＝非开放平台 Key。
-- 已知「模型列表为空」的两种成因：① 会员线 Key 打开放平台端点（Kimi Code FAQ 记为 platform-mismatch 症状）；② **账户无可用模型**——`/v1/models` 列的是「当前 Key 可用」的模型，随账户余额 / 代金券状态变：余额为零时 API 请求 403（免费权益页）；`kimi-k3.1-pro` 需充值（最低 10 元）解锁、注册赠券不覆盖它（问题排查页）；官方 401/404 排查清单第 3 条即「账户是否有可用余额，代金券是否支持目标模型」。实测样本（2026-11-04，用户现场）为 200 + `{"object":"list","data":[]}`：**用户已确认该 Key 是开放平台按量 Key（非 code plan）**，鉴权通过、列表为空，故倾向②（账户无可用模型），待 `GET /v1/users/me/balance` 探针分辨余额状态；若余额充足仍空列表则属平台侧可见性异常，走官方 API 问题反馈表单（带 `request_id`）。
+- 已知「模型列表为空」的两种成因：① 会员线 Key 打开放平台端点（Kimi Code FAQ 记为 platform-mismatch 症状）；② **账户无可用模型**——`/v1/models` 列的是「当前 Key 可用」的模型，随账户余额 / 代金券状态变：余额为零时 API 请求 403（免费权益页）；`kimi-k3.1-pro` 需充值（最低 10 元）解锁、注册赠券不覆盖它（问题排查页）；官方 401/404 排查清单第 3 条即「账户是否有可用余额，代金券是否支持目标模型」。实测样本（2026-11-04，用户现场，已确认为开放平台按量 Key）：`/v1/models` → 200 + `{"object":"list","data":[]}`；`/v1/users/me/balance` → 200 + `{"code":0,"data":{"available_balance":15,"voucher_balance":15,"cash_balance":0}}`（**赠券 15 元在账，排除"余额为零"**）；`/v1/chat/completions`（`kimi-k2.6`）→ 404 `resource_not_found_error`「Not found the model kimi-k2.6 or Permission denied」——**空列表与 404 同源：账号对模型的访问权未生效**（404 文档口径含"当前账号无权限访问，检查账号 tier"）。待多模型矩阵探针排除"模型名下线"后定论：全 404/403 → 账号侧开通问题（先试充值 10 元解锁，再走官方反馈表单带 `request_id`）；某模型 200 → `/v1/models` 可见性怪癖，插件走自定义供应商手动加模型行即用，并向反馈表单报备。
 
 ## 来源
 
