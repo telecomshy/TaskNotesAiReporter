@@ -270,12 +270,6 @@
 	color: var(--text-error);
 }
 
-.tah-provider-action {
-	display: flex;
-	gap: 0.5rem;
-	margin-top: 0.25rem;
-}
-
 .tah-fetch-models-btn,
 .tah-test-custom-btn,
 .tah-save-custom-btn {
@@ -307,16 +301,10 @@
 	opacity: 0.9;
 }
 
-/* 自定义供应商卡片展开区：每行配置的垂直间距（紧凑取向） */
-.tah-provider-custom .tah-provider-field {
-	margin-bottom: 0.65rem;
-}
-.tah-provider-custom .tah-provider-field:last-child,
-.tah-provider-custom .tah-provider-action {
-	margin-bottom: 0;
-}
-.tah-provider-custom .tah-provider-action {
-	margin-top: 0.4rem;
+/* 自定义供应商卡片展开区：纵向节奏只由 .tah-provider-body 的 gap 决定——
+   字段行不叠 margin（此前 margin 与 flex gap 双重叠加，行距翻倍，故显宽） */
+.tah-provider-custom .tah-provider-body {
+	gap: 0.6rem;
 }
 
 /* 「启用模型」标签行：标签居左，「获取模型列表」居右（本区半自动入口，拉取 → 挑选） */
