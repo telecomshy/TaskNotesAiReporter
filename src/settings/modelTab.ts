@@ -291,7 +291,7 @@ function renderPresetProviderCard(
 	keyRow.createSpan({ cls: "tah-provider-field-label", text: t("model.apiKeyLabel") });
 	const keyHost = keyRow.createDiv({ cls: "tah-provider-input" });
 	attachSecretControl(ctx, keyHost, provider, (value) =>
-		void onPresetSecretChange(card, provider, value, showEnabled, ctx)
+		onPresetSecretChange(card, provider, value, showEnabled, ctx)
 	);
 	const fetchBtn = keyRow.createEl("button", { text: t("model.fetchModels") });
 	fetchBtn.addClass("tah-fetch-models-btn");
@@ -314,11 +314,6 @@ function renderPresetProviderCard(
 	};
 
 	showEnabled();
-
-	// 打开配置页时，若已配置 key 则静默拉取「模型清单」（只刷清单并提示新模型数，不自动启用）
-	if (configured) {
-		void fetchModelsSilent(provider, showEnabled, ctx);
-	}
 
 	// 头部点击折叠/展开
 	wireCollapse(header, body, arrow);
@@ -400,47 +395,19 @@ function wireCollapse(header: HTMLElement, body: HTMLElement, arrow: HTMLElement
 }
 
 /**
- * 预设供应商的密钥变更：只保存密钥名并更新状态；新选了密钥则静默拉取「模型清单」
- * （只刷清单并提示新模型数，不改动启用集，#87），清空也不动启用集。
+ * 预设供应商的密钥变更：只保存密钥名并更新状态与显示。
+ * 「启用模型」只在「获取模型列表」＋挑选确认处变动（#90 唯一入口）；
+ * 清空密钥名连带清空启用集由 provider 层不变量处理（#90，回归 #29）。
  */
-async function onPresetSecretChange(
+function onPresetSecretChange(
 	card: HTMLElement,
 	provider: ModelProvider,
 	value: string,
 	showEnabled: () => void,
 	ctx: SettingsTabContext
-): Promise<void> {
-	const oldId = provider.apiKeySecretId;
+): void {
 	ctx.plugin.providers.setSecretId(provider.id, value);
 	refreshCardState(card, provider, ctx.plugin.t);
-	if (provider.apiKeySecretId && provider.apiKeySecretId !== oldId) {
-		await fetchModelsSilent(provider, showEnabled, ctx);
-	} else {
-		showEnabled();
-	}
-}
-
-/**
- * 静默拉取（打开设置页 / 密钥变更触发，#87）：只刷新「模型清单」并提示「有 N 个新模型可挑选」，
- * 永不自动启用；失败不打扰用户。
- */
-async function fetchModelsSilent(
-	provider: ModelProvider,
-	showEnabled: () => void,
-	ctx: SettingsTabContext
-): Promise<void> {
-	try {
-		const models = await listModels(
-			provider.baseUrl,
-			ctx.plugin.providers.secretValue(provider.apiKeySecretId)
-		);
-		const count = ctx.plugin.providers.refreshModelCatalog(provider.id, models);
-		if (count > 0) {
-			new Notice(ctx.plugin.t("model.newModelsAvailable", { count }));
-		}
-	} catch {
-		// 静默失败：模型清单保持原样
-	}
 	showEnabled();
 }
 

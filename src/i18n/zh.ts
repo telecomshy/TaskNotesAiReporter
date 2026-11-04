@@ -173,8 +173,6 @@ export const zh: Strings = {
 		pickerCancel: "取消",
 		staleBadge: "已失效",
 		protectActiveModel: "「当前模型」不可移除，请先切换模型",
-		newModelsAvailable: "有 {{count}} 个新模型可挑选",
-		newModelsAvailable_plural: "有 {{count}} 个新模型可挑选",
 		fetchNeedKey: "请先选择 API 密钥",
 		fetchSecretMissing: "在密钥存储中找不到所选密钥",
 		secretUnavailable: "所选密钥已不可用，请重新选择。",

@@ -6,6 +6,7 @@
 
 import type { TaskNotesAIHelperSettings } from "../types";
 import { normalizeSettings } from "./logic";
+import { clearUnconfiguredPresetModels } from "./providerSettings";
 import { importPendingSecrets, type SecretStore } from "./secrets";
 
 /** 载入所需的外部 IO：读原始数据、落盘、按名读写密钥。 */
@@ -22,7 +23,8 @@ export interface SettingsIO {
 
 /**
  * 载入并组合最终设置。
- * 顺序：归一原始数据 → 迁移待导入的旧版明文密钥 → 仅当迁移发生变更时落盘一次。
+ * 顺序：归一原始数据 → 迁移待导入的旧版明文密钥 → 清理未配置供应商的存量启用集（#90，
+ * 排在密钥名回填之后，避免误伤旧明文迁移保留的模型）→ 仅当迁移发生变更时落盘一次。
  */
 export async function loadSettings(io: SettingsIO): Promise<TaskNotesAIHelperSettings> {
 	const raw = await io.loadRaw();
@@ -32,6 +34,7 @@ export async function loadSettings(io: SettingsIO): Promise<TaskNotesAIHelperSet
 		set: (id, value) => io.setSecret(id, value),
 	};
 	const { settings, changed } = importPendingSecrets(normalized, pendingSecrets, store);
-	if (changed) await io.save(settings);
+	const cleaned = clearUnconfiguredPresetModels(settings);
+	if (changed || cleaned) await io.save(settings);
 	return settings;
 }

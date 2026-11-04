@@ -163,14 +163,40 @@ export function setProviderBaseUrl(state: ProviderState, providerId: string, bas
 }
 
 /**
- * 设置密钥名（去空白）。只动密钥名本身：启用集与模型清单是用户的策展结果，
- * 密钥变更不改动它们（与「静默拉取不改动启用集」同门，#87）。
+ * 设置密钥名（去空白）。「启用模型」与「模型清单」是用户的策展结果，设 / 换密钥名不改动它们；
+ * 清空密钥名则回到「未配置 ⇒ 无启用模型」（#90，回归 #29 不变量）：
+ * 预设供应商清空启用集，悬空「当前模型」一并清空。自定义供应商的模型行是手工配置，不受影响。
  */
 export function setSecretId(state: ProviderState, providerId: string, secretId: string): ProviderState {
 	const provider = findProvider(state, providerId);
 	if (!provider) return state;
 	provider.apiKeySecretId = secretId.trim();
+	if (needsSecretForModels(provider) && provider.apiKeySecretId === "") {
+		provider.models = [];
+		clearActiveIfModelGone(state);
+	}
 	return state;
+}
+
+/**
+ * 「未配置 ⇒ 无启用模型」的载入迁移（#90）：清空密钥名为空的预设供应商的存量启用集
+ * （历史拉取 / 测试残留）。只清启用集——「当前模型」悬空留给解析层报 no-model（ADR-0010：
+ * 载入不校验 activeModel）；「模型清单」是拉取历史，不动。返回是否发生清理（供边界决定落盘）。
+ */
+export function clearUnconfiguredPresetModels(state: ProviderState): boolean {
+	let changed = false;
+	for (const provider of state.providers) {
+		if (!needsSecretForModels(provider) || provider.apiKeySecretId.trim() !== "") continue;
+		if (modelsOf(provider).length === 0) continue;
+		provider.models = [];
+		changed = true;
+	}
+	return changed;
+}
+
+/** 「未配置 ⇒ 无启用模型」的适用对象：要求密钥的预设供应商（无认证供应商不要求密钥名）。 */
+function needsSecretForModels(provider: ModelProvider): boolean {
+	return provider.type === "preset" && provider.authType !== "none";
 }
 
 /** 设置认证方式；切到「无」时清空密钥名。 */
@@ -234,34 +260,19 @@ export function applyPickedModels(
 }
 
 /**
- * 刷新「模型清单」（#87，静默拉取与手动拉取共用）：只替换清单本身，
- * 不动启用集、不动当前模型（「静默拉取永不自动启用」）。空列表视为拉取异常，不刷清单。
+ * 刷新「模型清单」（#87，手动拉取后调用）：只替换清单本身，
+ * 不动启用集、不动当前模型。空列表视为拉取异常，不刷清单。
  */
 export function refreshModelCatalog(
 	state: ProviderState,
 	providerId: string,
 	models: string[]
-): ProviderState {
+): void {
 	const provider = findProvider(state, providerId);
-	if (!provider) return state;
+	if (!provider) return;
 	const cleaned = coerceModelIds(models);
-	if (cleaned.length === 0) return state;
+	if (cleaned.length === 0) return;
 	provider.modelCatalog = cleaned;
-	return state;
-}
-
-/**
- * 「有 N 个新模型可挑选」的 N（#87）：清单新出现且尚未启用的模型数。
- * 已启用的模型不算「可挑选」，旧清单已有的不算「新」。
- */
-export function countNewPickable(
-	before: readonly string[],
-	after: readonly string[],
-	enabled: readonly string[]
-): number {
-	const beforeSet = new Set(before);
-	const enabledSet = new Set(enabled);
-	return after.filter((m) => !beforeSet.has(m) && !enabledSet.has(m)).length;
 }
 
 /** 为自定义供应商追加一个空模型配置。 */
@@ -491,8 +502,8 @@ export interface ProviderSettings {
 	setProviderBaseUrl(providerId: string, baseUrl: string): void;
 	setSecretId(providerId: string, secretId: string): void;
 	setAuthType(providerId: string, authType: ModelProvider["authType"]): void;
-	/** 刷新「模型清单」（不动启用集），返回「有 N 个新模型可挑选」的 N（#87）。 */
-	refreshModelCatalog(providerId: string, models: string[]): number;
+	/** 刷新「模型清单」（不动启用集；#87）。 */
+	refreshModelCatalog(providerId: string, models: string[]): void;
 	/** 挑选确认：挑选集成为启用集（当前模型受保护，移除不清思考偏好；#87）。 */
 	applyPickedModels(providerId: string, picked: string[]): void;
 	/** 「当前模型」是否受保护（不可被移除，需先切换模型；#87）。 */
@@ -519,7 +530,7 @@ export interface ProviderSettings {
 /** 构造绑定门面。命令落在设置 owner 上，由 owner 自持状态与落盘（接线层不再逐字段搬运）。 */
 export function createProviderSettings(deps: ProviderSettingsDeps): ProviderSettings {
 	const { owner } = deps;
-	const run = (command: (state: ProviderState) => ProviderState): void => {
+	const run = (command: (state: ProviderState) => void): void => {
 		void owner.apply((state) => {
 			command(state);
 		});
@@ -532,17 +543,7 @@ export function createProviderSettings(deps: ProviderSettingsDeps): ProviderSett
 			run((s) => setProviderBaseUrl(s, providerId, baseUrl)),
 		setSecretId: (providerId, secretId) => run((s) => setSecretId(s, providerId, secretId)),
 		setAuthType: (providerId, authType) => run((s) => setAuthType(s, providerId, authType)),
-		refreshModelCatalog: (providerId, models) => {
-			let count = 0;
-			void owner.apply((state) => {
-				const provider = state.providers.find((p) => p.id === providerId);
-				if (!provider) return;
-				const before = catalogOf(provider);
-				refreshModelCatalog(state, providerId, models);
-				count = countNewPickable(before, catalogOf(provider), modelsOf(provider));
-			});
-			return count;
-		},
+		refreshModelCatalog: (providerId, models) => run((s) => refreshModelCatalog(s, providerId, models)),
 		applyPickedModels: (providerId, picked) => run((s) => applyPickedModels(s, providerId, picked)),
 		isModelProtected: (providerId, model) =>
 			isModelProtected(owner.get(), providerId, model),

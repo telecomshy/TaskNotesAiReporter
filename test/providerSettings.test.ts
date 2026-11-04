@@ -14,7 +14,6 @@ import {
 	setSecretId,
 	setAuthType,
 	refreshModelCatalog,
-	countNewPickable,
 	applyPickedModels,
 	isModelStale,
 	isModelProtected,
@@ -183,7 +182,7 @@ test("setProviderBaseUrl 去空白写入", () => {
 	assert.equal(p.baseUrl, "https://x.com/v1");
 });
 
-test("setSecretId 预设清空密钥名：不动启用集与模型清单（策展动作只在挑选，#87）", () => {
+test("setSecretId 预设清空密钥名：清空启用集，悬空当前模型一并清空（#90，回归 #29 不变量）", () => {
 	const p = provider({
 		id: "p",
 		type: "preset",
@@ -195,12 +194,12 @@ test("setSecretId 预设清空密钥名：不动启用集与模型清单（策�
 	const s = state({ providers: [p], activeProviderId: "p", activeModel: "m" });
 	setSecretId(s, "p", "");
 	assert.equal(p.apiKeySecretId, "");
-	assert.deepEqual(p.models, ["m"], "启用集保留");
-	assert.deepEqual(p.modelCatalog, ["m"], "模型清单保留");
-	assert.equal(s.activeModel, "m");
+	assert.deepEqual(p.models, [], "未配置（密钥名为空）⇒ 无启用模型");
+	assert.deepEqual(p.modelCatalog, ["m"], "模型清单是拉取历史，不动");
+	assert.equal(s.activeModel, "", "悬空「当前模型」一并清空");
 });
 
-test("setSecretId 纯空白视为清空：同样不动启用集", () => {
+test("setSecretId 纯空白视为清空：同样清空启用集", () => {
 	const p = provider({
 		id: "p",
 		type: "preset",
@@ -209,11 +208,10 @@ test("setSecretId 纯空白视为清空：同样不动启用集", () => {
 		models: ["m"],
 		modelCatalog: ["m"],
 	});
-	const s = state({ providers: [p], activeProviderId: "p", activeModel: "m" });
+	const s = state({ providers: [p] });
 	setSecretId(s, "p", "   ");
 	assert.equal(p.apiKeySecretId, "");
-	assert.deepEqual(p.models, ["m"]);
-	assert.equal(s.activeModel, "m");
+	assert.deepEqual(p.models, []);
 });
 
 test("setSecretId 预设换新密钥名：去空白并保留模型", () => {
@@ -223,6 +221,26 @@ test("setSecretId 预设换新密钥名：去空白并保留模型", () => {
 	assert.equal(p.apiKeySecretId, "new");
 	assert.deepEqual(p.models, ["m"]);
 	assert.equal(s.activeModel, "m");
+});
+
+test("setSecretId 自定义供应商清空密钥名：模型行不动（手工配置不是拉取策展）", () => {
+	const p = provider({
+		id: "c",
+		type: "custom",
+		authType: "bearer",
+		apiKeySecretId: "old",
+		customModels: [{ id: "mc1", modelId: "m" }],
+	});
+	const s = state({ providers: [p] });
+	setSecretId(s, "c", "");
+	assert.deepEqual(p.customModels, [{ id: "mc1", modelId: "m" }]);
+});
+
+test("setSecretId 无认证（none）供应商清空密钥名：启用集不动（不要求密钥）", () => {
+	const p = provider({ id: "p", type: "preset", authType: "none", apiKeySecretId: "", models: ["m"] });
+	const s = state({ providers: [p] });
+	setSecretId(s, "p", "");
+	assert.deepEqual(p.models, ["m"]);
 });
 
 test("setAuthType 切到 none：清空密钥名", () => {
@@ -240,7 +258,7 @@ test("catalogOf 缺失清单读作空清单", () => {
 	assert.deepEqual(catalogOf(provider({ id: "p", type: "preset", modelCatalog: ["x"] })), ["x"]);
 });
 
-test("refreshModelCatalog 只刷模型清单：启用集与当前模型不动（静默拉取）", () => {
+test("refreshModelCatalog 只刷模型清单：启用集与当前模型不动（手动拉取同用）", () => {
 	const p = provider({ id: "p", type: "preset", models: ["kept"], modelCatalog: ["old"] });
 	const s = state({ providers: [p], activeProviderId: "p", activeModel: "kept" });
 	refreshModelCatalog(s, "p", ["kept", "fresh"]);
@@ -273,12 +291,6 @@ test("refreshModelCatalog 清洗清单：去空白、去重、剔除非字符串
 	const s = state({ providers: [p] });
 	refreshModelCatalog(s, "p", [" a ", "a", "", "  ", 123 as unknown as string, "b"]);
 	assert.deepEqual(p.modelCatalog, ["a", "b"]);
-});
-
-test("countNewPickable 只数清单新增且未启用的模型（「有 N 个新模型可挑选」）", () => {
-	assert.equal(countNewPickable(["a"], ["a", "b", "c"], ["b"]), 1, "b 已启用、a 旧有，只剩 c");
-	assert.equal(countNewPickable([], ["a"], []), 1);
-	assert.equal(countNewPickable(["a"], ["a"], []), 0, "清单没变化没有新模型");
 });
 
 // ===== 启用 / 停用（挑选确认，#87） =====
@@ -536,13 +548,12 @@ test("门面：命令落盘一次，并保留引用", () => {
 	assert.equal(saves, 1);
 });
 
-test("门面：refreshModelCatalog 只刷清单并返回「有 N 个新模型可挑选」的 N", () => {
+test("门面：refreshModelCatalog 只刷清单，不改动启用集", () => {
 	const p = provider({ id: "a", type: "preset", models: ["m"], modelCatalog: ["m"] });
 	const live = { ...DEFAULT_SETTINGS, ...state({ providers: [p], activeProviderId: "a", activeModel: "m" }) };
 	const owner = createSettingsOwner(live, { save: () => Promise.resolve(), getSecret: () => null });
 	const facade = createProviderSettings({ owner });
-	const count = facade.refreshModelCatalog("a", ["m", "new1", "new2"]);
-	assert.equal(count, 2);
+	facade.refreshModelCatalog("a", ["m", "new1", "new2"]);
 	assert.deepEqual(live.providers[0].modelCatalog, ["m", "new1", "new2"]);
 	assert.deepEqual(live.providers[0].models, ["m"], "启用集不改动");
 });

@@ -8,7 +8,7 @@
 		"deploy": "npm run build && node scripts/deploy.mjs",
 		"lint": "eslint . --max-warnings 0",
 		"dev": "node esbuild.config.mjs",
-		"test": "node --import tsx --experimental-test-module-mocks --test \"test/*.test.ts\"",
+		"test": "node --import tsx --import ./test/fakes/obsidian-shim.mjs --experimental-test-module-mocks --test \"test/*.test.ts\"",
 		"typecheck": "tsc -noEmit -skipLibCheck",
 		"prepare": "husky"
 	},

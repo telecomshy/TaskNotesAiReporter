@@ -90,12 +90,88 @@ test("loadSettings 迁移先于落盘：save 是最后一个 IO 调用", async (
 	);
 });
 
-test("loadSettings 纯空白旧明文：归一阶段即丢弃，不触发落盘", async () => {
+test("loadSettings 纯空白旧明文：归一阶段即丢弃，不写密钥", async () => {
 	const fake = fakeIO(rawWithLegacySecret("   "));
 	const settings = await loadSettings(fake.io);
-	assert.deepEqual(fake.events, ["loadRaw"], "空白明文不进入待迁移项，故无落盘");
+	assert.deepEqual(fake.events, ["loadRaw", "save"], "空白明文不进入待迁移项；未配置清空启用集触发一次落盘");
 	assert.deepEqual(fake.secrets, {});
 	assert.equal(settings.providers[0].apiKeySecretId, "");
+	assert.deepEqual(settings.providers[0].models, [], "未配置（密钥名为空）⇒ 无启用模型");
+});
+
+test("loadSettings 旧明文迁移回填密钥名后：启用集保留（清理规则不误伤）", async () => {
+	const fake = fakeIO(rawWithLegacySecret("sk-old"));
+	const settings = await loadSettings(fake.io);
+	assert.deepEqual(settings.providers[0].models, ["m1"], "配置过（迁移后有密钥名）则保留");
+});
+
+test("loadSettings 预设供应商密钥名为空：载入清空启用集并落盘（#90）", async () => {
+	const fake = fakeIO({
+		providers: [
+			{
+				id: "kimi",
+				name: "Kimi",
+				type: "preset",
+				baseUrl: "https://api.moonshot.cn/v1",
+				apiKeySecretId: "",
+				models: ["kimi-latest", "moonshot-v1-8k"],
+				modelCatalog: ["kimi-latest", "moonshot-v1-8k"],
+				authType: "bearer",
+			},
+		],
+		activeProviderId: "kimi",
+		activeModel: "",
+	});
+	const settings = await loadSettings(fake.io);
+	assert.deepEqual(settings.providers[0].models, [], "未配置 ⇒ 无任何模型");
+	assert.deepEqual(fake.saved, [settings], "存量残留清理落盘一次");
+	assert.deepEqual(fake.events, ["loadRaw", "save"]);
+});
+
+test("loadSettings 预设供应商已配置密钥名：启用集保留、不落盘", async () => {
+	const fake = fakeIO({
+		providers: [
+			{
+				id: "kimi",
+				name: "Kimi",
+				type: "preset",
+				baseUrl: "https://api.moonshot.cn/v1",
+				apiKeySecretId: "tnar-kimi-x",
+				models: ["kimi-latest"],
+				authType: "bearer",
+			},
+		],
+		activeProviderId: "kimi",
+		activeModel: "kimi-latest",
+	});
+	const settings = await loadSettings(fake.io);
+	assert.deepEqual(settings.providers[0].models, ["kimi-latest"]);
+	assert.equal(settings.activeModel, "kimi-latest");
+	assert.deepEqual(fake.events, ["loadRaw"], "无变更不落盘");
+});
+
+test("loadSettings 自定义供应商密钥名为空：模型行保留（手工配置不受清理影响）", async () => {
+	const fake = fakeIO({
+		providers: [
+			{
+				id: "custom_x",
+				name: "自定义",
+				type: "custom",
+				baseUrl: "http://localhost:3000/v1",
+				apiKeySecretId: "",
+				authType: "bearer",
+				customModels: [{ id: "mc1", modelId: "m" }],
+			},
+		],
+		activeProviderId: "custom_x",
+		activeModel: "",
+	});
+	const settings = await loadSettings(fake.io);
+	assert.deepEqual(
+		(settings.providers[0] as { customModels?: unknown[] }).customModels,
+		[{ id: "mc1", modelId: "m" }]
+	);
+	assert.deepEqual(fake.events, ["loadRaw"]);
 });
 
 test("loadSettings 保留用户既有设置（非默认值不被覆盖）", async () => {
