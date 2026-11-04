@@ -59,7 +59,7 @@ function setup(
 				baseUrl: "https://api.example.com",
 				apiKey: "sk",
 				model: "m",
-				thinking: { setting: "off", param: null, note: "unknown" },
+				thinking: { setting: "off", param: null, note: "unknown", learned: null },
 			},
 		}),
 		chat: async (prompt, config) => {
@@ -161,7 +161,7 @@ test("模型参数回退：该模型自带上限优先", async () => {
 				apiKey: "k",
 				model: "m",
 				maxTokens: 4096,
-				thinking: { setting: "on", param: null, note: null },
+				thinking: { setting: "on", param: null, note: null, learned: null },
 			},
 		}),
 	});
@@ -282,6 +282,7 @@ const thinkingOffParam = {
 	setting: "off" as const,
 	param: { name: "thinking", value: { type: "disabled" } },
 	note: null,
+	learned: null,
 };
 
 test("思考参数透传：当前模型的思考参数随 chat 配置交出（界面不拼参数）", async () => {
@@ -321,7 +322,7 @@ test("假关不误报：未发参数（强制思考）或响应无推理段 → 
 				baseUrl: "https://api.example.com",
 				apiKey: "sk",
 				model: "m",
-				thinking: { setting: "off", param: null, note: "forced" },
+				thinking: { setting: "off", param: null, note: "forced", learned: null },
 			},
 		}),
 		chat: async () => ({ content: "正文", hasReasoning: true }),

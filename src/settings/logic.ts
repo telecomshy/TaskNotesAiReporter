@@ -6,9 +6,11 @@
 import {
 	DEFAULT_SETTINGS,
 	PRESET_PROVIDERS,
+	type LearnedCapability,
 	type ModelProvider,
 	type ReportTemplate,
 	type TaskNotesAIHelperSettings,
+	type ThinkingParam,
 	type ThinkingSetting,
 } from "../types";
 import type { PendingSecret } from "./secrets";
@@ -115,6 +117,10 @@ export function normalizeSettings(raw: unknown): NormalizedSettings {
 				const thinkingByModel = normalizeThinkingByModel(providerRaw.thinkingByModel);
 				if (thinkingByModel) provider.thinkingByModel = thinkingByModel;
 				else delete provider.thinkingByModel;
+				// 「习得能力」（#89）：条目逐个校验，非法剔除；「中断」本就不落条目。
+				const learnedByModel = normalizeLearnedByModel(providerRaw.learnedByModel);
+				if (learnedByModel) provider.learnedByModel = learnedByModel;
+				else delete provider.learnedByModel;
 				const legacy = providerRaw.apiKey;
 				delete provider.apiKey; // 不再持久化明文密钥
 				if (typeof legacy === "string" && legacy.trim() !== "" && typeof provider.id === "string") {
@@ -237,6 +243,47 @@ function normalizeThinkingByModel(raw: unknown): Record<string, ThinkingSetting>
 		if (setting !== undefined) out[model] = setting;
 	}
 	return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/**
+ * 归一「习得能力」映射（#89）：条目须有合法判定（三档落档值，「中断」不落条目）与
+ * 非空测试时间戳，且「可关」条目必须带可解析的关参数；其余情形视为脏数据剔除。
+ * 无合法条目返回 undefined（＝不发明，读取侧＝未知，测试入口保持可点）。归一幂等。
+ */
+function normalizeLearnedByModel(raw: unknown): Record<string, LearnedCapability> | undefined {
+	if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined;
+	const out: Record<string, LearnedCapability> = {};
+	for (const [model, value] of Object.entries(raw as Record<string, unknown>)) {
+		const entry = normalizeLearnedCapability(value);
+		if (entry !== undefined) out[model] = entry;
+	}
+	return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/** 单条习得能力归一；非法返回 undefined。 */
+function normalizeLearnedCapability(value: unknown): LearnedCapability | undefined {
+	if (typeof value !== "object" || value === null) return undefined;
+	const raw = value as Record<string, unknown>;
+	const verdict = raw.verdict;
+	if (verdict !== "not-detected" && verdict !== "switchable" && verdict !== "not-switchable") {
+		return undefined;
+	}
+	if (typeof raw.testedAt !== "string" || raw.testedAt === "") return undefined;
+	const entry: LearnedCapability = { verdict, testedAt: raw.testedAt };
+	const off = normalizeThinkingParam(raw.off);
+	if (off) entry.off = off;
+	if (typeof raw.triedFields === "number" && Number.isFinite(raw.triedFields)) {
+		entry.triedFields = raw.triedFields;
+	}
+	return entry;
+}
+
+/** 关参数归一：须为非空名字的键值对；非法返回 undefined。 */
+function normalizeThinkingParam(value: unknown): ThinkingParam | undefined {
+	if (typeof value !== "object" || value === null) return undefined;
+	const raw = value as Record<string, unknown>;
+	if (typeof raw.name !== "string" || raw.name === "") return undefined;
+	return { name: raw.name, value: raw.value };
 }
 
 /** 把未被用户改动的旧中文示例模板迁移为当前英文默认版；改过的模板原样保留。 */

@@ -9,6 +9,8 @@ import type TaskNotesAIHelperPlugin from "../../main";
 import type { TaskInfo } from "../types";
 import type { TaskRepository } from "../tasks/repository";
 import { chatCompletion } from "../ai/client";
+import { runThinkingTest } from "../ai/thinkingTest";
+import { thinkingVerdictNoticeKey } from "../i18n";
 import { saveReport } from "../report/writer";
 import { createGeneration, type GenerateSettings } from "../report/generate";
 import { describeReportFailure } from "../report/errorMessage";
@@ -192,8 +194,8 @@ export class ReportModal extends Modal {
 
 			if (result.ok === true) {
 				new Notice(this.plugin.t("report.saved", { path: result.path }));
-				// 假关（设「关」而响应仍带推理段）：一次性非阻断告警（#84）
-				if (result.fakeOff) new Notice(this.plugin.t("report.thinkingFakeOff"));
+				// 假关（设「关」而响应仍带推理段）：一次性非阻断告警，内含「重新测试」动作（#84 / #89）
+				if (result.fakeOff) this.showFakeOffWarning();
 				const file = this.app.vault.getAbstractFileByPath(result.path);
 				if (file instanceof TFile) {
 					await this.app.workspace.getLeaf(false).openFile(file);
@@ -212,5 +214,39 @@ export class ReportModal extends Modal {
 				);
 			}
 		}
+	}
+
+	/**
+	 * 假关告警（#84 / #89）：一次性非阻断告警，内含「重新测试」动作——
+	 * 习得能力出错时的修正路径之一（设置页习得行另有「重新测试」文字入口）。
+	 */
+	private showFakeOffWarning(): void {
+		const t = this.plugin.t;
+		const notice = new Notice(t("report.thinkingFakeOff"), 0);
+		const retestBtn = notice.messageEl.createEl("button", {
+			text: t("report.thinkingFakeOffRetest"),
+		});
+		retestBtn.addEventListener("click", () => {
+			notice.hide();
+			void this.retestThinking();
+		});
+	}
+
+	/** 假关告警的「重新测试」（#89）：清习得并重跑思考测试；中断不留结论，可再触发。 */
+	private async retestThinking(): Promise<void> {
+		const t = this.plugin.t;
+		const providerId = this.plugin.settings.activeProviderId;
+		const model = this.plugin.settings.activeModel;
+		this.plugin.providers.clearLearnedThinking(providerId, model);
+		const resolved = this.plugin.providers.resolveActive();
+		if (!resolved.ok) return;
+		const result = await runThinkingTest({
+			baseUrl: resolved.config.baseUrl,
+			apiKey: resolved.config.apiKey,
+			model: resolved.config.model,
+			timeoutSeconds: this.plugin.settings.timeoutSeconds,
+		});
+		if (result.entry) this.plugin.providers.recordThinkingTest(providerId, model, result.entry);
+		new Notice(t(thinkingVerdictNoticeKey(result.verdict)));
 	}
 }

@@ -3,7 +3,7 @@
  * 纯逻辑，不依赖 Obsidian，可直接单元测试。
  */
 
-import type { DateField } from "../types";
+import type { DateField, ThinkingTestVerdict } from "../types";
 import { en, type Strings } from "./en";
 import { zh } from "./zh";
 
@@ -53,6 +53,19 @@ export function calendarLabels(language: UiLanguage): Strings["calendar"] {
 export function dateFieldLabelKey(field: DateField): string {
 	const suffix = field.replace(/^date/, "");
 	return `settings.dateField${suffix.charAt(0).toUpperCase()}${suffix.slice(1)}`;
+}
+
+/** 「思考测试」四值判定 → 结论提示文案键（#89）；措辞诚实（不写「强制思考」「无思考」）。 */
+const THINKING_VERDICT_NOTICE_KEYS: Record<ThinkingTestVerdict, string> = {
+	"not-detected": "model.thinkingTestVerdictNotDetected",
+	switchable: "model.thinkingTestVerdictSwitchable",
+	"not-switchable": "model.thinkingTestVerdictNotSwitchable",
+	interrupted: "model.thinkingTestInterrupted",
+};
+
+/** 取「思考测试」判定的结论提示文案键。 */
+export function thinkingVerdictNoticeKey(verdict: ThinkingTestVerdict): string {
+	return THINKING_VERDICT_NOTICE_KEYS[verdict];
 }
 
 /** 字符串表的深层可选类型：允许翻译器按部分目录构造（测试与渐进迁移）。 */

@@ -9,6 +9,7 @@
 
 import { requestUrlTransport } from "./transport";
 import { buildChatCompletionsUrl, buildModelsUrl } from "../core/aiUrl";
+import { probeOutcomeOfError, type ThinkingProbeOutcome } from "../core/thinking";
 import { AIClientError } from "./errors";
 import { requestJson, type RequestFn } from "./request";
 import type { ThinkingParam } from "../types";
@@ -38,6 +39,18 @@ export interface ChatResult {
 	content: string;
 	hasReasoning: boolean;
 }
+
+/** 思考测试微型请求的目标（#89）：微型请求自带提示与输出上限，不需要温度/上限配置。 */
+export interface ThinkingProbeConfig {
+	baseUrl: string;
+	apiKey: string;
+	model: string;
+	timeoutSeconds: number;
+}
+
+/** 思考测试微型请求的提示与输出上限（#89）：越小越省，够读出推理段读面即可。 */
+const THINKING_PROBE_PROMPT = "1+1=? Reply with the number only.";
+const THINKING_PROBE_MAX_TOKENS = 256;
 
 const defaultRequest: RequestFn = requestUrlTransport;
 
@@ -109,14 +122,55 @@ export async function chatCompletion(
  * 响应是否残留推理段：`reasoning_content` 非空或 `reasoning_tokens` 计量大于零。
  * 假关判定的唯一读面——不看 HTTP 200（错误参数名会得到 200＋正常思考）。
  */
-function detectReasoning(data: {
-	choices?: Array<{ message?: { reasoning_content?: unknown } }>;
-	usage?: { completion_tokens_details?: { reasoning_tokens?: unknown } };
-}): boolean {
-	const reasoningContent = data.choices?.[0]?.message?.reasoning_content;
+function detectReasoning(data: unknown): boolean {
+	const body = data as {
+		choices?: Array<{ message?: { reasoning_content?: unknown } }>;
+		usage?: { completion_tokens_details?: { reasoning_tokens?: unknown } };
+	};
+	const reasoningContent = body.choices?.[0]?.message?.reasoning_content;
 	if (typeof reasoningContent === "string" && reasoningContent.trim() !== "") return true;
-	const reasoningTokens = data.usage?.completion_tokens_details?.reasoning_tokens;
+	const reasoningTokens = body.usage?.completion_tokens_details?.reasoning_tokens;
 	return typeof reasoningTokens === "number" && reasoningTokens > 0;
+}
+
+/**
+ * 思考测试微型请求（#89）：只读「响应推理段读面」（唯一证据，不认 HTTP 200）。
+ * 空正文不算失败（思考模型可能把输出额度花在推理段上）；
+ * 错误按 `probeOutcomeOfError` 归类——测试内 400＝字段不适用（探测信号），其余异常＝中断。
+ */
+export async function thinkingProbe(
+	config: ThinkingProbeConfig,
+	param: ThinkingParam | null,
+	request: RequestFn = defaultRequest
+): Promise<ThinkingProbeOutcome> {
+	try {
+		const hasReasoning = await requestJson(
+			{
+				op: "chat",
+				url: buildChatCompletionsUrl(config.baseUrl),
+				method: "POST",
+				apiKey: config.apiKey,
+				body: JSON.stringify({
+					model: config.model,
+					messages: [{ role: "user", content: THINKING_PROBE_PROMPT }],
+					temperature: 0,
+					max_tokens: THINKING_PROBE_MAX_TOKENS,
+					stream: false,
+					...(param ? { [param.name]: param.value } : {}),
+				}),
+				timeoutSeconds: config.timeoutSeconds,
+			},
+			(json) => detectReasoning(json),
+			request
+		);
+		return hasReasoning ? "reasoning-present" : "reasoning-absent";
+	} catch (error) {
+		const status =
+			error instanceof AIClientError && error.code === "chat.http"
+				? error.details.status
+				: undefined;
+		return probeOutcomeOfError(status);
+	}
 }
 
 /** 测试连接：发送一条极简请求以校验配置是否可用。 */

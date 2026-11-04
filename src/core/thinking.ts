@@ -8,9 +8,11 @@
  */
 
 import type {
+	LearnedCapability,
 	ThinkingParam,
 	ThinkingResolution,
 	ThinkingSetting,
+	ThinkingTestVerdict,
 } from "../types";
 
 /** 解析输入：按（供应商 ID, 模型）查能力表；两档取值见 `ThinkingSetting`。 */
@@ -18,6 +20,8 @@ export interface ThinkingInput {
 	providerId: string;
 	model: string;
 	setting: ThinkingSetting;
+	/** 习得能力条目（#89）：命中即盖过内置能力表（习得 ＞ 内置 ＞ 未知）。 */
+	learned?: LearnedCapability | null;
 }
 
 /** 一个（供应商, 模型）的思考能力。 */
@@ -107,6 +111,8 @@ export const THINKING_CAPABILITIES: readonly ThinkingCapabilityRow[] = [
 
 /**
  * 解析「思考」两档到请求参数与 UI 标注（#88 两档语义）：
+ * - 习得能力命中即生效（习得 ＞ 内置能力表 ＞ 未知，#89）：「可关」的「关」发习得关参数，
+ *   「开」无开参数则不发；「未检出思考」「未能关闭」不发参数（措辞在呈现层，诚实化）；
  * - 「开」发开参数（该模型无开参数则不发）；「关」发关参数；一次请求只发一个参数；
  * - 强制思考 / 无思考模型无论两档都不发参数，给出置灰标注；
  * - 能力表未命中（含自定义供应商）不发参数、标注未知（对未知模型降级，见研究笔记 9.6）。
@@ -116,19 +122,28 @@ export function resolveThinking(
 	table: readonly ThinkingCapabilityRow[] = THINKING_CAPABILITIES
 ): ThinkingResolution {
 	const setting = input.setting;
+	const learned = input.learned ?? null;
+
+	if (learned) {
+		if (learned.verdict === "switchable") {
+			const off = learned.off ?? null;
+			return { setting, param: setting === "off" ? off : null, note: null, learned };
+		}
+		return { setting, param: null, note: null, learned };
+	}
 
 	const row = table.find(
 		(r) => r.providerId === input.providerId && matchModel(r.modelPattern, input.model)
 	);
-	if (!row) return { setting, param: null, note: "unknown" };
+	if (!row) return { setting, param: null, note: "unknown", learned: null };
 
 	const cap = row.capability;
-	if (cap.kind === "forced") return { setting, param: null, note: "forced" };
-	if (cap.kind === "none") return { setting, param: null, note: "none" };
+	if (cap.kind === "forced") return { setting, param: null, note: "forced", learned: null };
+	if (cap.kind === "none") return { setting, param: null, note: "none", learned: null };
 
-	if (setting === "off") return { setting, param: cap.off, note: null };
-	if (setting === "on" && cap.on) return { setting, param: cap.on, note: null };
-	return { setting, param: null, note: null };
+	if (setting === "off") return { setting, param: cap.off, note: null, learned: null };
+	if (setting === "on" && cap.on) return { setting, param: cap.on, note: null, learned: null };
+	return { setting, param: null, note: null, learned: null };
 }
 
 /**
@@ -145,39 +160,76 @@ export function normalizeThinkingSetting(raw: unknown): ThinkingSetting | undefi
 /** 徽标色族（原型四色定案）：builtin＝内置（紫）/ learned＝实测（绿）/ unknown＝未知（灰）/ warn＝警示（琥珀）。 */
 export type ThinkingBadgeTone = "builtin" | "learned" | "unknown" | "warn";
 
-/**
- * 显示矩阵的行状态（#86 / #88）：builtin＝内置能力表·可关 / forced＝强制思考 /
- * none＝无思考 / unknown＝未知能力。习得档（实测）由 #89 增补。
- */
-export type ThinkingDisplayState = "builtin" | "forced" | "none" | "unknown";
-
-/** 测试入口形态：available＝可发起思考测试（本票留位、#89 落行为）/ done＝已知无需测试。 */
-export type ThinkingTestEntry = "available" | "done";
+/** 测试入口形态：available＝可发起思考测试 / done＝已知无需测试 / retest＝已实测可「重新测试」（#89）。 */
+export type ThinkingTestEntry = "available" | "done" | "retest";
 
 /**
  * 「思考」显示矩阵一行（#86）：开关可用性 + 徽标 + 备注警示 + 测试入口。
- * 文案键由 UI 映射（ADR-0005），本模块只出数据。徽标「实测」与测试按钮行为由 #89 填充。
+ * 文案键由 UI 映射（ADR-0005），本模块只出数据。习得档徽标带测试时间戳（UI 取 learned.testedAt）。
  */
 export interface ThinkingDisplay {
 	state: ThinkingDisplayState;
 	badge: ThinkingBadgeTone;
-	/** 滑动开关可操作 ⇔ 思考能力已知且可关。 */
+	/** 滑动开关可操作 ⇔ 思考能力已知且可关（内置可关或习得可关）。 */
 	toggleEnabled: boolean;
 	/** 备注用警示色（琥珀）。 */
 	footnoteWarn: boolean;
 	testEntry: ThinkingTestEntry;
 }
 
-/** 显示矩阵（#86）：行状态 → 呈现数据。习得档（实测）行由 #89 增补。 */
+/**
+ * 显示矩阵的行状态（#86 / #88 / #89）：builtin＝内置能力表·可关 / forced＝强制思考 /
+ * none＝无思考 / unknown＝未知能力；learned-*＝习得档（实测）三值——
+ * 可关 / 未检出思考（措辞不写「无思考」）/ 未能关闭（措辞不写「强制思考」）。
+ */
+export type ThinkingDisplayState =
+	| "builtin"
+	| "forced"
+	| "none"
+	| "unknown"
+	| "learned-switchable"
+	| "learned-not-detected"
+	| "learned-not-switchable";
+
+/** 显示矩阵（#86 / #89）：行状态 → 呈现数据。习得档转「重新测试」文字入口（清习得并重跑）。 */
 const THINKING_DISPLAY: Record<ThinkingDisplayState, ThinkingDisplay> = {
 	builtin: { state: "builtin", badge: "builtin", toggleEnabled: true, footnoteWarn: false, testEntry: "done" },
 	forced: { state: "forced", badge: "warn", toggleEnabled: false, footnoteWarn: true, testEntry: "done" },
 	none: { state: "none", badge: "unknown", toggleEnabled: false, footnoteWarn: false, testEntry: "done" },
 	unknown: { state: "unknown", badge: "unknown", toggleEnabled: false, footnoteWarn: true, testEntry: "available" },
+	"learned-switchable": {
+		state: "learned-switchable",
+		badge: "learned",
+		toggleEnabled: true,
+		footnoteWarn: false,
+		testEntry: "retest",
+	},
+	"learned-not-detected": {
+		state: "learned-not-detected",
+		badge: "learned",
+		toggleEnabled: false,
+		footnoteWarn: false,
+		testEntry: "retest",
+	},
+	"learned-not-switchable": {
+		state: "learned-not-switchable",
+		badge: "warn",
+		toggleEnabled: false,
+		footnoteWarn: true,
+		testEntry: "retest",
+	},
 };
 
-/** 由思考解析结果推导「当前模型」区呈现（显示矩阵，#88 落地）。 */
+/** 习得判定 → 显示矩阵行状态。 */
+const LEARNED_DISPLAY_STATE: Record<LearnedCapability["verdict"], ThinkingDisplayState> = {
+	switchable: "learned-switchable",
+	"not-detected": "learned-not-detected",
+	"not-switchable": "learned-not-switchable",
+};
+
+/** 由思考解析结果推导「当前模型」区呈现（显示矩阵，#88 落地；习得档 #89 增补）。 */
 export function thinkingDisplay(resolution: ThinkingResolution): ThinkingDisplay {
+	if (resolution.learned) return THINKING_DISPLAY[LEARNED_DISPLAY_STATE[resolution.learned.verdict]];
 	const state: ThinkingDisplayState = resolution.note === null ? "builtin" : resolution.note;
 	return THINKING_DISPLAY[state];
 }
@@ -198,4 +250,120 @@ export function isThinkingFakeOff(
 function matchModel(pattern: string, model: string): boolean {
 	if (pattern.endsWith("*")) return model.startsWith(pattern.slice(0, -1));
 	return pattern === model;
+}
+
+// ===== 思考测试纯状态机（#89，缝 1） =====
+
+/**
+ * 固定字段候选（#89）：按研究笔记的参数族有序排列（`thinking` 对象 / `enable_thinking` 布尔 /
+ * `reasoning_effort` 字符串，见 docs/research/thinking-toggle-apis.md），一次只发一个
+ * （ADR-0024 互斥约束）。候选清单之外的暗号不猜——漏网的真暗号只能给出「未能关闭」。
+ */
+export const THINKING_OFF_CANDIDATES: readonly ThinkingParam[] = [
+	{ name: "thinking", value: { type: "disabled" } },
+	{ name: "enable_thinking", value: false },
+	{ name: "reasoning_effort", value: "none" },
+];
+
+/**
+ * 微型请求的读面结果（思考测试状态机输入，#89）：
+ * - `reasoning-present` / `reasoning-absent`：2xx，按响应推理段读面判定（唯一证据，不认 HTTP 200）；
+ * - `rejected`：400，字段不适用（探测信号），换下一个候选；
+ * - `interrupted`：超时 / 网络错误 / 其它异常，中断不留结论。
+ */
+export type ThinkingProbeOutcome =
+	| "reasoning-present"
+	| "reasoning-absent"
+	| "rejected"
+	| "interrupted";
+
+/** 执行层错误 → 读面结果归类：测试内 400 是探测信号，其余异常一律中断（AC2）。 */
+export function probeOutcomeOfError(status: number | undefined): ThinkingProbeOutcome {
+	return status === 400 ? "rejected" : "interrupted";
+}
+
+/** 状态机的下一步：发微型请求（param null＝基线），或给出最终四值判定＋习得条目。 */
+export type ThinkingTestAction =
+	| { kind: "probe"; param: ThinkingParam | null }
+	| { kind: "conclude"; verdict: ThinkingTestVerdict; entry: LearnedCapability | null };
+
+/** 思考测试状态：基线 → 逐字段（待试候选下标）→ 判定。纯状态，无 IO。 */
+export interface ThinkingTestState {
+	phase: "baseline" | "probe";
+	candidateIndex: number;
+}
+
+/** 开始思考测试：第一步是基线微型请求（不发思考参数，先判会不会思考）。 */
+export function startThinkingTest(): { state: ThinkingTestState; action: ThinkingTestAction } {
+	return {
+		state: { phase: "baseline", candidateIndex: 0 },
+		action: { kind: "probe", param: null },
+	};
+}
+
+/**
+ * 状态机转移（#89）：输入上一步微型请求的读面结果，输出下一步。
+ * 判定只认推理段读面：`reasoning-absent` 是「可关」的唯一证据；`rejected`（400）换下一个
+ * 候选；`interrupted` 一律中断、不留结论（可完整重测）；候选耗尽仍未关掉 →「未能关闭」
+ * （措辞不写「强制思考」）；基线未检出 →「未检出思考」（措辞不写「无思考」）。
+ * `now` 注入时钟，产出的习得条目带测试时间戳。
+ */
+export function stepThinkingTest(
+	state: ThinkingTestState,
+	outcome: ThinkingProbeOutcome,
+	now: () => string = () => new Date().toISOString()
+): { state: ThinkingTestState; action: ThinkingTestAction } {
+	const interrupted: ThinkingTestAction = { kind: "conclude", verdict: "interrupted", entry: null };
+	if (outcome === "interrupted") return { state, action: interrupted };
+
+	if (state.phase === "baseline") {
+		// 基线无字段可换：400 不是探测信号，按中断处理。
+		if (outcome === "rejected") return { state, action: interrupted };
+		if (outcome === "reasoning-absent") {
+			return {
+				state,
+				action: {
+					kind: "conclude",
+					verdict: "not-detected",
+					entry: { verdict: "not-detected", testedAt: now() },
+				},
+			};
+		}
+		return {
+			state: { phase: "probe", candidateIndex: 0 },
+			action: { kind: "probe", param: THINKING_OFF_CANDIDATES[0] },
+		};
+	}
+
+	const current = THINKING_OFF_CANDIDATES[state.candidateIndex];
+	if (outcome === "reasoning-absent") {
+		return {
+			state,
+			action: {
+				kind: "conclude",
+				verdict: "switchable",
+				entry: { verdict: "switchable", off: current, testedAt: now() },
+			},
+		};
+	}
+	// rejected（字段不适用）或 reasoning-present（被静默忽略）：换下一个候选。
+	const next = state.candidateIndex + 1;
+	if (next < THINKING_OFF_CANDIDATES.length) {
+		return {
+			state: { phase: "probe", candidateIndex: next },
+			action: { kind: "probe", param: THINKING_OFF_CANDIDATES[next] },
+		};
+	}
+	return {
+		state,
+		action: {
+			kind: "conclude",
+			verdict: "not-switchable",
+			entry: {
+				verdict: "not-switchable",
+				triedFields: THINKING_OFF_CANDIDATES.length,
+				testedAt: now(),
+			},
+		},
+	};
 }

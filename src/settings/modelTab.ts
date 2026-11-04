@@ -4,11 +4,16 @@
  */
 
 import { Notice, SecretComponent } from "obsidian";
-import type { ModelConfig, ModelProvider, ThinkingResolution } from "../types";
-import type { Translator } from "../i18n";
+import type { LearnedCapability, ModelConfig, ModelProvider, ThinkingResolution } from "../types";
+import { thinkingVerdictNoticeKey, type Translator } from "../i18n";
 import { listModels, testConnection } from "../ai/client";
+import { runThinkingTest } from "../ai/thinkingTest";
 import { describeAIError } from "../ai/errorMessage";
-import { thinkingDisplay, type ThinkingDisplayState } from "../core/thinking";
+import {
+	thinkingDisplay,
+	THINKING_OFF_CANDIDATES,
+	type ThinkingDisplayState,
+} from "../core/thinking";
 import {
 	modelsOf,
 	isConfigured,
@@ -111,23 +116,57 @@ const DISPLAY_COPY: Record<ThinkingDisplayState, { badge: string; footnote: stri
 	forced: { badge: "model.thinkingBadgeForced", footnote: "model.thinkingForced" },
 	none: { badge: "model.thinkingBadgeNone", footnote: "model.thinkingNone" },
 	unknown: { badge: "model.thinkingBadgeUnknown", footnote: "model.thinkingUnknown" },
+	"learned-switchable": {
+		badge: "model.thinkingBadgeLearned",
+		footnote: "model.thinkingNoteLearnedSwitchable",
+	},
+	"learned-not-detected": {
+		badge: "model.thinkingBadgeLearned",
+		footnote: "model.thinkingNoteLearnedNotDetected",
+	},
+	"learned-not-switchable": {
+		badge: "model.thinkingBadgeLearned",
+		footnote: "model.thinkingNoteLearnedNotSwitchable",
+	},
 };
+
+/** 习得徽标「实测 {{date}}」的日期（测试时间戳的日期部分）。 */
+function learnedDate(learned: LearnedCapability): string {
+	return learned.testedAt.slice(0, 10);
+}
+
+/** 备注文案：习得档带时间戳 / 字段数变量，其余按行状态直取。 */
+function footnoteText(
+	state: ThinkingDisplayState,
+	learned: LearnedCapability | null,
+	t: Translator
+): string {
+	if (!learned) return t(DISPLAY_COPY[state].footnote);
+	if (state === "learned-not-switchable") {
+		return t(DISPLAY_COPY[state].footnote, {
+			count: learned.triedFields ?? THINKING_OFF_CANDIDATES.length,
+		});
+	}
+	return t(DISPLAY_COPY[state].footnote, { date: learnedDate(learned) });
+}
 
 /**
  * 「思考」两档滑动开关（#88）：作用于当前模型，偏好按模型持久化。
  * 显示矩阵（开关可用性 / 徽标 / 备注 / 测试入口）由 core/thinking 产出，本函数只做呈现。
- * 「实测」徽标与测试按钮行为由 #89 填充，本票只留位（按钮渲染为禁用）。
+ * 测试入口（#89）：未知＝「测试思考能力」按钮；习得档＝「重新测试」文字入口（清习得并重跑）；
+ * 已知（内置）＝置灰「已知，无需测试」。
  */
 function renderThinkingRow(card: HTMLElement, ctx: SettingsTabContext): void {
 	const t = ctx.plugin.t;
 	const settings = ctx.plugin.settings;
 	const provider = settings.providers.find((p) => p.id === settings.activeProviderId);
+	const activeModel = settings.activeModel;
 
-	// 未选模型时按能力未知呈现（置灰＋备注），开关不可操作
+	// 未选模型时按能力未知呈现（置灰＋备注），开关与测试入口均不可操作
 	const resolution: ThinkingResolution =
-		provider && settings.activeModel !== ""
-			? thinkingFor(provider, settings.activeModel)
-			: { setting: "off", param: null, note: "unknown" };
+		provider && activeModel !== ""
+			? thinkingFor(provider, activeModel)
+			: { setting: "off", param: null, note: "unknown", learned: null };
 	const display = thinkingDisplay(resolution);
 
 	const row = cardRow(card, t("model.thinking"), t("model.thinkingDesc"));
@@ -153,21 +192,40 @@ function renderThinkingRow(card: HTMLElement, ctx: SettingsTabContext): void {
 	const foot = card.createDiv({ cls: "tah-thinking-foot" });
 	const badge = foot.createSpan({ cls: `tah-thinking-badge tah-thinking-badge-${display.badge}` });
 	badge.createSpan({ cls: "tah-thinking-badge-dot" });
-	badge.createSpan({ text: t(DISPLAY_COPY[display.state].badge) });
+	badge.createSpan({
+		text: resolution.learned
+			? t(DISPLAY_COPY[display.state].badge, { date: learnedDate(resolution.learned) })
+			: t(DISPLAY_COPY[display.state].badge),
+	});
 	foot.createSpan({
 		cls: display.footnoteWarn
 			? "tah-thinking-footnote tah-thinking-footnote-warn"
 			: "tah-thinking-footnote",
-		text: t(DISPLAY_COPY[display.state].footnote),
+		text: footnoteText(display.state, resolution.learned, t),
 	});
 	foot.createSpan({ cls: "tah-thinking-foot-spacer" });
+
+	const startTest = (btn: HTMLElement, retest: boolean) => {
+		if (!provider || activeModel === "") return;
+		btn.setAttribute("disabled", "true");
+		btn.setText(t("model.thinkingTestRunning"));
+		void runThinkingTestFlow(ctx, provider.id, activeModel, retest);
+	};
+
 	if (display.testEntry === "available") {
-		// 测试入口位：思考测试行为由 #89 落地，此前保持禁用
 		const testBtn = foot.createEl("button", {
 			cls: "tah-thinking-test-btn",
 			text: t("model.thinkingTestRun"),
 		});
-		testBtn.disabled = true;
+		testBtn.disabled = !provider || activeModel === "";
+		testBtn.addEventListener("click", () => startTest(testBtn, false));
+	} else if (display.testEntry === "retest") {
+		// 「重新测试」文字入口（#89）：清习得并重跑；假关告警内另有同款动作
+		const retestBtn = foot.createEl("button", {
+			cls: "tah-thinking-test-link",
+			text: t("model.thinkingTestRetest"),
+		});
+		retestBtn.addEventListener("click", () => startTest(retestBtn, true));
 	} else {
 		// 显示矩阵「测试入口置灰」：位在，已知无需测试
 		const doneBtn = foot.createEl("button", {
@@ -176,6 +234,35 @@ function renderThinkingRow(card: HTMLElement, ctx: SettingsTabContext): void {
 		});
 		doneBtn.disabled = true;
 	}
+}
+
+/**
+ * 思考测试流程（#89）：重测先清习得（清习得并重跑），再基线 → 逐字段 → 四值判定；
+ * 判定为「中断」不留结论（入口保持可点），其余落「习得能力」并刷新呈现。
+ */
+async function runThinkingTestFlow(
+	ctx: SettingsTabContext,
+	providerId: string,
+	model: string,
+	retest: boolean
+): Promise<void> {
+	const t = ctx.plugin.t;
+	if (retest) ctx.plugin.providers.clearLearnedThinking(providerId, model);
+	const resolved = ctx.plugin.providers.resolveActive();
+	if (!resolved.ok) {
+		new Notice(t("model.thinkingTestNeedModel"));
+		ctx.refresh();
+		return;
+	}
+	const result = await runThinkingTest({
+		baseUrl: resolved.config.baseUrl,
+		apiKey: resolved.config.apiKey,
+		model: resolved.config.model,
+		timeoutSeconds: ctx.plugin.settings.timeoutSeconds,
+	});
+	if (result.entry) ctx.plugin.providers.recordThinkingTest(providerId, model, result.entry);
+	new Notice(t(thinkingVerdictNoticeKey(result.verdict)));
+	ctx.refresh();
 }
 
 /** 内置供应商卡片：仅需 api key，模型动态拉取 */

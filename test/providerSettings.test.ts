@@ -24,13 +24,15 @@ import {
 	removeModel,
 	selectActiveModel,
 	setModelThinking,
+	recordThinkingTest,
+	clearLearnedThinking,
 	resolveActive,
 	isSecretMissing,
 	createProviderSettings,
 	type ProviderState,
 } from "../src/settings/providerSettings";
 import { createSettingsOwner } from "../src/settings/owner";
-import { DEFAULT_SETTINGS, type ModelProvider } from "../src/types";
+import { DEFAULT_SETTINGS, type LearnedCapability, type ModelProvider } from "../src/types";
 
 function provider(over: Partial<ModelProvider> & { id: string }): ModelProvider {
 	return {
@@ -451,7 +453,7 @@ test("resolveActive 成功：解析出地址与密钥值", () => {
 			baseUrl: "https://api.example.com",
 			apiKey: "sk",
 			model: "m",
-			thinking: { setting: "off", param: null, note: "unknown" },
+			thinking: { setting: "off", param: null, note: "unknown", learned: null },
 		},
 	});
 });
@@ -631,4 +633,131 @@ test("renameModel 迁移该模型的思考偏好；removeModel 移除不清偏�
 	removeModel(s, "c", "1");
 	assert.deepEqual(p.customModels, []);
 	assert.deepEqual(p.thinkingByModel, { m2: "on" }, "移除模型不清除思考偏好");
+});
+
+// ===== 习得能力（#89，思考测试落档） =====
+
+const LEARNED_SWITCHABLE: LearnedCapability = {
+	verdict: "switchable",
+	off: { name: "enable_thinking", value: false },
+	testedAt: "2026-11-04T08:00:00.000Z",
+};
+
+test("recordThinkingTest（#89）：习得条目按（供应商, 模型）落档，thinkingFor 即刻以习得为准", () => {
+	const p = provider({ id: "p", type: "preset", models: ["m"] });
+	const s = state({ providers: [p] });
+	recordThinkingTest(s, "p", "m", LEARNED_SWITCHABLE);
+	assert.deepEqual(p.learnedByModel, { m: LEARNED_SWITCHABLE }, "条目键＝模型（供应商即所属条目），含测试时间戳");
+	assert.deepEqual(thinkingFor(p, "m").param, { name: "enable_thinking", value: false }, "习得关参数生效");
+});
+
+test("习得盖过内置能力表（#89）：内置可关模型实测「未能关闭」后，解析以习得为准", () => {
+	const p = provider({
+		id: "deepseek",
+		type: "preset",
+		models: ["deepseek-v4-pro"],
+		learnedByModel: {
+			"deepseek-v4-pro": { verdict: "not-switchable", triedFields: 3, testedAt: "2026-11-04T08:00:00.000Z" },
+		},
+	});
+	const r = thinkingFor(p, "deepseek-v4-pro");
+	assert.equal(r.param, null, "习得「未能关闭」盖过内置可关");
+	assert.equal(r.learned?.verdict, "not-switchable");
+});
+
+test("clearLearnedThinking（#89）：假关告警「重新测试」先清习得；思考偏好与其它模型条目不动", () => {
+	const p = provider({
+		id: "p",
+		type: "preset",
+		models: ["m", "n"],
+		thinkingByModel: { m: "on" },
+		learnedByModel: {
+			m: LEARNED_SWITCHABLE,
+			n: { verdict: "not-detected", testedAt: "2026-11-04T08:00:00.000Z" },
+		},
+	});
+	const s = state({ providers: [p] });
+	clearLearnedThinking(s, "p", "m");
+	assert.deepEqual(
+		p.learnedByModel,
+		{ n: { verdict: "not-detected", testedAt: "2026-11-04T08:00:00.000Z" } },
+		"只清目标模型的习得"
+	);
+	assert.deepEqual(p.thinkingByModel, { m: "on" }, "思考偏好不动");
+	assert.equal(thinkingFor(p, "m").learned, null, "清后回落内置/未知");
+	assert.equal(thinkingFor(p, "m").setting, "on");
+});
+
+test("习得能力门面（#89）：recordThinkingTest 落档并落盘，clearLearnedThinking 清档", () => {
+	const p = provider({ id: "p", type: "preset", models: ["m"] });
+	const live = {
+		...DEFAULT_SETTINGS,
+		...state({ providers: [p], activeProviderId: "p", activeModel: "m" }),
+	};
+	let saved = 0;
+	const owner = createSettingsOwner(live, {
+		save: () => {
+			saved += 1;
+			return Promise.resolve();
+		},
+		getSecret: () => null,
+	});
+	const facade = createProviderSettings({ owner });
+	facade.recordThinkingTest("p", "m", LEARNED_SWITCHABLE);
+	assert.deepEqual(p.learnedByModel, { m: LEARNED_SWITCHABLE });
+	assert.ok(saved > 0, "随设置持久化（切走再切回直接可用）");
+	facade.clearLearnedThinking("p", "m");
+	assert.deepEqual(p.learnedByModel, {});
+});
+
+test("renameModel 迁移习得条目（#89，与思考偏好同门）；removeModel 移除不清习得", () => {
+	const p = provider({
+		id: "c",
+		type: "custom",
+		authType: "none",
+		customModels: [{ id: "1", modelId: "m" }],
+		learnedByModel: { m: LEARNED_SWITCHABLE },
+	});
+	const s = state({ providers: [p], activeProviderId: "c", activeModel: "" });
+	renameModel(s, "c", "1", "m2");
+	assert.deepEqual(p.learnedByModel, { m2: LEARNED_SWITCHABLE }, "习得随模型改名迁移");
+	removeModel(s, "c", "1");
+	assert.deepEqual(p.learnedByModel, { m2: LEARNED_SWITCHABLE }, "移除模型不清习得");
+});
+
+test("applyPickedModels 停用不清习得（#89，US7：重新添加后不必重新测试）", () => {
+	const p = provider({
+		id: "c",
+		type: "custom",
+		customModels: [{ id: "mc1", modelId: "m" }],
+		learnedByModel: { m: LEARNED_SWITCHABLE },
+	});
+	const s = state({ providers: [p] });
+	applyPickedModels(s, "c", []);
+	assert.deepEqual(p.learnedByModel, { m: LEARNED_SWITCHABLE }, "习得保留");
+	applyPickedModels(s, "c", ["m"]);
+	assert.deepEqual(
+		thinkingFor(p, "m").param,
+		{ name: "enable_thinking", value: false },
+		"重新添加后原样生效"
+	);
+});
+
+test("resolveActive 生成路径同样以习得为准（#89）：习得关参数进请求解析", () => {
+	const p = provider({
+		id: "deepseek",
+		type: "preset",
+		authType: "bearer",
+		apiKeySecretId: "k",
+		models: ["deepseek-v4-pro"],
+		learnedByModel: { "deepseek-v4-pro": LEARNED_SWITCHABLE },
+	});
+	const s = state({ providers: [p], activeProviderId: "deepseek", activeModel: "deepseek-v4-pro" });
+	const result = resolveActive(s, () => "sk");
+	assert.deepEqual(
+		result.ok && result.config.thinking.param,
+		{ name: "enable_thinking", value: false },
+		"习得＞内置"
+	);
+	assert.deepEqual(result.ok && result.config.thinking.learned, LEARNED_SWITCHABLE);
 });

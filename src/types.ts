@@ -121,6 +121,12 @@ export interface ModelProvider {
 	 * 偏好在该模型回来时复得（「偏好跟模型走」）。
 	 */
 	thinkingByModel?: Record<string, ThinkingSetting>;
+	/**
+	 * 「习得能力」（#89）：「思考测试」实测结论，键＝模型 ID（供应商即本条目所属供应商，
+	 * 合起来即（供应商, 模型）键），条目自带测试时间戳；解析优先级 习得 ＞ 内置能力表 ＞ 未知。
+	 * 移出启用集不清习得（重新添加后原样生效）；「中断」不留条目。
+	 */
+	learnedByModel?: Record<string, LearnedCapability>;
 }
 
 /** 单个模型配置（自定义供应商手动维护，每模型可独立设置参数） */
@@ -149,14 +155,39 @@ export interface ThinkingParam {
 /** 思考能力的 UI 标注（置灰 + 说明）：强制思考 / 无思考 / 能力未知（不发参数）。 */
 export type ThinkingNote = "forced" | "none" | "unknown";
 
-/** 思考解析结果（core/thinking 产出）：请求参数 + UI 标注。 */
+/**
+ * 思考测试的四值判定（#89）：措辞诚实——「未检出思考」不写「无思考」，「未能关闭」不写「强制思考」。
+ * 未检出思考＝基线微型请求未检出推理段（按无思考处理）；可关＝某字段使推理段消失；
+ * 未能关闭＝全部字段无效或被静默忽略；中断＝超时/网络错误，不留结论。
+ */
+export type ThinkingTestVerdict = "not-detected" | "switchable" | "not-switchable" | "interrupted";
+
+/**
+ * 习得能力（#89）：「思考测试」实测结论，按（供应商, 模型）键随设置持久化，
+ * 解析优先级 习得 ＞ 内置能力表 ＞ 未知（见 CONTEXT.md「习得能力」）。
+ * 「中断」不留条目；条目自带测试时间戳。
+ */
+export interface LearnedCapability {
+	/** 落档判定（「中断」不落）。 */
+	verdict: Exclude<ThinkingTestVerdict, "interrupted">;
+	/** 「可关」的关参数：生成期「关」发它（「开」无开参数则不发）。 */
+	off?: ThinkingParam;
+	/** 「未能关闭」实测过的字段数（备注证据）。 */
+	triedFields?: number;
+	/** 测试时间戳（ISO 8601）。 */
+	testedAt: string;
+}
+
+/** 思考解析结果（core/thinking 产出）：请求参数 + UI 标注 + 习得能力来源。 */
 export interface ThinkingResolution {
 	/** 生效的两档（缺省＝关）。 */
 	setting: ThinkingSetting;
 	/** 请求体追加参数；null＝不发思考参数。 */
 	param: ThinkingParam | null;
-	/** UI 置灰标注；null＝正常可交互。 */
+	/** UI 置灰标注；null＝正常可交互。习得条目命中时呈现走习得档，note 不参与。 */
 	note: ThinkingNote | null;
+	/** 习得能力条目（#89）：命中即盖过内置能力表，含测试时间戳；null＝内置或未知。 */
+	learned: LearnedCapability | null;
 }
 
 /** 当前生效的模型配置（由设置解析而来）：供应商接口 + 选中模型 + 该模型参数。 */

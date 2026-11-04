@@ -11,6 +11,7 @@
 import type {
 	ActiveModelConfig,
 	ActiveModelResolution,
+	LearnedCapability,
 	ModelConfig,
 	ModelProvider,
 	ThinkingResolution,
@@ -70,15 +71,16 @@ export function isModelStale(provider: ModelProvider, model: string): boolean {
 }
 
 /**
- * 读取某个模型的「思考」解析结果：该模型偏好（缺省＝关）经能力表映射，
+ * 读取某个模型的「思考」解析结果：该模型偏好（缺省＝关）经能力层映射，
  * 请求参数与置灰标注一并带出（ADR-0024）。设置页与当前模型 解析共用这一个读面。
- * 自定义供应商与预设同路（ADR-0026）：能力按（供应商, 模型）查表，未实测即未知。
+ * 能力层优先级（#89）：习得能力 ＞ 内置能力表 ＞ 未知——自定义供应商与预设同路（ADR-0026）。
  */
 export function thinkingFor(provider: ModelProvider, model: string): ThinkingResolution {
 	return resolveThinking({
 		providerId: provider.id,
 		model,
 		setting: provider.thinkingByModel?.[model] ?? "off",
+		learned: provider.learnedByModel?.[model] ?? null,
 	});
 }
 
@@ -291,9 +293,10 @@ export function renameModel(
 	const oldModelId = model.modelId;
 	model.modelId = newModelId.trim();
 	const provider = findProvider(state, providerId);
-	if (provider && provider.thinkingByModel && oldModelId in provider.thinkingByModel) {
-		provider.thinkingByModel[model.modelId] = provider.thinkingByModel[oldModelId];
-		deleteThinking(provider, oldModelId);
+	if (provider) {
+		// 思考偏好与习得能力都「跟模型走」（#89）：改名迁移条目，残键不留。
+		migrateModelKey(provider.thinkingByModel, oldModelId, model.modelId);
+		migrateModelKey(provider.learnedByModel, oldModelId, model.modelId);
 	}
 	clearActiveIfModelGone(state);
 	return state;
@@ -338,6 +341,38 @@ export function setModelThinking(
 	if (!provider) return state;
 	if (!provider.thinkingByModel) provider.thinkingByModel = {};
 	provider.thinkingByModel[model] = setting;
+	return state;
+}
+
+/**
+ * 落「习得能力」条目（#89）：思考测试的实测结论，按（供应商, 模型）键持久化并盖过内置能力表。
+ * 条目自带测试时间戳；「中断」不留条目（由状态机把关，见 core/thinking）。
+ */
+export function recordThinkingTest(
+	state: ProviderState,
+	providerId: string,
+	model: string,
+	entry: LearnedCapability
+): ProviderState {
+	const provider = findProvider(state, providerId);
+	if (!provider) return state;
+	if (!provider.learnedByModel) provider.learnedByModel = {};
+	provider.learnedByModel[model] = entry;
+	return state;
+}
+
+/**
+ * 清「习得能力」条目（#89）：假关告警「重新测试」动作先清后重跑（清习得并重跑）。
+ * 清后能力回落内置能力表 / 未知；重跑若中断，旧结论不会借尸还魂。
+ */
+export function clearLearnedThinking(
+	state: ProviderState,
+	providerId: string,
+	model: string
+): ProviderState {
+	const provider = findProvider(state, providerId);
+	if (!provider?.learnedByModel) return state;
+	delete provider.learnedByModel[model];
 	return state;
 }
 
@@ -411,9 +446,12 @@ function clearActiveIfModelGone(state: ProviderState): void {
 	if (!modelExists(provider, state.activeModel)) state.activeModel = "";
 }
 
-/** 删除某个模型的「思考」偏好条目。 */
-function deleteThinking(provider: ModelProvider, model: string): void {
-	if (provider.thinkingByModel) delete provider.thinkingByModel[model];
+/** 模型改名时迁移按模型键的条目（「思考」偏好与习得能力同门，#89）。 */
+function migrateModelKey<T>(map: Record<string, T> | undefined, oldKey: string, newKey: string): void {
+	if (map && oldKey in map) {
+		map[newKey] = map[oldKey];
+		delete map[oldKey];
+	}
 }
 
 /** 模型 ID 是否非空且在该供应商的模型列表中。 */
@@ -468,6 +506,10 @@ export interface ProviderSettings {
 	): void;
 	removeModel(providerId: string, modelConfigId: string): void;
 	setModelThinking(providerId: string, model: string, setting: ThinkingSetting): void;
+	/** 落「习得能力」条目（#89）：思考测试结论按（供应商, 模型）持久化，盖过内置能力表。 */
+	recordThinkingTest(providerId: string, model: string, entry: LearnedCapability): void;
+	/** 清「习得能力」条目（#89）：假关告警「重新测试」先清后重跑。 */
+	clearLearnedThinking(providerId: string, model: string): void;
 	selectActiveModel(providerId: string, model: string): void;
 	resolveActive(): ActiveModelResolution;
 	secretValue(secretId: string): string;
@@ -513,6 +555,10 @@ export function createProviderSettings(deps: ProviderSettingsDeps): ProviderSett
 			run((s) => removeModel(s, providerId, modelConfigId)),
 		setModelThinking: (providerId, model, setting) =>
 			run((s) => setModelThinking(s, providerId, model, setting)),
+		recordThinkingTest: (providerId, model, entry) =>
+			run((s) => recordThinkingTest(s, providerId, model, entry)),
+		clearLearnedThinking: (providerId, model) =>
+			run((s) => clearLearnedThinking(s, providerId, model)),
 		selectActiveModel: (providerId, model) =>
 			run((s) => selectActiveModel(s, providerId, model)),
 		resolveActive: () => resolveActive(owner.get(), (id) => owner.readSecret(id)),

@@ -566,7 +566,7 @@ button.tah-thinking-switch:disabled {
 	flex: 1;
 }
 
-/* 测试入口位（思考测试行为由 #89 落地，此前禁用） */
+/* 测试入口位：未知档「测试思考能力」按钮（#89 思考测试已落地） */
 button.tah-thinking-test-btn {
 	appearance: none;
 	font: inherit;
@@ -610,6 +610,37 @@ button.tah-thinking-test-done {
 	box-shadow: none;
 	white-space: nowrap;
 	cursor: default;
+}
+
+/* 习得档的「重新测试」文字入口（#89，原型 btn-link 形态：文字链接，点击＝清习得并重跑） */
+button.tah-thinking-test-link {
+	appearance: none;
+	font: inherit;
+	font-size: var(--font-ui-smaller, 12px);
+	padding: 4px 2px;
+	border: none;
+	background: none;
+	color: var(--interactive-accent);
+	box-shadow: none;
+	white-space: nowrap;
+	text-decoration: underline;
+	cursor: pointer;
+}
+
+button.tah-thinking-test-link:hover:not(:disabled) {
+	filter: brightness(1.1);
+}
+
+button.tah-thinking-test-link:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 2px;
+	box-shadow: none;
+}
+
+button.tah-thinking-test-link:disabled {
+	opacity: 0.42;
+	cursor: not-allowed;
+	text-decoration: none;
 }
 
 /* 自定义供应商：模型列表与单行配置 */

@@ -333,6 +333,81 @@ test("normalizeSettings 旧设置无思考偏好：不发明条目（每模型�
 	}
 });
 
+// ===== 习得能力归一化（#89） =====
+
+test("normalizeSettings 习得能力：合法条目保留（含测试时间戳），非法条目剔除", () => {
+	const good = {
+		verdict: "switchable",
+		off: { name: "thinking", value: { type: "disabled" } },
+		testedAt: "2026-11-04T08:00:00.000Z",
+	};
+	const weak = { verdict: "not-switchable", triedFields: 3, testedAt: "2026-11-04T08:00:00.000Z" };
+	const raw = {
+		providers: [
+			{
+				id: "p",
+				name: "p",
+				type: "preset",
+				baseUrl: "https://x",
+				apiKeySecretId: "k",
+				models: ["a"],
+				authType: "bearer",
+				learnedByModel: {
+					good,
+					weak,
+					badVerdict: { verdict: "forced", testedAt: "t" },
+					interrupted: { verdict: "interrupted", testedAt: "t" },
+					noTime: { verdict: "not-detected" },
+					junk: "x",
+				},
+			},
+		],
+	};
+	const settings = load(raw);
+	const p = settings.providers.find((x) => x.id === "p")!;
+	assert.deepEqual(p.learnedByModel, { good, weak }, "只留合法条目（「中断」不落条目）");
+});
+
+test("normalizeSettings 习得能力：无合法条目不发明（读取侧＝未知，可重新测试）", () => {
+	const settings = load({
+		providers: [
+			{
+				id: "p",
+				name: "p",
+				type: "preset",
+				baseUrl: "https://x",
+				apiKeySecretId: "k",
+				models: ["a"],
+				authType: "bearer",
+				learnedByModel: { a: { verdict: "interrupted", testedAt: "t" }, b: 42 },
+			},
+		],
+	});
+	assert.equal(settings.providers[0].learnedByModel, undefined);
+});
+
+test("normalizeSettings 习得能力归一化幂等：归一后载入原样保留", () => {
+	const entry = { verdict: "not-detected", testedAt: "2026-11-04T08:00:00.000Z" };
+	const once = load({
+		providers: [
+			{
+				id: "p",
+				name: "p",
+				type: "preset",
+				baseUrl: "https://x",
+				apiKeySecretId: "k",
+				models: ["a"],
+				authType: "bearer",
+				learnedByModel: { a: entry },
+			},
+		],
+	});
+	const p1 = once.providers.find((x) => x.id === "p")!;
+	assert.deepEqual(p1.learnedByModel, { a: entry });
+	const twice = load({ providers: [p1] });
+	assert.deepEqual(twice.providers.find((x) => x.id === "p")!.learnedByModel, { a: entry }, "幂等");
+});
+
 // ===== 模型清单与启用集迁移（#87，ADR-0026） =====
 
 test("normalizeSettings 迁移：存量模型成为启用集且模型清单初值＝启用集", () => {

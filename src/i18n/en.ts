@@ -66,6 +66,7 @@ export const en = {
 		saved: "Report saved: {{path}}",
 		thinkingFakeOff:
 			"\"Off\" did not take effect: the response still contains reasoning, so the model may still be thinking.",
+		thinkingFakeOffRetest: "Retest",
 		failureNoTasks: "Add tasks before generating a report",
 		failureNoModel: "Select a model and configure its API key in the plugin settings first",
 		failureSave: "Failed to save the report: check the report output folder and write permissions",
@@ -152,6 +153,19 @@ export const en = {
 		thinkingBadgeUnknown: "Unknown capability",
 		thinkingTestRun: "Test thinking",
 		thinkingTestDone: "Known — no test needed",
+		thinkingTestRunning: "Testing…",
+		thinkingTestRetest: "Retest",
+		thinkingTestNeedModel: "Select a model first",
+		thinkingBadgeLearned: "Measured {{date}}",
+		thinkingNoteLearnedSwitchable: "Measured: can be turned off ({{date}})",
+		thinkingNoteLearnedNotDetected: "No thinking detected in test ({{date}})",
+		thinkingNoteLearnedNotSwitchable: "Tested {{count}} fields — could not turn it off",
+		thinkingTestVerdictNotDetected:
+			"Test result: no thinking detected. This does not mean the model never thinks.",
+		thinkingTestVerdictSwitchable: "Test result: thinking can be turned off.",
+		thinkingTestVerdictNotSwitchable:
+			"Test result: could not turn thinking off. This does not mean the model always thinks.",
+		thinkingTestInterrupted: "Test interrupted — no conclusion recorded. Test again anytime.",
 		configured: "Configured",
 		notConfigured: "Not configured",
 		fetchModels: "Fetch models",

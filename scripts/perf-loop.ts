@@ -143,7 +143,7 @@ async function main(): Promise<void> {
 				model,
 				maxTokens,
 				// chat 为桩，参数被桩吞掉；不夹带特定厂商的开关参数
-				thinking: { setting: "on", param: null, note: null },
+				thinking: { setting: "on", param: null, note: null, learned: null },
 			},
 		}),
 		chat: async () => ({ content: "（桩）", hasReasoning: false }),

@@ -3,10 +3,18 @@ import assert from "node:assert/strict";
 import {
 	isThinkingFakeOff,
 	normalizeThinkingSetting,
+	probeOutcomeOfError,
 	resolveThinking,
+	startThinkingTest,
+	stepThinkingTest,
 	thinkingDisplay,
 	THINKING_CAPABILITIES,
+	THINKING_OFF_CANDIDATES,
 } from "../src/core/thinking";
+
+/** 思考测试状态机测试的固定时钟（习得条目时间戳断言用）。 */
+const NOW = () => "2026-11-04T08:00:00.000Z";
+const TESTED_AT = "2026-11-04T08:00:00.000Z";
 
 test("两档迁移（#88）：存量「自动」迁移为「开」，on / off 原样保留（幂等）", () => {
 	assert.equal(normalizeThinkingSetting("auto"), "on", "auto → on");
@@ -305,4 +313,231 @@ test("百炼仅思考型号（qwen3.8-2.4t-a95b / kimi-k3）：forced；旧命�
 		assert.equal(r.param, null, model);
 		assert.equal(r.note, "none", model);
 	}
+});
+
+// ===== 思考测试纯状态机（#89，缝 1） =====
+
+test("思考测试（#89）：先发基线微型请求（不发思考参数）", () => {
+	const started = startThinkingTest();
+	assert.deepEqual(started.action, { kind: "probe", param: null }, "第一步是基线微型请求");
+});
+
+test("思考测试（#89）：基线未检出推理段 → 「未检出思考」，落习得条目（含时间戳）", () => {
+	const { action } = stepThinkingTest(startThinkingTest().state, "reasoning-absent", NOW);
+	assert.deepEqual(action, {
+		kind: "conclude",
+		verdict: "not-detected",
+		entry: { verdict: "not-detected", testedAt: TESTED_AT },
+	});
+});
+
+test("思考测试（#89）：基线检出推理段 → 进入逐字段，先试 thinking 族关参数（一次只发一个）", () => {
+	const { action } = stepThinkingTest(startThinkingTest().state, "reasoning-present", NOW);
+	assert.deepEqual(action, {
+		kind: "probe",
+		param: { name: "thinking", value: { type: "disabled" } },
+	});
+	assert.deepEqual(
+		THINKING_OFF_CANDIDATES,
+		[
+			{ name: "thinking", value: { type: "disabled" } },
+			{ name: "enable_thinking", value: false },
+			{ name: "reasoning_effort", value: "none" },
+		],
+		"固定字段候选按研究笔记参数族有序排列"
+	);
+});
+
+test("思考测试（#89）：基线 400 无字段可换，不算探测信号，按「中断」处理", () => {
+	const { action } = stepThinkingTest(startThinkingTest().state, "rejected", NOW);
+	assert.deepEqual(action, { kind: "conclude", verdict: "interrupted", entry: null });
+});
+
+test("思考测试（#89）：基线超时/网络错误 → 「中断」，不留结论（可完整重测）", () => {
+	const { action } = stepThinkingTest(startThinkingTest().state, "interrupted", NOW);
+	assert.deepEqual(action, { kind: "conclude", verdict: "interrupted", entry: null });
+});
+
+test("思考测试（#89）：某字段使推理段消失 → 「可关」，习得条目带该关参数（推理段消失是唯一证据）", () => {
+	const probe1 = stepThinkingTest(startThinkingTest().state, "reasoning-present", NOW);
+	const { action } = stepThinkingTest(probe1.state, "reasoning-absent", NOW);
+	assert.deepEqual(action, {
+		kind: "conclude",
+		verdict: "switchable",
+		entry: {
+			verdict: "switchable",
+			off: { name: "thinking", value: { type: "disabled" } },
+			testedAt: TESTED_AT,
+		},
+	});
+});
+
+test("思考测试（#89）：400 视为字段不适用，继续下一个候选（enable_thinking 族）", () => {
+	const probe1 = stepThinkingTest(startThinkingTest().state, "reasoning-present", NOW);
+	assert.deepEqual(probe1.action, {
+		kind: "probe",
+		param: { name: "thinking", value: { type: "disabled" } },
+	});
+	const probe2 = stepThinkingTest(probe1.state, "rejected", NOW);
+	assert.deepEqual(probe2.action, {
+		kind: "probe",
+		param: { name: "enable_thinking", value: false },
+	});
+});
+
+test("思考测试（#89）：200 但推理段仍在（参数被静默忽略）也换下一个，不认 HTTP 200", () => {
+	const probe1 = stepThinkingTest(startThinkingTest().state, "reasoning-present", NOW);
+	const probe2 = stepThinkingTest(probe1.state, "reasoning-present", NOW);
+	assert.deepEqual(probe2.action, {
+		kind: "probe",
+		param: { name: "enable_thinking", value: false },
+	});
+});
+
+test("思考测试（#89）：候选耗尽仍未关掉 → 「未能关闭」（不写「强制思考」），条目带实测字段数", () => {
+	const probe1 = stepThinkingTest(startThinkingTest().state, "reasoning-present", NOW);
+	const probe2 = stepThinkingTest(probe1.state, "rejected", NOW);
+	const probe3 = stepThinkingTest(probe2.state, "reasoning-present", NOW);
+	const { action } = stepThinkingTest(probe3.state, "reasoning-present", NOW);
+	assert.deepEqual(action, {
+		kind: "conclude",
+		verdict: "not-switchable",
+		entry: { verdict: "not-switchable", triedFields: 3, testedAt: TESTED_AT },
+	});
+});
+
+test("思考测试（#89）：逐字段途中中断同样不留结论（可完整重测）", () => {
+	const probe1 = stepThinkingTest(startThinkingTest().state, "reasoning-present", NOW);
+	const probe2 = stepThinkingTest(probe1.state, "rejected", NOW);
+	const { action } = stepThinkingTest(probe2.state, "interrupted", NOW);
+	assert.deepEqual(action, { kind: "conclude", verdict: "interrupted", entry: null });
+});
+
+test("微型请求错误归类（#89）：测试内 400＝字段不适用（rejected），其余异常一律中断", () => {
+	assert.equal(probeOutcomeOfError(400), "rejected");
+	for (const status of [200, 401, 403, 429, 500, undefined]) {
+		assert.equal(probeOutcomeOfError(status), "interrupted", String(status));
+	}
+});
+
+// ===== 习得能力解析（#89，缝 1） =====
+
+const LEARNED_SWITCHABLE = {
+	verdict: "switchable" as const,
+	off: { name: "reasoning_effort", value: "none" },
+	testedAt: TESTED_AT,
+};
+
+test("习得能力盖过内置能力表（#89）：习得关参数优先于内置 thinking 族", () => {
+	const r = resolveThinking({
+		providerId: "deepseek",
+		model: "deepseek-v4-pro",
+		setting: "off",
+		learned: LEARNED_SWITCHABLE,
+	});
+	assert.deepEqual(r.param, { name: "reasoning_effort", value: "none" }, "习得＞内置");
+	assert.deepEqual(r.learned, LEARNED_SWITCHABLE);
+});
+
+test("习得·可关（#89）：「开」无开参数则不发（只实测了关）", () => {
+	const r = resolveThinking({
+		providerId: "custom_x",
+		model: "m",
+		setting: "on",
+		learned: LEARNED_SWITCHABLE,
+	});
+	assert.equal(r.param, null);
+});
+
+test("习得盖过未知（#89）：自定义供应商模型实测可关后与预设同路（AC7）", () => {
+	const r = resolveThinking({
+		providerId: "custom_x",
+		model: "m",
+		setting: "off",
+		learned: LEARNED_SWITCHABLE,
+	});
+	assert.deepEqual(r.param, { name: "reasoning_effort", value: "none" });
+	assert.equal(r.note, null);
+});
+
+test("习得弱结论（#89）：未检出思考 / 未能关闭 不发参数，但条目生效且盖过内置", () => {
+	const notSwitchable = { verdict: "not-switchable" as const, triedFields: 3, testedAt: TESTED_AT };
+	const r1 = resolveThinking({
+		providerId: "deepseek",
+		model: "deepseek-v4-pro",
+		setting: "off",
+		learned: notSwitchable,
+	});
+	assert.equal(r1.param, null, "习得「未能关闭」盖过内置可关");
+	assert.deepEqual(r1.learned, notSwitchable);
+	const notDetected = { verdict: "not-detected" as const, testedAt: TESTED_AT };
+	const r2 = resolveThinking({
+		providerId: "deepseek",
+		model: "deepseek-v4-pro",
+		setting: "on",
+		learned: notDetected,
+	});
+	assert.equal(r2.param, null);
+	assert.deepEqual(r2.learned, notDetected);
+});
+
+test("假关判定（#89）：习得·可关同样受假关监视（设关发参而推理段残留 → 假关）", () => {
+	const r = resolveThinking({
+		providerId: "custom_x",
+		model: "m",
+		setting: "off",
+		learned: LEARNED_SWITCHABLE,
+	});
+	assert.equal(isThinkingFakeOff(r, true), true);
+	assert.equal(isThinkingFakeOff(r, false), false);
+});
+
+// ===== 显示矩阵习得档（#89，缝 1） =====
+
+test("显示矩阵（#89）：习得·可关 → 开关激活、徽标实测、转「重新测试」文字入口", () => {
+	const r = resolveThinking({
+		providerId: "custom_x",
+		model: "m",
+		setting: "off",
+		learned: LEARNED_SWITCHABLE,
+	});
+	assert.deepEqual(thinkingDisplay(r), {
+		state: "learned-switchable",
+		badge: "learned",
+		toggleEnabled: true,
+		footnoteWarn: false,
+		testEntry: "retest",
+	});
+});
+
+test("显示矩阵（#89）：习得·未检出思考 → 开关置灰、徽标实测、可重测（措辞不写「无思考」）", () => {
+	const r = resolveThinking({
+		providerId: "custom_x",
+		model: "m",
+		setting: "off",
+		learned: { verdict: "not-detected", testedAt: TESTED_AT },
+	});
+	assert.deepEqual(thinkingDisplay(r), {
+		state: "learned-not-detected",
+		badge: "learned",
+		toggleEnabled: false,
+		footnoteWarn: false,
+		testEntry: "retest",
+	});
+});
+
+test("显示矩阵（#89）：习得·未能关闭 → 开关置灰、徽标警示、备注警示、可重测（措辞不写「强制思考」）", () => {
+	const r = resolveThinking({
+		providerId: "custom_x",
+		model: "m",
+		setting: "off",
+		learned: { verdict: "not-switchable", triedFields: 3, testedAt: TESTED_AT },
+	});
+	assert.deepEqual(thinkingDisplay(r), {
+		state: "learned-not-switchable",
+		badge: "warn",
+		toggleEnabled: false,
+		footnoteWarn: true,
+		testEntry: "retest",
+	});
 });
