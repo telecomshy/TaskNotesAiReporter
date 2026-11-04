@@ -1,8 +1,8 @@
 /**
  * 生成报告主弹窗里的「选择任务」区：左栏筛选结果，右栏报告集合。
  *
- * 本类是渲染器 + 交互接线：选择规则由 selectionSession 拥有。
- * 点击左栏任务即加入右栏并从左侧消失；右栏是唯一的移除入口。
+ * 本类是渲染器 + 交互接线：选择规则由 selectionSession 拥有，重绘规则由 `render` 一处拥有（#96）。
+ * 已加入的任务留在左栏筛选结果原位并带标记；右栏是唯一的移除入口。
  */
 
 import { CalendarWidget } from "./Calendar";
@@ -39,6 +39,8 @@ type MobilePane = "filter" | "joined";
 
 export class TaskSelectionView {
 	private session: SelectionSession | null = null;
+	/** 上一帧：重绘规则的唯一依据（null = 首次装配）。 */
+	private lastFrame: SelectionFrame | null = null;
 
 	private readonly leftEl: HTMLElement;
 	private readonly rightEl: HTMLElement;
@@ -63,6 +65,8 @@ export class TaskSelectionView {
 	private clearSearchBtn: HTMLButtonElement | null = null;
 	private calendar: CalendarWidget | null = null;
 	private calendarContainer: HTMLElement | null = null;
+	/** 自定义日期面板是否展开（视图交互状态，不进 session）。 */
+	private calendarOpen = false;
 	private mobilePane: MobilePane = "filter";
 
 	constructor(private readonly options: TaskSelectionViewOptions) {
@@ -128,9 +132,8 @@ export class TaskSelectionView {
 	/** 注入任务快照并回到初始状态。 */
 	setTasks(tasks: TaskInfo[]): void {
 		this.session = createSelectionSession(tasks, this.options.dateFields);
-		const f = frame(this.session);
-		this.renderFilter(f);
-		this.renderAll(f);
+		this.lastFrame = null;
+		this.render(frame(this.session), null);
 	}
 
 	/** 右栏当前集合，供生成报告读取。 */
@@ -140,33 +143,34 @@ export class TaskSelectionView {
 
 	// ===== 状态推进 =====
 
+	/**
+	 * 所有转移的唯一入口：无操作不重绘；有变化则存帧、按上一帧派生重绘范围。
+	 * 返回新帧（交互处需要，如重置日历）；无操作为 null。
+	 */
+	private apply(next: SelectionSession): SelectionFrame | null {
+		if (!this.session || next === this.session) return null;
+		this.session = next;
+		const prev = this.lastFrame;
+		const f = frame(next);
+		this.lastFrame = f;
+		this.render(f, prev);
+		return f;
+	}
+
 	private update(transition: (session: SelectionSession) => SelectionSession): void {
 		if (!this.session) return;
-		const next = transition(this.session);
-		if (next === this.session) return;
-		this.session = next;
-		this.renderAll(frame(next));
+		this.apply(transition(this.session));
 	}
 
 	private applyQuery(value: string): void {
 		if (!this.session) return;
 		if (this.searchInput) this.searchInput.value = value;
-		const next = setQuery(this.session, value);
-		if (next === this.session) return;
-		this.session = next;
-		const f = frame(next);
-		this.updateTitleMeta(f);
-		this.renderAll(f);
+		this.apply(setQuery(this.session, value));
 	}
 
 	private changeTab(tab: SelectionTab): void {
 		if (!this.session) return;
-		const next = switchTab(this.session, tab);
-		if (next === this.session) return;
-		this.session = next;
-		const f = frame(next);
-		this.renderFilter(f);
-		this.renderAll(f);
+		this.apply(switchTab(this.session, tab));
 	}
 
 	private setMobilePane(pane: MobilePane): void {
@@ -179,7 +183,26 @@ export class TaskSelectionView {
 
 	// ===== 渲染 =====
 
-	private renderAll(f: SelectionFrame): void {
+	/**
+	 * 唯一的重绘规则：切页签重建筛选区；时间页仅区间变化时更新区间控件；
+	 * 标题页仅查询变化时更新解析提示；动作区与两栏每帧刷新。
+	 * 日历的**重置**不在此处——那是交互来源的知识（快捷/清空要重置，日历内选择不能重置，
+	 * 否则两次点击的起点会丢），见 applyRangePick 与日历回调。
+	 */
+	private render(f: SelectionFrame, prev: SelectionFrame | null): void {
+		if (!prev || prev.filter.tab !== f.filter.tab) {
+			this.renderFilter(f);
+		} else if (f.filter.tab === "time") {
+			if (
+				!sameRange(prev.filter.range, f.filter.range) ||
+				prev.filter.rangeSource !== f.filter.rangeSource
+			) {
+				this.updateRangeButtons(f);
+				this.updateRangeLabel(f);
+			}
+		} else if (prev.filter.query !== f.filter.query) {
+			this.updateTitleMeta(f);
+		}
 		this.renderActions(f);
 		this.renderLeftList(f);
 		this.renderRightList(f);
@@ -320,6 +343,7 @@ export class TaskSelectionView {
 		this.filterEl.empty();
 		this.calendar = null;
 		this.calendarContainer = null;
+		this.calendarOpen = false;
 		this.rangeLabelEl = null;
 		this.calendarToggleBtn = null;
 		this.clearRangeBtn = null;
@@ -360,20 +384,12 @@ export class TaskSelectionView {
 		});
 		this.calendarToggleBtn.setAttr("aria-controls", "tah-calendar-panel");
 		this.calendarToggleBtn.addEventListener("click", () => {
-			const open = !this.isCalendarOpen();
+			const open = !this.calendarOpen;
 			if (open && this.session) {
 				// 打开自定义：周期快捷来源的区间不再占用任务列表，日历与列表一起清空；
 				// 自定义来源的区间保留，避免重复挑选。
-				const next = chooseRange(this.session, { kind: "open-custom" });
-				const changed = next !== this.session;
-				this.session = next;
-				const nextFrame = frame(next);
-				if (changed) {
-					this.calendar?.clearRange();
-					this.updateRangeLabel(nextFrame);
-					this.renderAll(nextFrame);
-				}
-				this.updateRangeButtons(nextFrame);
+				const f = this.apply(chooseRange(this.session, { kind: "open-custom" }));
+				if (f) this.calendar?.clearRange();
 			}
 			this.setCalendarOpen(open);
 		});
@@ -396,19 +412,16 @@ export class TaskSelectionView {
 		this.renderCalendar(f.filter.calendarSeed);
 	}
 
-	/** 应用一次区间选择：更新区间与来源，并同步日历、标签与列表。 */
+	/**
+	 * 应用一次区间选择（快捷 / 清空）：重绘由 `apply` 派生，日历恢复到当前区间并收起。
+	 * 快捷周期与清空都不预选自定义日历。
+	 */
 	private applyRangePick(pick: RangePick): void {
 		if (!this.session) return;
-		const next = chooseRange(this.session, pick);
-		if (next === this.session) return;
-		this.session = next;
-		const f = frame(next);
-		this.updateRangeButtons(f);
-		// 快捷周期与清空都不预选自定义日历
+		const f = this.apply(chooseRange(this.session, pick));
+		if (!f) return;
 		this.renderCalendar(f.filter.calendarSeed);
-		this.updateRangeLabel(f);
 		this.setCalendarOpen(false);
-		this.renderAll(f);
 	}
 
 	/** 按区间来源高亮当前选中的快捷按钮；展开态由 setCalendarOpen 单独处理。 */
@@ -426,6 +439,7 @@ export class TaskSelectionView {
 
 	/** 展开 / 收起自定义日期面板；快捷按钮始终可见。 */
 	private setCalendarOpen(open: boolean): void {
+		this.calendarOpen = open;
 		this.calendarContainer?.toggleClass("tah-hidden", !open);
 		this.calendarContainer?.setAttr("aria-hidden", String(!open));
 		if (this.calendarToggleBtn) {
@@ -435,12 +449,6 @@ export class TaskSelectionView {
 			this.calendarToggleBtn.toggleClass("tah-quick-btn-open", open);
 			this.calendarToggleBtn.setAttr("aria-expanded", String(open));
 		}
-	}
-
-	private isCalendarOpen(): boolean {
-		return this.calendarContainer
-			? !this.calendarContainer.classList.contains("tah-hidden")
-			: false;
 	}
 
 	private updateRangeLabel(f: SelectionFrame): void {
@@ -470,15 +478,11 @@ export class TaskSelectionView {
 			initialRange,
 			(range, complete) => {
 				if (!range || !this.session) return;
-				const next = chooseRange(this.session, { kind: "custom", range });
-				if (next === this.session) return;
-				this.session = next;
-				const f = frame(next);
-				this.updateRangeButtons(f);
-				this.updateRangeLabel(f);
-				// 两次点击选完区间才收起；单击只是单日区间，可能还在选起点
+				const f = this.apply(chooseRange(this.session, { kind: "custom", range }));
+				if (!f) return;
+				// 不重置日历：两次点击的起点由组件自己保留，重建会丢。
+				// 两次点击选完区间才收起；单击只是单日区间，可能还在选起点。
 				if (complete) this.setCalendarOpen(false);
-				this.renderAll(f);
 			}
 		);
 		this.calendar.render();
@@ -535,7 +539,11 @@ export class TaskSelectionView {
 	}
 }
 
-/** 起止日相等；用于把会话区间映射回对应的周期快捷按钮。 */
-function sameRange(a: DateRange | null, b: DateRange): boolean {
-	return a !== null && a.start === b.start && a.end === b.end;
+/**
+ * 两个区间是否等价（都 null 也算相同）；用于把会话区间映射回周期快捷按钮，
+ * 以及重绘差量里「区间有没有变」的判断。
+ */
+function sameRange(a: DateRange | null, b: DateRange | null): boolean {
+	if (a === null || b === null) return a === b;
+	return a.start === b.start && a.end === b.end;
 }
