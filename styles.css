@@ -187,12 +187,14 @@
 	color: var(--interactive-accent);
 }
 
+/* 展开区纵向节奏只由 gap 决定，字段行不叠 margin（此前 margin 与 flex gap 双叠，行距翻倍）。
+   内置与自定义卡同一取值，两种供应商卡行距保持一致。 */
 .tah-provider-body {
 	padding: 1rem 1rem 1.1rem;
 	border-top: 1px solid var(--background-modifier-border);
 	display: flex;
 	flex-direction: column;
-	gap: 1.25rem;
+	gap: 0.6rem;
 }
 
 .tah-provider-field {
@@ -299,12 +301,6 @@
 
 .tah-save-custom-btn:hover {
 	opacity: 0.9;
-}
-
-/* 自定义供应商卡片展开区：纵向节奏只由 .tah-provider-body 的 gap 决定——
-   字段行不叠 margin（此前 margin 与 flex gap 双重叠加，行距翻倍，故显宽） */
-.tah-provider-custom .tah-provider-body {
-	gap: 0.6rem;
 }
 
 /* 「启用模型」标签行：标签居左，「获取模型列表」居右（本区半自动入口，拉取 → 挑选） */
