@@ -161,7 +161,7 @@ test("模型参数回退：该模型自带上限优先", async () => {
 				apiKey: "k",
 				model: "m",
 				maxTokens: 4096,
-				thinking: { setting: "auto", param: null, note: null },
+				thinking: { setting: "on", param: null, note: null },
 			},
 		}),
 	});

@@ -3,11 +3,12 @@
  * 本模块只导出 renderModelTab 入口，内部辅助函数均为本模块私有。
  */
 
-import { Notice, SecretComponent, Setting } from "obsidian";
-import type { ModelConfig, ModelProvider } from "../types";
+import { Notice, SecretComponent } from "obsidian";
+import type { ModelConfig, ModelProvider, ThinkingResolution } from "../types";
 import type { Translator } from "../i18n";
 import { listModels, testConnection } from "../ai/client";
 import { describeAIError } from "../ai/errorMessage";
+import { thinkingDisplay, type ThinkingDisplayState } from "../core/thinking";
 import {
 	modelsOf,
 	isConfigured,
@@ -46,7 +47,20 @@ export function renderModelTab(container: HTMLElement, ctx: SettingsTabContext):
 	addBtn.addEventListener("click", () => addCustomProvider(ctx));
 }
 
-/** 顶部「当前模型」区：选择生成报告使用的模型 */
+/** 「选择模型」卡的一行：左名称＋说明，右控件（P1 卡片设计语言）。返回行容器。 */
+function cardRow(card: HTMLElement, name: string, desc: string): HTMLElement {
+	const row = card.createDiv({ cls: "tah-model-card-row" });
+	const text = row.createDiv({ cls: "tah-model-card-text" });
+	text.createDiv({ cls: "tah-model-card-name", text: name });
+	text.createDiv({ cls: "tah-model-card-desc", text: desc });
+	return row;
+}
+
+/**
+ * 顶部「当前模型」区：「选择模型」卡（#88，P1 同卡第二行摆放）。
+ * 卡内第一行选择模型；分隔线下第二行「思考」两档滑动开关（偏好跟模型走）；
+ * 卡脚注行放能力徽标 ＋ 备注 ＋ 右对齐测试入口位。
+ */
 function renderActiveModelSection(container: HTMLElement, ctx: SettingsTabContext): void {
 	const t = ctx.plugin.t;
 	container.createEl("h3", { text: t("model.activeHeading") });
@@ -60,81 +74,107 @@ function renderActiveModelSection(container: HTMLElement, ctx: SettingsTabContex
 		return;
 	}
 
-	new Setting(container)
-		.setName(t("model.selectModelName"))
-		.setDesc(t("model.selectModelDesc"))
-		.addDropdown((dropdown) => {
-			// 按供应商分组；「已失效」模型仍可选（保留可移除，AC6）
-			for (const provider of selectable) {
-				const optgroup = dropdown.selectEl.createEl("optgroup");
-				optgroup.label = provider.name;
-				for (const model of modelsOf(provider)) {
-					const option = optgroup.createEl("option");
-					option.value = `${provider.id}::${model}`;
-					option.text = isModelStale(provider, model)
-						? `${model} · ${t("model.staleBadge")}`
-						: model;
-				}
-			}
+	const card = container.createDiv({ cls: "tah-model-card" });
 
-			const currentValue = `${ctx.plugin.settings.activeProviderId}::${ctx.plugin.settings.activeModel}`;
-			dropdown.setValue(currentValue);
+	// 第一行：选择模型（下拉按供应商分组；「已失效」模型仍可选（保留可移除，AC6））
+	const selectRow = cardRow(card, t("model.selectModelName"), t("model.selectModelDesc"));
+	const selectEl = selectRow.createEl("select", { cls: "tah-model-select" });
+	for (const provider of selectable) {
+		const optgroup = selectEl.createEl("optgroup");
+		optgroup.label = provider.name;
+		for (const model of modelsOf(provider)) {
+			const option = optgroup.createEl("option");
+			option.value = `${provider.id}::${model}`;
+			option.text = isModelStale(provider, model)
+				? `${model} · ${t("model.staleBadge")}`
+				: model;
+		}
+	}
+	selectEl.value = `${ctx.plugin.settings.activeProviderId}::${ctx.plugin.settings.activeModel}`;
+	selectEl.addEventListener("change", () => {
+		const value = selectEl.value;
+		const sepIndex = value.indexOf("::");
+		if (sepIndex < 0) return;
+		ctx.plugin.providers.selectActiveModel(value.slice(0, sepIndex), value.slice(sepIndex + 2));
+		// 刷新以更新思考行（偏好与能力随模型而变）
+		ctx.refresh();
+	});
 
-			dropdown.onChange((value) => {
-				const sepIndex = value.indexOf("::");
-				if (sepIndex < 0) return;
-				ctx.plugin.providers.selectActiveModel(value.slice(0, sepIndex), value.slice(sepIndex + 2));
-				// 刷新以更新模型标签/行的「当前」高亮
-				ctx.refresh();
-			});
-		});
-
-	renderThinkingControl(container, ctx);
+	// 分隔线之下第二行：「思考」两档开关 + 卡脚注
+	card.createDiv({ cls: "tah-model-card-divider" });
+	renderThinkingRow(card, ctx);
 }
 
+/** 显示矩阵行 → 徽标与备注文案键（纯模块只出数据，文案键在 UI 映射，ADR-0005）。 */
+const DISPLAY_COPY: Record<ThinkingDisplayState, { badge: string; footnote: string }> = {
+	builtin: { badge: "model.thinkingBadgeBuiltin", footnote: "model.thinkingNoteBuiltin" },
+	forced: { badge: "model.thinkingBadgeForced", footnote: "model.thinkingForced" },
+	none: { badge: "model.thinkingBadgeNone", footnote: "model.thinkingNone" },
+	unknown: { badge: "model.thinkingBadgeUnknown", footnote: "model.thinkingUnknown" },
+};
+
 /**
- * 「思考」三态控制（#84，ADR-0024）：作用于当前模型，偏好按模型持久化。
- * 能力表判定驱动置灰与标注（强制思考 / 无思考 / 未知）；参数由能力表自动映射，界面不拼参数。
+ * 「思考」两档滑动开关（#88）：作用于当前模型，偏好按模型持久化。
+ * 显示矩阵（开关可用性 / 徽标 / 备注 / 测试入口）由 core/thinking 产出，本函数只做呈现。
+ * 「实测」徽标与测试按钮行为由 #89 填充，本票只留位（按钮渲染为禁用）。
  */
-function renderThinkingControl(container: HTMLElement, ctx: SettingsTabContext): void {
+function renderThinkingRow(card: HTMLElement, ctx: SettingsTabContext): void {
 	const t = ctx.plugin.t;
 	const settings = ctx.plugin.settings;
 	const provider = settings.providers.find((p) => p.id === settings.activeProviderId);
-	if (!provider || settings.activeModel === "") return;
 
-	const setting = provider.thinkingByModel?.[settings.activeModel] ?? "off";
-	const resolution = thinkingFor(provider, settings.activeModel);
+	// 未选模型时按能力未知呈现（置灰＋备注），开关不可操作
+	const resolution: ThinkingResolution =
+		provider && settings.activeModel !== ""
+			? thinkingFor(provider, settings.activeModel)
+			: { setting: "off", param: null, note: "unknown" };
+	const display = thinkingDisplay(resolution);
 
-	const row = container.createDiv({ cls: "tah-provider-field tah-thinking-row" });
-	row.createSpan({ cls: "tah-provider-field-label", text: t("model.thinking") });
-	const group = row.createDiv({ cls: "tah-auth-group" });
-	const options = [
-		["auto", t("model.thinkingAuto")],
-		["on", t("model.thinkingOn")],
-		["off", t("model.thinkingOff")],
-	] as const;
-	for (const [value, label] of options) {
-		const btn = group.createEl("button", { text: label });
-		btn.addClass("tah-auth-btn");
-		btn.toggleClass("tah-auth-active", setting === value);
-		// 置灰＝发不出 / 不该发思考参数：强制思考（关会 400）与自定义供应商（不提供开关，ADR-0025）；
-		// 无思考 / 能力未知只标注、不锁偏好（#84 口径）
-		btn.disabled = resolution.note === "forced" || resolution.note === "unsupported";
-		btn.addEventListener("click", () => {
-			ctx.plugin.providers.setModelThinking(provider.id, settings.activeModel, value);
-			ctx.refresh();
+	const row = cardRow(card, t("model.thinking"), t("model.thinkingDesc"));
+
+	const on = resolution.setting === "on";
+	const sw = row.createEl("button", {
+		cls: "tah-thinking-switch",
+		attr: {
+			role: "switch",
+			"aria-checked": String(on),
+			"aria-label": t("model.thinking"),
+			title: on ? t("model.thinkingOn") : t("model.thinkingOff"),
+		},
+	});
+	sw.disabled = !display.toggleEnabled;
+	sw.addEventListener("click", () => {
+		if (!provider || !display.toggleEnabled) return;
+		ctx.plugin.providers.setModelThinking(provider.id, settings.activeModel, on ? "off" : "on");
+		ctx.refresh();
+	});
+
+	// 卡脚注：能力徽标 ＋ 备注 ＋ 右对齐测试入口位
+	const foot = card.createDiv({ cls: "tah-thinking-foot" });
+	const badge = foot.createSpan({ cls: `tah-thinking-badge tah-thinking-badge-${display.badge}` });
+	badge.createSpan({ cls: "tah-thinking-badge-dot" });
+	badge.createSpan({ text: t(DISPLAY_COPY[display.state].badge) });
+	foot.createSpan({
+		cls: display.footnoteWarn
+			? "tah-thinking-footnote tah-thinking-footnote-warn"
+			: "tah-thinking-footnote",
+		text: t(DISPLAY_COPY[display.state].footnote),
+	});
+	foot.createSpan({ cls: "tah-thinking-foot-spacer" });
+	if (display.testEntry === "available") {
+		// 测试入口位：思考测试行为由 #89 落地，此前保持禁用
+		const testBtn = foot.createEl("button", {
+			cls: "tah-thinking-test-btn",
+			text: t("model.thinkingTestRun"),
 		});
-	}
-	if (resolution.note !== null) {
-		const noteKey =
-			resolution.note === "forced"
-				? "model.thinkingForced"
-				: resolution.note === "none"
-					? "model.thinkingNone"
-					: resolution.note === "unsupported"
-						? "model.thinkingUnsupported"
-						: "model.thinkingUnknown";
-		row.createSpan({ cls: "tah-thinking-note", text: t(noteKey) });
+		testBtn.disabled = true;
+	} else {
+		// 显示矩阵「测试入口置灰」：位在，已知无需测试
+		const doneBtn = foot.createEl("button", {
+			cls: "tah-thinking-test-done",
+			text: t("model.thinkingTestDone"),
+		});
+		doneBtn.disabled = true;
 	}
 }
 

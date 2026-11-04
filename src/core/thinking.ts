@@ -1,9 +1,10 @@
 /**
- * 「思考」参数解析纯模块（#84，ADR-0024 / ADR-0025）：输入（供应商类型 + 模型 + 思考三态
+ * 「思考」参数解析纯模块（#84，ADR-0024 / ADR-0026）：输入（供应商 + 模型 + 思考两档
  * + 能力表），输出请求体追加参数 / 不可关原因 / UI 标注 / 假关判定。
  * 能力表是插件内置数据（随 docs/research/thinking-toggle-apis.md 维护），非用户配置面；
  * 新增模型只改表，不改代码路径。一次请求只发一个开关参数（互斥参数同发会 400）。
- * 自定义供应商不提供思考开关（ADR-0025）：能力表按网关分派、自定义 URL 猜不得。
+ * 能力按（供应商 ID, 模型）查表命中——自定义供应商与预设同路（ADR-0026）：ID 不在表内，
+ * 未实测（#89 习得能力）前一律未知。
  */
 
 import type {
@@ -12,9 +13,8 @@ import type {
 	ThinkingSetting,
 } from "../types";
 
-/** 解析输入。预设供应商查能力表；自定义供应商不提供思考开关（恒标注 unsupported）。 */
+/** 解析输入：按（供应商 ID, 模型）查能力表；两档取值见 `ThinkingSetting`。 */
 export interface ThinkingInput {
-	providerType: "preset" | "custom";
 	providerId: string;
 	model: string;
 	setting: ThinkingSetting;
@@ -106,21 +106,16 @@ export const THINKING_CAPABILITIES: readonly ThinkingCapabilityRow[] = [
 ];
 
 /**
- * 解析「思考」三态到请求参数与 UI 标注：
- * - 「自动」不发参数（保持服务端默认）；「开」发开参数（无开参数等同「自动」）；「关」发关参数；
- * - 强制思考 / 无思考模型无论三态都不发参数，给出置灰标注；
- * - 能力表未知模型不发参数、标注未知（对未知模型降级，见研究笔记 9.6）；
- * - 自定义供应商不提供思考开关（ADR-0025）：恒不发参数、标注 unsupported。
+ * 解析「思考」两档到请求参数与 UI 标注（#88 两档语义）：
+ * - 「开」发开参数（该模型无开参数则不发）；「关」发关参数；一次请求只发一个参数；
+ * - 强制思考 / 无思考模型无论两档都不发参数，给出置灰标注；
+ * - 能力表未命中（含自定义供应商）不发参数、标注未知（对未知模型降级，见研究笔记 9.6）。
  */
 export function resolveThinking(
 	input: ThinkingInput,
 	table: readonly ThinkingCapabilityRow[] = THINKING_CAPABILITIES
 ): ThinkingResolution {
 	const setting = input.setting;
-
-	if (input.providerType === "custom") {
-		return { setting, param: null, note: "unsupported" };
-	}
 
 	const row = table.find(
 		(r) => r.providerId === input.providerId && matchModel(r.modelPattern, input.model)
@@ -134,6 +129,57 @@ export function resolveThinking(
 	if (setting === "off") return { setting, param: cap.off, note: null };
 	if (setting === "on" && cap.on) return { setting, param: cap.on, note: null };
 	return { setting, param: null, note: null };
+}
+
+/**
+ * 两档解析与迁移（#88）：把持久化的思考取值归一为两档。
+ * 存量三态「自动」迁移为「开」（行为几乎不变，见 ADR-0026）；迁移幂等（on → on）。
+ * 非法值剔除：返回 undefined，由调用方丢弃条目（读取侧缺省＝「关」）。
+ */
+export function normalizeThinkingSetting(raw: unknown): ThinkingSetting | undefined {
+	if (raw === "on" || raw === "off") return raw;
+	if (raw === "auto") return "on";
+	return undefined;
+}
+
+/** 徽标色族（原型四色定案）：builtin＝内置（紫）/ learned＝实测（绿）/ unknown＝未知（灰）/ warn＝警示（琥珀）。 */
+export type ThinkingBadgeTone = "builtin" | "learned" | "unknown" | "warn";
+
+/**
+ * 显示矩阵的行状态（#86 / #88）：builtin＝内置能力表·可关 / forced＝强制思考 /
+ * none＝无思考 / unknown＝未知能力。习得档（实测）由 #89 增补。
+ */
+export type ThinkingDisplayState = "builtin" | "forced" | "none" | "unknown";
+
+/** 测试入口形态：available＝可发起思考测试（本票留位、#89 落行为）/ done＝已知无需测试。 */
+export type ThinkingTestEntry = "available" | "done";
+
+/**
+ * 「思考」显示矩阵一行（#86）：开关可用性 + 徽标 + 备注警示 + 测试入口。
+ * 文案键由 UI 映射（ADR-0005），本模块只出数据。徽标「实测」与测试按钮行为由 #89 填充。
+ */
+export interface ThinkingDisplay {
+	state: ThinkingDisplayState;
+	badge: ThinkingBadgeTone;
+	/** 滑动开关可操作 ⇔ 思考能力已知且可关。 */
+	toggleEnabled: boolean;
+	/** 备注用警示色（琥珀）。 */
+	footnoteWarn: boolean;
+	testEntry: ThinkingTestEntry;
+}
+
+/** 显示矩阵（#86）：行状态 → 呈现数据。习得档（实测）行由 #89 增补。 */
+const THINKING_DISPLAY: Record<ThinkingDisplayState, ThinkingDisplay> = {
+	builtin: { state: "builtin", badge: "builtin", toggleEnabled: true, footnoteWarn: false, testEntry: "done" },
+	forced: { state: "forced", badge: "warn", toggleEnabled: false, footnoteWarn: true, testEntry: "done" },
+	none: { state: "none", badge: "unknown", toggleEnabled: false, footnoteWarn: false, testEntry: "done" },
+	unknown: { state: "unknown", badge: "unknown", toggleEnabled: false, footnoteWarn: true, testEntry: "available" },
+};
+
+/** 由思考解析结果推导「当前模型」区呈现（显示矩阵，#88 落地）。 */
+export function thinkingDisplay(resolution: ThinkingResolution): ThinkingDisplay {
+	const state: ThinkingDisplayState = resolution.note === null ? "builtin" : resolution.note;
+	return THINKING_DISPLAY[state];
 }
 
 /**

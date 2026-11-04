@@ -12,6 +12,7 @@ import {
 	type ThinkingSetting,
 } from "../types";
 import type { PendingSecret } from "./secrets";
+import { normalizeThinkingSetting } from "../core/thinking";
 import {
 	coerceModelIds,
 	coerceReportLanguage,
@@ -109,7 +110,8 @@ export function normalizeSettings(raw: unknown): NormalizedSettings {
 					type,
 					authType,
 				} as unknown as ModelProvider & { apiKey?: string };
-				// 「思考」三态：保留合法值、剔除非法项；无合法条目即整块不发明（读取侧缺省＝关，见 ADR-0024）。
+				// 「思考」两档（#88）：每值经 core/thinking 归一（存量 auto→on）、非法值剔除；
+				// 无合法条目即整块不发明（读取侧缺省＝关，见 ADR-0024 / ADR-0026）。
 				const thinkingByModel = normalizeThinkingByModel(providerRaw.thinkingByModel);
 				if (thinkingByModel) provider.thinkingByModel = thinkingByModel;
 				else delete provider.thinkingByModel;
@@ -223,12 +225,16 @@ function migrateModelCatalog(provider: ModelProvider, catalogRaw: unknown): void
 	provider.modelCatalog = coerceModelIds(enabled);
 }
 
-/** 归一「思考」三态映射：只保留合法三态值；无合法条目返回 undefined（＝不发明，读取侧缺省关）。 */
+/**
+ * 归一「思考」两档映射（#88 迁移）：每值经 core/thinking 归一——存量「自动」迁移为「开」，
+ * 非法值剔除；无合法条目返回 undefined（＝不发明，读取侧缺省关）。迁移幂等。
+ */
 function normalizeThinkingByModel(raw: unknown): Record<string, ThinkingSetting> | undefined {
 	if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined;
 	const out: Record<string, ThinkingSetting> = {};
 	for (const [model, value] of Object.entries(raw as Record<string, unknown>)) {
-		if (value === "auto" || value === "on" || value === "off") out[model] = value;
+		const setting = normalizeThinkingSetting(value);
+		if (setting !== undefined) out[model] = setting;
 	}
 	return Object.keys(out).length > 0 ? out : undefined;
 }

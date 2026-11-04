@@ -385,20 +385,231 @@
 	font-weight: 500;
 }
 
-/* 「思考」三态：强制思考模型的开关置灰（显式声明盖过原生禁用外观，见 CODING_STANDARDS「UI and CSS」） */
-button.tah-auth-btn:disabled {
-	appearance: none;
-	opacity: 0.5;
-	cursor: not-allowed;
-	background: var(--background-primary);
+/* ===== 「选择模型」卡（#88，P1 同卡第二行）：第一行选择模型，分隔线下「思考」两档开关，卡脚注徽标行 ===== */
+
+.tah-model-card {
 	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	background: var(--background-primary);
+	padding: 1rem 1.15rem;
+	margin-bottom: 1.2rem;
+}
+
+.tah-model-card-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+}
+
+.tah-model-card-text {
+	min-width: 0;
+}
+
+.tah-model-card-name {
+	font-weight: 600;
+}
+
+.tah-model-card-desc {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	margin-top: 3px;
+	line-height: 1.55;
+}
+
+.tah-model-card-divider {
+	border-top: 1px solid var(--background-modifier-border);
+	margin: 0.85rem 0;
+}
+
+/* 模型下拉：显式声明盖过主题控件外观（箭头自绘），见 CODING_STANDARDS「UI and CSS」 */
+select.tah-model-select {
+	appearance: none;
+	flex: none;
+	max-width: 55%;
+	font: inherit;
+	font-size: var(--font-ui-small);
+	padding: 0.45rem 1.8rem 0.45rem 0.75rem;
+	border-radius: 6px;
+	border: 1px solid var(--background-modifier-border);
+	background-color: var(--background-primary);
+	background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+		linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+	background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%;
+	background-size: 5px 5px;
+	background-repeat: no-repeat;
+	color: var(--text-normal);
+	box-shadow: none;
+	cursor: pointer;
+}
+
+select.tah-model-select:hover {
+	border-color: var(--background-modifier-border-hover, var(--background-modifier-border));
+}
+
+select.tah-model-select.tah-model-select:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 1px;
 	box-shadow: none;
 }
 
-/* 「思考」能力标注（强制思考 / 无思考 / 能力未知） */
-.tah-thinking-note {
+/* 「思考」两档滑动开关（#88）：禁用态半透明（强制思考 / 无思考 / 能力未知置灰） */
+button.tah-thinking-switch {
+	appearance: none;
+	position: relative;
+	flex: none;
+	width: 42px;
+	height: 23px;
+	padding: 0;
+	border: none;
+	border-radius: 12px;
+	background: var(--background-modifier-border-hover, var(--background-modifier-border));
+	box-shadow: none;
+	cursor: pointer;
+	transition: background 0.15s;
+}
+
+button.tah-thinking-switch:hover:not(:disabled) {
+	filter: brightness(1.08);
+}
+
+button.tah-thinking-switch.tah-thinking-switch:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 2px;
+	box-shadow: none;
+}
+
+button.tah-thinking-switch::after {
+	content: "";
+	position: absolute;
+	top: 2.5px;
+	left: 2.5px;
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	background: #fff;
+	transition: left 0.15s;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+button.tah-thinking-switch[aria-checked="true"] {
+	background: var(--interactive-accent);
+}
+
+button.tah-thinking-switch[aria-checked="true"]::after {
+	left: 21.5px;
+}
+
+button.tah-thinking-switch:disabled {
+	opacity: 0.42;
+	cursor: not-allowed;
+}
+
+/* 卡脚注：能力徽标 ＋ 备注 ＋ 右对齐测试入口。徽标四色——内置＝紫 / 实测＝绿 / 未知＝灰 / 警示＝琥珀 */
+.tah-thinking-foot {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	margin-top: 0.7rem;
+	flex-wrap: wrap;
+}
+
+.tah-thinking-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 11px;
+	font-weight: 700;
+	padding: 3px 9px;
+	border-radius: 999px;
+	white-space: nowrap;
+}
+
+.tah-thinking-badge-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: currentColor;
+}
+
+.tah-thinking-badge-builtin {
+	background: rgba(107, 92, 231, 0.14);
+	color: #6b5ce7;
+}
+
+/* 「实测」徽标（习得能力，#89）：本票留位 */
+.tah-thinking-badge-learned {
+	background: rgba(44, 122, 68, 0.16);
+	color: #2c7a44;
+}
+
+.tah-thinking-badge-unknown {
+	background: var(--background-modifier-border);
 	color: var(--text-muted);
-	font-size: var(--font-ui-small);
+}
+
+.tah-thinking-badge-warn {
+	background: rgba(207, 139, 60, 0.16);
+	color: var(--text-warning, #cf8b3c);
+}
+
+.tah-thinking-footnote {
+	font-size: var(--font-ui-smaller, 12px);
+	color: var(--text-muted);
+}
+
+.tah-thinking-footnote-warn {
+	color: var(--text-warning, #cf8b3c);
+}
+
+.tah-thinking-foot-spacer {
+	flex: 1;
+}
+
+/* 测试入口位（思考测试行为由 #89 落地，此前禁用） */
+button.tah-thinking-test-btn {
+	appearance: none;
+	font: inherit;
+	font-size: var(--font-ui-smaller, 12px);
+	font-weight: 700;
+	padding: 5px 13px;
+	border-radius: 6px;
+	border: 1px solid var(--interactive-accent);
+	background: var(--interactive-accent);
+	color: var(--text-on-accent, #fff);
+	box-shadow: none;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+button.tah-thinking-test-btn:hover:not(:disabled) {
+	filter: brightness(1.08);
+}
+
+button.tah-thinking-test-btn.tah-thinking-test-btn:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 2px;
+	box-shadow: none;
+}
+
+button.tah-thinking-test-btn:disabled {
+	opacity: 0.42;
+	cursor: not-allowed;
+}
+
+/* 测试入口位的「已知，无需测试」形态（显示矩阵「置灰」列） */
+button.tah-thinking-test-done {
+	appearance: none;
+	font: inherit;
+	font-size: var(--font-ui-smaller, 12px);
+	padding: 5px 13px;
+	border-radius: 6px;
+	border: 1px solid var(--background-modifier-border);
+	background: transparent;
+	color: var(--text-muted);
+	box-shadow: none;
+	white-space: nowrap;
+	cursor: default;
 }
 
 /* 自定义供应商：模型列表与单行配置 */

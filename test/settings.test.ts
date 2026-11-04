@@ -282,9 +282,9 @@ test("normalizeSettings 不迁移非示例 id 的模板", () => {
 	assert.equal(settings.templates[0].content, LEGACY_EXAMPLE_CONTENT);
 });
 
-// ===== 「思考」三态迁移（#84，ADR-0024） =====
+// ===== 「思考」两档迁移（#88，ADR-0026） =====
 
-test("normalizeSettings 保留用户的「思考」偏好；非法三态值剔除（读取侧回退缺省关）", () => {
+test("normalizeSettings 保留用户的「思考」偏好；存量「自动」迁移为「开」；非法值剔除", () => {
 	const raw = {
 		providers: [
 			{
@@ -295,13 +295,35 @@ test("normalizeSettings 保留用户的「思考」偏好；非法三态值剔�
 				apiKeySecretId: "k",
 				models: ["a", "b"],
 				authType: "bearer",
-				thinkingByModel: { a: "on", b: "sometimes", c: "off" },
+				thinkingByModel: { a: "on", b: "sometimes", c: "off", d: "auto" },
 			},
 		],
 	};
 	const settings = load(raw);
 	const p = settings.providers.find((x) => x.id === "p")!;
-	assert.deepEqual(p.thinkingByModel, { a: "on", c: "off" });
+	assert.deepEqual(p.thinkingByModel, { a: "on", c: "off", d: "on" }, "auto → on，非法剔除");
+});
+
+test("normalizeSettings 思考迁移幂等：迁移后的取值再载入原样保留", () => {
+	const once = load({
+		providers: [
+			{
+				id: "p",
+				name: "p",
+				type: "preset",
+				baseUrl: "https://x",
+				apiKeySecretId: "k",
+				models: ["a"],
+				authType: "bearer",
+				thinkingByModel: { a: "auto" },
+			},
+		],
+	});
+	const p1 = once.providers.find((x) => x.id === "p")!;
+	assert.deepEqual(p1.thinkingByModel, { a: "on" });
+	const twice = load({ providers: [p1] });
+	const p2 = twice.providers.find((x) => x.id === "p")!;
+	assert.deepEqual(p2.thinkingByModel, { a: "on" }, "迁移幂等");
 });
 
 test("normalizeSettings 旧设置无思考偏好：不发明条目（每模型读取侧缺省＝关）", () => {

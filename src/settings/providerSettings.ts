@@ -72,10 +72,10 @@ export function isModelStale(provider: ModelProvider, model: string): boolean {
 /**
  * 读取某个模型的「思考」解析结果：该模型偏好（缺省＝关）经能力表映射，
  * 请求参数与置灰标注一并带出（ADR-0024）。设置页与当前模型 解析共用这一个读面。
+ * 自定义供应商与预设同路（ADR-0026）：能力按（供应商, 模型）查表，未实测即未知。
  */
 export function thinkingFor(provider: ModelProvider, model: string): ThinkingResolution {
 	return resolveThinking({
-		providerType: provider.type,
 		providerId: provider.id,
 		model,
 		setting: provider.thinkingByModel?.[model] ?? "off",
@@ -327,7 +327,7 @@ export function removeModel(
 	return state;
 }
 
-/** 写入某个模型的「思考」三态（按模型持久化，键＝模型 ID；见 ADR-0024）。 */
+/** 写入某个模型的「思考」两档（按模型持久化，键＝模型 ID；见 ADR-0024 / ADR-0026）。 */
 export function setModelThinking(
 	state: ProviderState,
 	providerId: string,
@@ -381,7 +381,7 @@ export function resolveActive(
 		apiKey,
 		model: state.activeModel,
 		// 「思考」解析（能力表映射 / 置灰标注）由纯模块产出（ADR-0024）；
-		// 自定义供应商不提供思考开关（ADR-0025），解析恒为 unsupported。
+		// 自定义供应商与预设同路：能力表未命中即未知（ADR-0026）。
 		thinking: thinkingFor(provider, state.activeModel),
 	};
 	if (provider.type === "custom" && Array.isArray(provider.customModels)) {

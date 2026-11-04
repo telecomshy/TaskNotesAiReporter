@@ -571,13 +571,15 @@ test("门面：resolveActive 与 isSecretMissing 用注入的密钥读取", () =
 	assert.equal(facade.secretValue("gone"), "");
 });
 
-// ===== 「思考」三态（#84，ADR-0024） =====
+// ===== 「思考」两档（#84 / #88，ADR-0024 / ADR-0026） =====
 
-test("setModelThinking：写入该模型的「思考」三态（偏好跟模型走）", () => {
+test("setModelThinking：写入该模型的「思考」两档（偏好跟模型走）", () => {
 	const p = provider({ id: "p", type: "preset", models: ["m"] });
 	const s = state({ providers: [p] });
-	setModelThinking(s, "p", "m", "auto");
-	assert.deepEqual(p.thinkingByModel, { m: "auto" });
+	setModelThinking(s, "p", "m", "on");
+	assert.deepEqual(p.thinkingByModel, { m: "on" });
+	setModelThinking(s, "p", "m", "off");
+	assert.deepEqual(p.thinkingByModel, { m: "off" });
 });
 
 test("模型「思考」缺省＝关：无偏好条目时解析出关参数（既有设置迁移后缺省关）", () => {

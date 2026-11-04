@@ -115,7 +115,8 @@ export interface ModelProvider {
 	modelCatalog?: string[];
 	customModels?: ModelConfig[]; // 仅自定义供应商：手动维护的模型配置（每模型含 contextLength/maxTokens）
 	/**
-	 * 每模型「思考」三态（键＝模型 ID；缺省＝「关」），随模型持久化，见 ADR-0024。
+	 * 每模型「思考」两态（键＝模型 ID；缺省＝「关」），随模型持久化，见 ADR-0024 / ADR-0026。
+	 * 存量三态「自动」在载入归一化处迁移为「开」（幂等）。
 	 * 改名 / 删除模型时由命令迁移或清理条目；模型从列表中消失留下的残键无害——
 	 * 偏好在该模型回来时复得（「偏好跟模型走」）。
 	 */
@@ -131,10 +132,10 @@ export interface ModelConfig {
 }
 
 /**
- * 「思考」三态（见 ADR-0024）：自动＝不发参数（保持服务端默认）；开＝显式请求思考；关＝请求不思考。
- * 出厂与迁移缺省均为「关」。
+ * 「思考」两档（#88，ADR-0026）：开＝发开参数（该模型无开参数则不发）；关＝发关参数。
+ * 出厂默认与读取侧缺省均为「关」；存量三态「自动」在载入归一化处迁移为「开」（见 core/thinking）。
  */
-export type ThinkingSetting = "auto" | "on" | "off";
+export type ThinkingSetting = "on" | "off";
 
 /**
  * 思考开关参数：一个键值对，一次请求只发一个
@@ -145,12 +146,12 @@ export interface ThinkingParam {
 	value: unknown;
 }
 
-/** 思考能力的 UI 标注（置灰 + 说明）：强制思考 / 无思考 / 能力未知（不发参数）/ 自定义供应商不提供开关。 */
-export type ThinkingNote = "forced" | "none" | "unknown" | "unsupported";
+/** 思考能力的 UI 标注（置灰 + 说明）：强制思考 / 无思考 / 能力未知（不发参数）。 */
+export type ThinkingNote = "forced" | "none" | "unknown";
 
 /** 思考解析结果（core/thinking 产出）：请求参数 + UI 标注。 */
 export interface ThinkingResolution {
-	/** 生效的三态（缺省＝关）。 */
+	/** 生效的两档（缺省＝关）。 */
 	setting: ThinkingSetting;
 	/** 请求体追加参数；null＝不发思考参数。 */
 	param: ThinkingParam | null;
@@ -165,7 +166,7 @@ export interface ActiveModelConfig {
 	model: string;
 	maxTokens?: number;
 	contextLength?: number;
-	/** 「思考」三态与能力表解析结果（ADR-0024）。 */
+	/** 「思考」两档与能力表解析结果（ADR-0024 / ADR-0026）。 */
 	thinking: ThinkingResolution;
 }
 

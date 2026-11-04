@@ -1,10 +1,28 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isThinkingFakeOff, resolveThinking, THINKING_CAPABILITIES } from "../src/core/thinking";
+import {
+	isThinkingFakeOff,
+	normalizeThinkingSetting,
+	resolveThinking,
+	thinkingDisplay,
+	THINKING_CAPABILITIES,
+} from "../src/core/thinking";
+
+test("两档迁移（#88）：存量「自动」迁移为「开」，on / off 原样保留（幂等）", () => {
+	assert.equal(normalizeThinkingSetting("auto"), "on", "auto → on");
+	assert.equal(normalizeThinkingSetting("on"), "on", "on → on（迁移幂等）");
+	assert.equal(normalizeThinkingSetting("off"), "off", "off → off");
+	assert.equal(normalizeThinkingSetting(normalizeThinkingSetting("auto")), "on", "再归一不变");
+});
+
+test("两档迁移（#88）：非法取值剔除（返回 undefined，读取侧缺省＝关）", () => {
+	for (const raw of ["sometimes", "", null, undefined, 1, {}, ["on"]] as unknown[]) {
+		assert.equal(normalizeThinkingSetting(raw), undefined, String(raw));
+	}
+});
 
 test("「关」产出关参数：DeepSeek 发 thinking:{type:disabled}，单键", () => {
 	const r = resolveThinking({
-		providerType: "preset",
 		providerId: "deepseek",
 		model: "deepseek-v4-pro",
 		setting: "off",
@@ -13,20 +31,8 @@ test("「关」产出关参数：DeepSeek 发 thinking:{type:disabled}，单键"
 	assert.equal(r.note, null);
 });
 
-test("「自动」不发任何参数（保持服务端默认）", () => {
-	const r = resolveThinking({
-		providerType: "preset",
-		providerId: "deepseek",
-		model: "deepseek-v4-pro",
-		setting: "auto",
-	});
-	assert.equal(r.param, null);
-	assert.equal(r.note, null);
-});
-
 test("「开」发开参数：thinking:{type:enabled}", () => {
 	const r = resolveThinking({
-		providerType: "preset",
 		providerId: "deepseek",
 		model: "deepseek-v4-pro",
 		setting: "on",
@@ -34,9 +40,30 @@ test("「开」发开参数：thinking:{type:enabled}", () => {
 	assert.deepEqual(r.param, { name: "thinking", value: { type: "enabled" } });
 });
 
+test("「开」该模型无开参数则不发（开＝发开参数（无则不发），#88 两档语义）", () => {
+	const table = [
+		{
+			providerId: "p",
+			modelPattern: "m",
+			capability: {
+				kind: "switchable" as const,
+				off: { name: "enable_thinking", value: false },
+			},
+		},
+	];
+	for (const setting of ["on", "off"] as const) {
+		const r = resolveThinking({ providerId: "p", model: "m", setting }, table);
+		if (setting === "on") {
+			assert.equal(r.param, null, "无开参数：「开」不发");
+		} else {
+			assert.deepEqual(r.param, { name: "enable_thinking", value: false }, "「关」发关参数");
+		}
+		assert.equal(r.note, null);
+	}
+});
+
 test("DashScope：qwen3.8 关参数是 enable_thinking:false（参数名逐供应商不同）", () => {
 	const r = resolveThinking({
-		providerType: "preset",
 		providerId: "qwen",
 		model: "qwen3.8-max",
 		setting: "off",
@@ -46,7 +73,6 @@ test("DashScope：qwen3.8 关参数是 enable_thinking:false（参数名逐供�
 
 test("强制思考模型（Kimi K3）：不发参数，标注 forced（强行关会硬失败）", () => {
 	const r = resolveThinking({
-		providerType: "preset",
 		providerId: "kimi",
 		model: "kimi-k3",
 		setting: "off",
@@ -57,7 +83,6 @@ test("强制思考模型（Kimi K3）：不发参数，标注 forced（强行关
 
 test("强制思考模型（MiniMax M3.1-Flash）：不发参数，标注 forced（关参数会 400）", () => {
 	const r = resolveThinking({
-		providerType: "preset",
 		providerId: "minimax",
 		model: "MiniMax-M3.1-Flash",
 		setting: "off",
@@ -69,7 +94,6 @@ test("强制思考模型（MiniMax M3.1-Flash）：不发参数，标注 forced�
 test("强制思考模型（GLM-5.3 全系）：不发参数，标注 forced", () => {
 	for (const model of ["glm-5.3", "glm-5.3-flash", "glm-5.3-flashx-legal"]) {
 		const r = resolveThinking({
-			providerType: "preset",
 			providerId: "zhipu",
 			model,
 			setting: "off",
@@ -85,7 +109,7 @@ test("无思考模型（moonshot-v1-* / glm-4-long）：不发参数，标注 no
 		["zhipu", "glm-4-long"],
 		["zhipu", "glm-4-flash-250414"],
 	] as const) {
-		const r = resolveThinking({ providerType: "preset", providerId, model, setting: "off" });
+		const r = resolveThinking({ providerId, model, setting: "off" });
 		assert.equal(r.param, null, model);
 		assert.equal(r.note, "none", model);
 	}
@@ -93,14 +117,12 @@ test("无思考模型（moonshot-v1-* / glm-4-long）：不发参数，标注 no
 
 test("MiniMax M3 可关：关=thinking:{type:disabled}，开=thinking:{type:adaptive}（开≠关的简单取反）", () => {
 	const off = resolveThinking({
-		providerType: "preset",
 		providerId: "minimax",
 		model: "MiniMax-M3",
 		setting: "off",
 	});
 	assert.deepEqual(off.param, { name: "thinking", value: { type: "disabled" } });
 	const on = resolveThinking({
-		providerType: "preset",
 		providerId: "minimax",
 		model: "MiniMax-M3",
 		setting: "on",
@@ -110,14 +132,12 @@ test("MiniMax M3 可关：关=thinking:{type:disabled}，开=thinking:{type:adap
 
 test("Kimi K2.6 可关：thinking:{type:disabled}；「开」显式发 enabled", () => {
 	const off = resolveThinking({
-		providerType: "preset",
 		providerId: "kimi",
 		model: "kimi-k2.6",
 		setting: "off",
 	});
 	assert.deepEqual(off.param, { name: "thinking", value: { type: "disabled" } });
 	const on = resolveThinking({
-		providerType: "preset",
 		providerId: "kimi",
 		model: "kimi-k2.6",
 		setting: "on",
@@ -127,7 +147,6 @@ test("Kimi K2.6 可关：thinking:{type:disabled}；「开」显式发 enabled",
 
 test("能力表未知模型：不发参数，标注 unknown（对未知模型降级）", () => {
 	const r = resolveThinking({
-		providerType: "preset",
 		providerId: "kimi",
 		model: "some-future-model",
 		setting: "off",
@@ -138,14 +157,12 @@ test("能力表未知模型：不发参数，标注 unknown（对未知模型降
 
 test("智谱 GLM 可关档（glm-5.2 / 4.7 族）：thinking:{type:disabled|enabled}", () => {
 	const off = resolveThinking({
-		providerType: "preset",
 		providerId: "zhipu",
 		model: "glm-5.2",
 		setting: "off",
 	});
 	assert.deepEqual(off.param, { name: "thinking", value: { type: "disabled" } });
 	const on = resolveThinking({
-		providerType: "preset",
 		providerId: "zhipu",
 		model: "glm-4.7-flash",
 		setting: "on",
@@ -153,14 +170,14 @@ test("智谱 GLM 可关档（glm-5.2 / 4.7 族）：thinking:{type:disabled|enab
 	assert.deepEqual(on.param, { name: "thinking", value: { type: "enabled" } });
 });
 
-test("一次请求只发一个开关参数：全表 × 全三态解析，非空参数并入请求体恰好占一个键", () => {
+test("一次请求只发一个开关参数：全表 × 全两态解析，非空参数并入请求体恰好占一个键", () => {
 	for (const row of THINKING_CAPABILITIES) {
 		const model = row.modelPattern.endsWith("*")
 			? `${row.modelPattern.slice(0, -1)}sample`
 			: row.modelPattern;
-		for (const setting of ["auto", "on", "off"] as const) {
+		for (const setting of ["on", "off"] as const) {
 			const label = `${row.providerId} ${row.modelPattern} ${setting}`;
-			const r = resolveThinking({ providerType: "preset", providerId: row.providerId, model, setting });
+			const r = resolveThinking({ providerId: row.providerId, model, setting });
 			if (r.param === null) continue;
 			// 与 client.chatCompletion 同款合成：参数并入请求体顶层后恰好多一个键（互斥参数不同时发）
 			const body: Record<string, unknown> = { model };
@@ -170,22 +187,64 @@ test("一次请求只发一个开关参数：全表 × 全三态解析，非空�
 	}
 });
 
-test("自定义供应商：不提供思考开关——三态皆不发参数，标注 unsupported（ADR-0025）", () => {
-	for (const setting of ["auto", "on", "off"] as const) {
+test("自定义供应商与预设同路（ADR-0026）：能力表未命中即未知档——不发参数、标注 unknown", () => {
+	for (const setting of ["on", "off"] as const) {
 		const r = resolveThinking({
-			providerType: "custom",
 			providerId: "custom_x",
 			model: "my-model",
 			setting,
 		});
 		assert.equal(r.param, null, setting);
-		assert.equal(r.note, "unsupported", setting);
+		assert.equal(r.note, "unknown", setting);
 	}
+});
+
+test("显示矩阵（#88）：内置·可关 → 开关激活、徽标内置能力表、测试入口置灰", () => {
+	const r = resolveThinking({ providerId: "deepseek", model: "deepseek-v4-pro", setting: "off" });
+	assert.deepEqual(thinkingDisplay(r), {
+		state: "builtin",
+		badge: "builtin",
+		toggleEnabled: true,
+		footnoteWarn: false,
+		testEntry: "done",
+	});
+});
+
+test("显示矩阵（#88）：强制思考 → 开关置灰、徽标警示、备注警示、无需测试", () => {
+	const r = resolveThinking({ providerId: "kimi", model: "kimi-k3", setting: "off" });
+	assert.deepEqual(thinkingDisplay(r), {
+		state: "forced",
+		badge: "warn",
+		toggleEnabled: false,
+		footnoteWarn: true,
+		testEntry: "done",
+	});
+});
+
+test("显示矩阵（#88）：无思考 → 开关置灰、徽标未知、备注不警示、无需测试", () => {
+	const r = resolveThinking({ providerId: "kimi", model: "moonshot-v1-8k", setting: "off" });
+	assert.deepEqual(thinkingDisplay(r), {
+		state: "none",
+		badge: "unknown",
+		toggleEnabled: false,
+		footnoteWarn: false,
+		testEntry: "done",
+	});
+});
+
+test("显示矩阵（#88）：未知 → 开关置灰、徽标未知、备注警示、测试入口留位", () => {
+	const r = resolveThinking({ providerId: "kimi", model: "some-future-model", setting: "off" });
+	assert.deepEqual(thinkingDisplay(r), {
+		state: "unknown",
+		badge: "unknown",
+		toggleEnabled: false,
+		footnoteWarn: true,
+		testEntry: "available",
+	});
 });
 
 test("假关判定：设关且发出关参数、响应仍带推理段 → 假关", () => {
 	const r = resolveThinking({
-		providerType: "preset",
 		providerId: "deepseek",
 		model: "deepseek-v4-pro",
 		setting: "off",
@@ -200,21 +259,18 @@ test("假关判定：设关但未发参数（强制思考/无思考/未知）→
 		["kimi", "moonshot-v1-8k"],
 		["kimi", "future-model"],
 	] as const) {
-		const r = resolveThinking({ providerType: "preset", providerId, model, setting: "off" });
+		const r = resolveThinking({ providerId, model, setting: "off" });
 		assert.equal(isThinkingFakeOff(r, true), false, model);
 	}
 });
 
-test("假关判定：自动/开档不判假关", () => {
-	for (const setting of ["auto", "on"] as const) {
-		const r = resolveThinking({ providerType: "preset", providerId: "deepseek", model: "m", setting });
-		assert.equal(isThinkingFakeOff(r, true), false, setting);
-	}
+test("假关判定：「开」不判假关", () => {
+	const r = resolveThinking({ providerId: "deepseek", model: "m", setting: "on" });
+	assert.equal(isThinkingFakeOff(r, true), false);
 });
 
 test("同一模型跨网关参数不同：百炼的 kimi-k2.6 用 enable_thinking（Moonshot 直连用 thinking 对象）", () => {
 	const r = resolveThinking({
-		providerType: "preset",
 		providerId: "qwen",
 		model: "kimi-k2.6",
 		setting: "off",
@@ -224,14 +280,12 @@ test("同一模型跨网关参数不同：百炼的 kimi-k2.6 用 enable_thinkin
 
 test("百炼稀宇直供 MiniMax 用 thinking 对象：M3 可关，M3.1-Flash 强制思考", () => {
 	const off = resolveThinking({
-		providerType: "preset",
 		providerId: "qwen",
 		model: "MiniMax/MiniMax-M3",
 		setting: "off",
 	});
 	assert.deepEqual(off.param, { name: "thinking", value: { type: "disabled" } });
 	const forced = resolveThinking({
-		providerType: "preset",
 		providerId: "qwen",
 		model: "MiniMax/MiniMax-M3.1-Flash",
 		setting: "off",
@@ -242,12 +296,12 @@ test("百炼稀宇直供 MiniMax 用 thinking 对象：M3 可关，M3.1-Flash �
 
 test("百炼仅思考型号（qwen3.8-2.4t-a95b / kimi-k3）：forced；旧命名 qwen-max/turbo/long 无思考开关：none", () => {
 	for (const model of ["qwen3.8-2.4t-a95b", "kimi-k3", "deepseek-r1-distill-qwen-32b"]) {
-		const r = resolveThinking({ providerType: "preset", providerId: "qwen", model, setting: "off" });
+		const r = resolveThinking({ providerId: "qwen", model, setting: "off" });
 		assert.equal(r.param, null, model);
 		assert.equal(r.note, "forced", model);
 	}
 	for (const model of ["qwen-max", "qwen-turbo", "qwen-long"]) {
-		const r = resolveThinking({ providerType: "preset", providerId: "qwen", model, setting: "off" });
+		const r = resolveThinking({ providerId: "qwen", model, setting: "off" });
 		assert.equal(r.param, null, model);
 		assert.equal(r.note, "none", model);
 	}
