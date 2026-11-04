@@ -179,7 +179,7 @@ export const zh: Strings = {
 		manageSecret: "管理密钥",
 		manageSecretHint: "请打开「设置 → 密钥存储」管理密钥。",
 		fetching: "正在获取 {{name}} 的模型列表…",
-		fetchEmpty: "未获取到模型列表",
+		fetchEmpty: "{{name}}：请求成功，但该 API 密钥下没有可用模型（部分套餐不提供模型列表）",
 		fetchFailed: "获取失败：{{error}}",
 		providerName: "服务商名称",
 		providerNamePlaceholder: "例如：DeepSeek、Ollama 本地",

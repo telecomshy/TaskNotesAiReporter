@@ -518,7 +518,7 @@ async function fetchModels(provider: ModelProvider, ctx: SettingsTabContext): Pr
 	try {
 		const models = await listModels(provider.baseUrl, apiKey);
 		if (models.length === 0) {
-			new Notice(t("model.fetchEmpty"));
+			new Notice(t("model.fetchEmpty", { name: provider.name }));
 			return;
 		}
 		ctx.plugin.providers.refreshModelCatalog(provider.id, models);

@@ -187,7 +187,7 @@ export const en = {
 		manageSecret: "Manage secrets",
 		manageSecretHint: "Open Settings → Secret storage to manage your secrets.",
 		fetching: "Fetching models for {{name}}…",
-		fetchEmpty: "No models found",
+		fetchEmpty: "{{name}}: the request succeeded, but this API key has no available models (some plans don't expose a model list)",
 		fetchFailed: "Fetch failed: {{error}}",
 		providerName: "Provider name",
 		providerNamePlaceholder: "e.g. DeepSeek, local Ollama",

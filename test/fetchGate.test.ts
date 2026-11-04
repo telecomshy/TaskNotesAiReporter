@@ -189,6 +189,21 @@ test("「选择模型」下拉是选择的唯一入口：change 即选中", asyn
 	assert.equal(h.state.activeModel, MODELS[1], "下拉 change 应选中该模型");
 });
 
+test("模型列表为空（如 Kimi For Coding 密钥）：提示「密钥下无可用模型」，不弹挑选框", async () => {
+	resetRequests({ status: 200, json: { object: "list", data: [] } });
+	const h = makeHarness({ name: "齐备", secretId: SECRET_NAME, secrets: { [SECRET_NAME]: "sk-coding" } });
+	await flush();
+	fetchButton(h.root).fire("click");
+	await flush();
+
+	assert.equal(requests.length, 1);
+	assert.equal(Modal.opened.length, 0, "空列表不弹挑选框");
+	assert.ok(
+		notices.some((n) => n.includes("没有可用模型") && n.includes("Kimi")),
+		`应提示「该密钥下没有可用模型」并带供应商名，实际：${JSON.stringify(notices)}`
+	);
+});
+
 // ===== 未配置 ⇒ 无启用模型（清空联动在 UI 层可见） =====
 
 test("清空密钥名：卡片立即不再显示启用模型", async () => {
