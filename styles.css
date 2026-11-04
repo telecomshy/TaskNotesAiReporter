@@ -307,9 +307,9 @@
 	opacity: 0.9;
 }
 
-/* 自定义供应商卡片展开区：每行配置明确留出垂直间距 */
+/* 自定义供应商卡片展开区：每行配置的垂直间距（紧凑取向） */
 .tah-provider-custom .tah-provider-field {
-	margin-bottom: 1.05rem;
+	margin-bottom: 0.65rem;
 }
 .tah-provider-custom .tah-provider-field:last-child,
 .tah-provider-custom .tah-provider-action {
@@ -655,14 +655,14 @@ button.tah-thinking-test-link:disabled {
 .tah-custom-models-list {
 	display: flex;
 	flex-direction: column;
-	gap: 0.55rem;
+	gap: 0.35rem;
 }
 
 .tah-custom-model-row {
 	display: flex;
 	align-items: center;
 	gap: 0.6rem;
-	padding: 0.6rem 0.7rem;
+	padding: 0.45rem 0.7rem;
 	border: 1px solid var(--background-modifier-border);
 	border-radius: 6px;
 	background: var(--background-primary);
