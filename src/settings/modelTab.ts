@@ -3,34 +3,40 @@
  * 本模块只导出 renderModelTab 入口，内部辅助函数均为本模块私有。
  */
 
-import { Notice, SecretComponent } from "obsidian";
-import type { LearnedCapability, ModelConfig, ModelProvider, ThinkingResolution } from "../types";
-import { thinkingVerdictNoticeKey, type Translator } from "../i18n";
-import { listModels, testConnection } from "../ai/client";
-import { runThinkingTestFlow } from "../ai/thinkingTest";
+import { Notice, SecretComponent, type App } from "obsidian";
+import type { LearnedCapability, ModelConfig, ModelProvider } from "../types";
+import { thinkingDisplayCopy, type Translator } from "../i18n";
+import { testConnection } from "../ai/client";
 import { describeAIError } from "../ai/errorMessage";
-import {
-	thinkingDisplay,
-	THINKING_OFF_CANDIDATES,
-	type ThinkingDisplayState,
-} from "../core/thinking";
+import { THINKING_OFF_CANDIDATES, type ThinkingDisplayState } from "../core/thinking";
+import { runAndAnnounceThinkingTest } from "../ui/thinkingTestAction";
 import {
 	modelsOf,
 	isConfigured,
 	isSelectable,
 	isActiveModel,
 	isModelStale,
-	requiresSecret,
-	thinkingFor,
+	type ActiveModelInfo,
+	type ProviderSettings,
 } from "./providerSettings";
+import type { SettingsSnapshot } from "./owner";
+import { runFetchModelsFlow } from "./fetchModels";
 import { openModelPicker } from "./modelPicker";
-import type { SettingsTabContext } from "./index";
+
+/** 「模型配置」Tab 的依赖面：模型 / 供应商相关；不含非供应商设置命令。 */
+export interface ModelTabContext {
+	app: App;
+	settings: SettingsSnapshot;
+	providers: ProviderSettings;
+	t: Translator;
+	refresh: () => void;
+}
 
 /** 渲染「模型配置」Tab */
-export function renderModelTab(container: HTMLElement, ctx: SettingsTabContext): void {
+export function renderModelTab(container: HTMLElement, ctx: ModelTabContext): void {
 	renderActiveModelSection(container, ctx);
 
-	const t = ctx.plugin.t;
+	const t = ctx.t;
 	container.createEl("h3", { text: t("model.providersHeading"), cls: "tah-provider-title" });
 	container.createEl("p", {
 		text: t("model.providersIntro"),
@@ -38,7 +44,7 @@ export function renderModelTab(container: HTMLElement, ctx: SettingsTabContext):
 	});
 
 	const list = container.createDiv({ cls: "tah-provider-list" });
-	for (const provider of ctx.plugin.settings.providers) {
+	for (const provider of ctx.settings.providers) {
 		if (provider.type === "preset") {
 			renderPresetProviderCard(list, provider, ctx);
 		} else {
@@ -67,11 +73,11 @@ function cardRow(card: HTMLElement, name: string, desc: string): HTMLElement {
  * 卡内第一行选择模型；分隔线下第二行「思考开关」两档滑动开关（开关跟模型走）；
  * 卡脚注行放能力徽标 ＋ 备注 ＋ 右对齐测试入口位。
  */
-function renderActiveModelSection(container: HTMLElement, ctx: SettingsTabContext): void {
-	const t = ctx.plugin.t;
+function renderActiveModelSection(container: HTMLElement, ctx: ModelTabContext): void {
+	const t = ctx.t;
 	container.createEl("h3", { text: t("model.activeHeading") });
 
-	const selectable = ctx.plugin.settings.providers.filter(isSelectable);
+	const selectable = ctx.settings.providers.filter(isSelectable);
 	if (selectable.length === 0) {
 		container.createEl("p", {
 			text: t("model.noModels"),
@@ -81,6 +87,8 @@ function renderActiveModelSection(container: HTMLElement, ctx: SettingsTabContex
 	}
 
 	const card = container.createDiv({ cls: "tah-model-card" });
+	// 本屏唯一一次「当前模型」读：下拉当前值与思考行共用（无当前模型时按能力未知呈现）。
+	const info = ctx.providers.activeModelInfo();
 
 	// 第一行：选择模型（下拉按供应商分组；「已失效」模型仍可选（保留可移除，AC6））
 	const selectRow = cardRow(card, t("model.selectModelName"), t("model.selectModelDesc"));
@@ -96,40 +104,20 @@ function renderActiveModelSection(container: HTMLElement, ctx: SettingsTabContex
 				: model;
 		}
 	}
-	selectEl.value = `${ctx.plugin.settings.activeProviderId}::${ctx.plugin.settings.activeModel}`;
+	selectEl.value = `${info.providerId}::${info.model}`;
 	selectEl.addEventListener("change", () => {
 		const value = selectEl.value;
 		const sepIndex = value.indexOf("::");
 		if (sepIndex < 0) return;
-		ctx.plugin.providers.selectActiveModel(value.slice(0, sepIndex), value.slice(sepIndex + 2));
+		ctx.providers.selectActiveModel(value.slice(0, sepIndex), value.slice(sepIndex + 2));
 		// 刷新以更新思考行（「思考开关」与能力随模型而变）
 		ctx.refresh();
 	});
 
 	// 分隔线之下第二行：「思考」两档开关 + 卡脚注
 	card.createDiv({ cls: "tah-model-card-divider" });
-	renderThinkingRow(card, ctx);
+	renderThinkingRow(card, info, ctx);
 }
-
-/** 显示矩阵行 → 徽标与备注文案键（纯模块只出数据，文案键在 UI 映射，ADR-0005）。 */
-const DISPLAY_COPY: Record<ThinkingDisplayState, { badge: string; footnote: string }> = {
-	builtin: { badge: "model.thinkingBadgeBuiltin", footnote: "model.thinkingNoteBuiltin" },
-	forced: { badge: "model.thinkingBadgeForced", footnote: "model.thinkingForced" },
-	none: { badge: "model.thinkingBadgeNone", footnote: "model.thinkingNone" },
-	unknown: { badge: "model.thinkingBadgeUnknown", footnote: "model.thinkingUnknown" },
-	"learned-switchable": {
-		badge: "model.thinkingBadgeLearned",
-		footnote: "model.thinkingNoteLearnedSwitchable",
-	},
-	"learned-not-detected": {
-		badge: "model.thinkingBadgeLearned",
-		footnote: "model.thinkingNoteLearnedNotDetected",
-	},
-	"learned-not-switchable": {
-		badge: "model.thinkingBadgeLearned",
-		footnote: "model.thinkingNoteLearnedNotSwitchable",
-	},
-};
 
 /** 习得徽标「实测 {{date}}」的日期（测试时间戳的日期部分）。 */
 function learnedDate(learned: LearnedCapability): string {
@@ -143,35 +131,28 @@ function footnoteText(
 	t: Translator
 ): string {
 	if (state === "learned-not-switchable") {
-		return t(DISPLAY_COPY[state].footnote, {
+		return t(thinkingDisplayCopy[state].footnote, {
 			count: learned?.triedFields ?? THINKING_OFF_CANDIDATES.length,
 		});
 	}
-	return t(DISPLAY_COPY[state].footnote);
+	return t(thinkingDisplayCopy[state].footnote);
 }
 
 /**
  * 「思考开关」两档滑动开关（#88）：作用于当前模型，取值按模型持久化。
- * 显示矩阵（开关可用性 / 徽标 / 备注 / 测试入口）由 core/thinking 产出，本函数只做呈现。
+ * 呈现数据（开关可用性 / 徽标 / 备注 / 测试入口 / 习得条目）全部取自 `ActiveModelInfo`，
+ * 本函数只做呈现（文案键在 UI 映射，ADR-0005）。
  * 测试入口（#89）：未知＝「测试思考能力」按钮；习得档＝「重新测试」文字入口（清习得并重跑）；
  * 已知（内置）＝置灰「已知，无需测试」。
  */
-function renderThinkingRow(card: HTMLElement, ctx: SettingsTabContext): void {
-	const t = ctx.plugin.t;
-	const settings = ctx.plugin.settings;
-	const provider = settings.providers.find((p) => p.id === settings.activeProviderId);
-	const activeModel = settings.activeModel;
-
-	// 未选模型时按能力未知呈现（置灰＋备注），开关与测试入口均不可操作
-	const resolution: ThinkingResolution =
-		provider && activeModel !== ""
-			? thinkingFor(provider, activeModel)
-			: { setting: "off", param: null, note: "unknown", learned: null };
-	const display = thinkingDisplay(resolution);
+function renderThinkingRow(card: HTMLElement, info: ActiveModelInfo, ctx: ModelTabContext): void {
+	const t = ctx.t;
+	const { thinking, display } = info;
+	const hasModel = info.providerId !== "" && info.model !== "";
 
 	const row = cardRow(card, t("model.thinking"), t("model.thinkingDesc"));
 
-	const on = resolution.setting === "on";
+	const on = thinking.setting === "on";
 	const sw = row.createEl("button", {
 		cls: "tah-thinking-switch",
 		attr: {
@@ -183,8 +164,8 @@ function renderThinkingRow(card: HTMLElement, ctx: SettingsTabContext): void {
 	});
 	sw.disabled = !display.toggleEnabled;
 	sw.addEventListener("click", () => {
-		if (!provider || !display.toggleEnabled) return;
-		ctx.plugin.providers.setModelThinking(provider.id, settings.activeModel, on ? "off" : "on");
+		if (!hasModel || !display.toggleEnabled) return;
+		ctx.providers.setModelThinking(info.providerId, info.model, on ? "off" : "on");
 		ctx.refresh();
 	});
 
@@ -193,23 +174,31 @@ function renderThinkingRow(card: HTMLElement, ctx: SettingsTabContext): void {
 	const badge = foot.createSpan({ cls: `tah-thinking-badge tah-thinking-badge-${display.badge}` });
 	badge.createSpan({ cls: "tah-thinking-badge-dot" });
 	badge.createSpan({
-		text: resolution.learned
-			? t(DISPLAY_COPY[display.state].badge, { date: learnedDate(resolution.learned) })
-			: t(DISPLAY_COPY[display.state].badge),
+		text: thinking.learned
+			? t(thinkingDisplayCopy[display.state].badge, { date: learnedDate(thinking.learned) })
+			: t(thinkingDisplayCopy[display.state].badge),
 	});
 	foot.createSpan({
 		cls: display.footnoteWarn
 			? "tah-thinking-footnote tah-thinking-footnote-warn"
 			: "tah-thinking-footnote",
-		text: footnoteText(display.state, resolution.learned, t),
+		text: footnoteText(display.state, thinking.learned, t),
 	});
 	foot.createSpan({ cls: "tah-thinking-foot-spacer" });
 
 	const startTest = (btn: HTMLElement, retest: boolean) => {
-		if (!provider || activeModel === "") return;
+		if (!hasModel) return;
 		btn.setAttribute("disabled", "true");
 		btn.setText(t("model.thinkingTestRunning"));
-		void startThinkingTestFlow(ctx, retest);
+		void runAndAnnounceThinkingTest(
+			{
+				providers: ctx.providers,
+				timeoutSeconds: ctx.settings.timeoutSeconds,
+				t,
+				onDone: ctx.refresh,
+			},
+			retest
+		);
 	};
 
 	if (display.testEntry === "available") {
@@ -217,7 +206,7 @@ function renderThinkingRow(card: HTMLElement, ctx: SettingsTabContext): void {
 			cls: "tah-thinking-test-btn",
 			text: t("model.thinkingTestRun"),
 		});
-		testBtn.disabled = !provider || activeModel === "";
+		testBtn.disabled = !hasModel;
 		testBtn.addEventListener("click", () => startTest(testBtn, false));
 	} else if (display.testEntry === "retest") {
 		// 「重新测试」文字入口（#89）：清习得并重跑；假关告警内另有同款动作
@@ -236,28 +225,13 @@ function renderThinkingRow(card: HTMLElement, ctx: SettingsTabContext): void {
 	}
 }
 
-/**
- * 思考测试入口（#89）：按钮进入「测试中…」，流程走 ai/thinkingTest 的共享编排
- * （解析 → 重测先清习得 → 基线 → 逐字段 → 落习得），结束后刷新设置页呈现，结论文案以提示上浮。
- */
-async function startThinkingTestFlow(ctx: SettingsTabContext, retest: boolean): Promise<void> {
-	const t = ctx.plugin.t;
-	const result = await runThinkingTestFlow(
-		ctx.plugin.providers,
-		ctx.plugin.settings.timeoutSeconds,
-		retest
-	);
-	new Notice(result ? t(thinkingVerdictNoticeKey(result.verdict)) : t("model.thinkingTestNeedModel"));
-	ctx.refresh();
-}
-
 /** 内置供应商卡片：仅需 api key，模型动态拉取 */
 function renderPresetProviderCard(
 	container: HTMLElement,
 	provider: ModelProvider,
-	ctx: SettingsTabContext
+	ctx: ModelTabContext
 ): void {
-	const t = ctx.plugin.t;
+	const t = ctx.t;
 	const configured = isConfigured(provider);
 
 	const card = container.createDiv({ cls: "tah-provider-card" });
@@ -329,13 +303,13 @@ interface SecretControl {
  * 另给一个「管理密钥」入口（重命名/删除归 Obsidian 密钥存储）与「密钥不可用」内联提示。
  */
 function attachSecretControl(
-	ctx: SettingsTabContext,
+	ctx: ModelTabContext,
 	host: HTMLElement,
 	provider: ModelProvider,
 	onChange: (value: string) => void
 ): SecretControl {
 	host.addClass("tah-secret-host");
-	const t = ctx.plugin.t;
+	const t = ctx.t;
 	const mask = host.createSpan({ cls: "tah-secret-mask", text: SECRET_MASK });
 	const component = new SecretComponent(ctx.app, host).setValue(provider.apiKeySecretId);
 
@@ -347,7 +321,7 @@ function attachSecretControl(
 
 	const refresh = (secretId: string) => {
 		mask.toggleClass("is-empty", secretId.trim() === "");
-		hint.toggleClass("tah-hidden", !ctx.plugin.providers.isSecretMissing(secretId));
+		hint.toggleClass("tah-hidden", !ctx.providers.isSecretMissing(secretId));
 	};
 	refresh(provider.apiKeySecretId);
 
@@ -362,7 +336,7 @@ function attachSecretControl(
 const SECRET_STORAGE_TAB_ID = "keychain";
 
 /** 打开 Obsidian 的「密钥存储」设置页（内部 API 不在公开类型里，见 ADR-0008；带降级提示）。 */
-function openSecretStorage(ctx: SettingsTabContext): void {
+function openSecretStorage(ctx: ModelTabContext): void {
 	const setting = (ctx.app as unknown as {
 		setting?: { open?: () => void; openTabById?: (id: string) => void };
 	}).setting;
@@ -375,7 +349,7 @@ function openSecretStorage(ctx: SettingsTabContext): void {
 	} catch {
 		// 内部 API 不可用，走降级提示
 	}
-	new Notice(ctx.plugin.t("model.manageSecretHint"));
+	new Notice(ctx.t("model.manageSecretHint"));
 }
 
 /** 绑定卡片头部点击折叠/展开：切换 tah-hidden 并同步箭头。 */
@@ -397,10 +371,10 @@ function onPresetSecretChange(
 	provider: ModelProvider,
 	value: string,
 	showEnabled: () => void,
-	ctx: SettingsTabContext
+	ctx: ModelTabContext
 ): void {
-	ctx.plugin.providers.setSecretId(provider.id, value);
-	refreshCardState(card, provider, ctx.plugin.t);
+	ctx.providers.setSecretId(provider.id, value);
+	refreshCardState(card, provider, ctx.t);
 	showEnabled();
 }
 
@@ -409,16 +383,16 @@ function appendModelTag(
 	container: HTMLElement,
 	provider: ModelProvider,
 	model: string,
-	ctx: SettingsTabContext
+	ctx: ModelTabContext
 ): void {
-	const t = ctx.plugin.t;
+	const t = ctx.t;
 	const tag = container.createSpan({ cls: "tah-model-tag" });
 	tag.createSpan({ text: model });
 	if (isModelStale(provider, model)) {
 		tag.createSpan({ cls: "tah-stale-badge", text: t("model.staleBadge") });
 	}
-	const settings = ctx.plugin.settings;
-	if (isActiveModel(settings.activeProviderId, settings.activeModel, provider.id, model)) {
+	const info = ctx.providers.activeModelInfo();
+	if (isActiveModel(info.providerId, info.model, provider.id, model)) {
 		tag.addClass("tah-model-tag-active");
 	}
 }
@@ -428,9 +402,9 @@ function renderModelTags(
 	container: HTMLElement,
 	models: string[],
 	provider: ModelProvider,
-	ctx: SettingsTabContext
+	ctx: ModelTabContext
 ): void {
-	const t = ctx.plugin.t;
+	const t = ctx.t;
 	container.empty();
 	const MAIN_COUNT = 2;
 
@@ -460,9 +434,9 @@ function renderAllModelTags(
 	models: string[],
 	provider: ModelProvider,
 	expanded: boolean,
-	ctx: SettingsTabContext
+	ctx: ModelTabContext
 ): void {
-	const t = ctx.plugin.t;
+	const t = ctx.t;
 	container.empty();
 	const shown = expanded ? models : models.slice(0, 2);
 	for (const model of shown) {
@@ -487,39 +461,42 @@ function renderAllModelTags(
 }
 
 /**
- * 「获取模型列表」（手动点击，#87）：拉取成功后刷「模型清单」并弹出挑选对话框，确认才改动启用集；
- * 预设与自定义供应商共用。取消对话框即什么也不发生。空表（#92）＝正常状态：照实刷为空清单
- * （启用模型标「已失效」），给解释性提示且不弹挑选框。
+ * 「获取模型列表」（手动点击，#87）：规则（守卫 / 拉取 / 空表记账）由 fetchModels 流程拥有，
+ * 本函数只把结局映射为提示 / 挑选框。确认才改动启用集；取消对话框即什么也不发生。
  */
-async function fetchModels(provider: ModelProvider, ctx: SettingsTabContext): Promise<void> {
-	const t = ctx.plugin.t;
-	if (provider.baseUrl.trim() === "") {
-		new Notice(t("model.testNeedUrl"));
-		return;
-	}
-	const secretRequired = requiresSecret(provider);
-	if (secretRequired && provider.apiKeySecretId.trim() === "") {
-		new Notice(t("model.fetchNeedKey"));
-		return;
-	}
-	const apiKey = secretRequired ? ctx.plugin.providers.secretValue(provider.apiKeySecretId) : "";
-	if (secretRequired && apiKey === "") {
-		new Notice(t("model.fetchSecretMissing"));
-		return;
-	}
-	new Notice(t("model.fetching", { name: provider.name }));
-	try {
-		const models = await listModels(provider.baseUrl, apiKey);
-		ctx.plugin.providers.refreshModelCatalog(provider.id, models);
-		if (models.length === 0) {
+async function fetchModels(provider: ModelProvider, ctx: ModelTabContext): Promise<void> {
+	const t = ctx.t;
+	const outcome = await runFetchModelsFlow(
+		ctx.providers,
+		provider,
+		ctx.settings.timeoutSeconds,
+		undefined,
+		() => new Notice(t("model.fetching", { name: provider.name }))
+	);
+	switch (outcome.kind) {
+		case "need-url":
+			new Notice(t("model.testNeedUrl"));
+			return;
+		case "need-key":
+			new Notice(t("model.fetchNeedKey"));
+			return;
+		case "secret-missing":
+			new Notice(t("model.fetchSecretMissing"));
+			return;
+		case "failed":
+			new Notice(t("model.fetchFailed", { error: describeAIError(outcome.error, t) }));
+			return;
+		case "empty":
 			new Notice(t("model.fetchEmpty", { name: provider.name }));
 			ctx.refresh();
 			return;
-		}
-		openModelPicker(ctx, provider);
-	} catch (error) {
-		new Notice(t("model.fetchFailed", { error: describeAIError(error, t) }));
+		case "fetched":
+			openModelPicker(ctx, provider);
+			return;
 	}
+	// 穷尽性守卫：新增结局时这里编译失败，逼视图补上映射。
+	const exhaustive: never = outcome;
+	void exhaustive;
 }
 
 /** 更新卡片上的模型数量标签（模型数由 provider module 统一读取） */
@@ -542,14 +519,14 @@ function refreshCardState(card: HTMLElement, provider: ModelProvider, t: Transla
 }
 
 /** 添加自定义供应商：直接新增一张卡片，在卡片内维护配置与模型 */
-function addCustomProvider(ctx: SettingsTabContext): void {
-	ctx.plugin.providers.addProvider();
+function addCustomProvider(ctx: ModelTabContext): void {
+	ctx.providers.addProvider();
 	ctx.refresh();
 }
 
 /** 删除自定义供应商 */
-function deleteCustomProvider(provider: ModelProvider, ctx: SettingsTabContext): void {
-	ctx.plugin.providers.removeProvider(provider.id);
+function deleteCustomProvider(provider: ModelProvider, ctx: ModelTabContext): void {
+	ctx.providers.removeProvider(provider.id);
 	ctx.refresh();
 }
 
@@ -557,9 +534,9 @@ function deleteCustomProvider(provider: ModelProvider, ctx: SettingsTabContext):
 function renderCustomProviderCard(
 	container: HTMLElement,
 	provider: ModelProvider,
-	ctx: SettingsTabContext
+	ctx: ModelTabContext
 ): void {
-	const t = ctx.plugin.t;
+	const t = ctx.t;
 	const configured = isConfigured(provider);
 
 	const card = container.createDiv({ cls: "tah-provider-card tah-provider-custom" });
@@ -598,7 +575,7 @@ function renderCustomProviderCard(
 	nameInput.value = provider.name;
 	nameInput.placeholder = t("model.providerNamePlaceholder");
 	nameInput.addEventListener("change", () => {
-		ctx.plugin.providers.setProviderName(provider.id, nameInput.value);
+		ctx.providers.setProviderName(provider.id, nameInput.value);
 		nameInput.value = provider.name;
 		const nameEl = card.querySelector(".tah-provider-name");
 		if (nameEl) nameEl.textContent = provider.name;
@@ -612,7 +589,7 @@ function renderCustomProviderCard(
 	urlInput.value = provider.baseUrl;
 	urlInput.placeholder = t("model.apiUrlPlaceholder");
 	urlInput.addEventListener("change", () => {
-		ctx.plugin.providers.setProviderBaseUrl(provider.id, urlInput.value);
+		ctx.providers.setProviderBaseUrl(provider.id, urlInput.value);
 		urlInput.value = provider.baseUrl;
 		refreshCardState(card, provider, t);
 	});
@@ -630,7 +607,7 @@ function renderCustomProviderCard(
 	keyRow.createSpan({ cls: "tah-provider-field-label", text: t("model.apiKeyLabel") });
 	const keyHost = keyRow.createDiv({ cls: "tah-provider-input" });
 	const secret = attachSecretControl(ctx, keyHost, provider, (value) => {
-		ctx.plugin.providers.setSecretId(provider.id, value);
+		ctx.providers.setSecretId(provider.id, value);
 		refreshCardState(card, provider, t);
 	});
 
@@ -640,11 +617,11 @@ function renderCustomProviderCard(
 		keyRow.toggleClass("tah-hidden", provider.authType !== "bearer");
 	};
 	bearerBtn.addEventListener("click", () => {
-		ctx.plugin.providers.setAuthType(provider.id, "bearer");
+		ctx.providers.setAuthType(provider.id, "bearer");
 		updateAuth();
 	});
 	noneBtn.addEventListener("click", () => {
-		ctx.plugin.providers.setAuthType(provider.id, "none");
+		ctx.providers.setAuthType(provider.id, "none");
 		secret.refresh("");
 		secret.component.setValue("");
 		updateAuth();
@@ -666,7 +643,7 @@ function renderCustomProviderCard(
 		modelsList.empty();
 		updateModelCount(card, provider, t);
 		for (const mc of provider.customModels ?? []) {
-			renderCustomModelRow(modelsList, provider, mc, card, ctx);
+			renderCustomModelRow(modelsList, provider, mc, card, ctx, renderModelRows);
 		}
 		// 列表尾「手动添加」追加行：手动配置＝给列表添一行草稿，与列表编辑同属一体
 		const appendBtn = modelsList.createEl("button", {
@@ -674,7 +651,7 @@ function renderCustomProviderCard(
 			text: t("model.newModel"),
 		});
 		appendBtn.addEventListener("click", () => {
-			ctx.plugin.providers.addModel(provider.id);
+			ctx.providers.addModel(provider.id);
 			renderModelRows();
 			refreshCardState(card, provider, t);
 		});
@@ -692,15 +669,14 @@ function renderCustomModelRow(
 	provider: ModelProvider,
 	mc: ModelConfig,
 	card: HTMLElement,
-	ctx: SettingsTabContext
+	ctx: ModelTabContext,
+	/** 删除后重画整张列表（含列表尾的追加行）；由卡片传入 renderModelRows。 */
+	rerender: () => void
 ): void {
-	const t = ctx.plugin.t;
+	const t = ctx.t;
 	const row = listEl.createDiv({ cls: "tah-custom-model-row" });
-	const active = ctx.plugin.settings;
-	if (
-		mc.modelId !== "" &&
-		isActiveModel(active.activeProviderId, active.activeModel, provider.id, mc.modelId)
-	) {
+	const info = ctx.providers.activeModelInfo();
+	if (mc.modelId !== "" && isActiveModel(info.providerId, info.model, provider.id, mc.modelId)) {
 		row.addClass("tah-custom-model-row-active");
 	}
 
@@ -712,7 +688,7 @@ function renderCustomModelRow(
 	idInput.value = mc.modelId;
 	idInput.placeholder = t("model.modelIdPlaceholder");
 	idInput.addEventListener("change", () => {
-		ctx.plugin.providers.renameModel(provider.id, mc.id, idInput.value);
+		ctx.providers.renameModel(provider.id, mc.id, idInput.value);
 		idInput.value = mc.modelId;
 		syncCustomModels(provider, card, ctx);
 	});
@@ -729,7 +705,7 @@ function renderCustomModelRow(
 	ctxInput.value = mc.contextLength?.toString() ?? "";
 	ctxInput.placeholder = "204800";
 	ctxInput.addEventListener("change", () => {
-		ctx.plugin.providers.setModelParams(provider.id, mc.id, {
+		ctx.providers.setModelParams(provider.id, mc.id, {
 			contextLength: parseIntSafe(ctxInput.value),
 		});
 		syncCustomModels(provider, card, ctx);
@@ -743,7 +719,7 @@ function renderCustomModelRow(
 	maxInput.value = mc.maxTokens?.toString() ?? "";
 	maxInput.placeholder = "65535";
 	maxInput.addEventListener("change", () => {
-		ctx.plugin.providers.setModelParams(provider.id, mc.id, {
+		ctx.providers.setModelParams(provider.id, mc.id, {
 			maxTokens: parseIntSafe(maxInput.value),
 		});
 		syncCustomModels(provider, card, ctx);
@@ -768,12 +744,12 @@ function renderCustomModelRow(
 			baseUrl: provider.baseUrl.trim(),
 			apiKey:
 				provider.authType === "bearer"
-					? ctx.plugin.providers.secretValue(provider.apiKeySecretId)
+					? ctx.providers.secretValue(provider.apiKeySecretId)
 					: "",
 			model: modelId,
-			temperature: ctx.plugin.settings.temperature,
-			maxTokens: parseIntSafe(maxInput.value) ?? ctx.plugin.settings.maxTokens,
-			timeoutSeconds: ctx.plugin.settings.timeoutSeconds,
+			temperature: ctx.settings.temperature,
+			maxTokens: parseIntSafe(maxInput.value) ?? ctx.settings.maxTokens,
+			timeoutSeconds: ctx.settings.timeoutSeconds,
 		})
 			.then(() => {
 				new Notice(t("model.testPassed", { model: modelId }));
@@ -787,16 +763,13 @@ function renderCustomModelRow(
 	const delBtn = actions.createEl("button", { text: "✕" });
 	delBtn.addClass("tah-model-del-btn");
 	delBtn.addEventListener("click", () => {
-		if (ctx.plugin.providers.isModelProtected(provider.id, mc.modelId.trim())) {
+		if (ctx.providers.isModelProtected(provider.id, mc.modelId.trim())) {
 			new Notice(t("model.protectActiveModel"));
 			return;
 		}
-		ctx.plugin.providers.removeModel(provider.id, mc.id);
-		listEl.empty();
-		updateModelCount(card, provider, t);
-		for (const m2 of provider.customModels ?? []) {
-			renderCustomModelRow(listEl, provider, m2, card, ctx);
-		}
+		ctx.providers.removeModel(provider.id, mc.id);
+		// 整张列表重画（含列表尾追加行）：单删一行后不再丢「+ 手动添加模型 ID」按钮。
+		rerender();
 		refreshCardState(card, provider, t);
 	});
 }
@@ -805,10 +778,10 @@ function renderCustomModelRow(
 function syncCustomModels(
 	provider: ModelProvider,
 	card: HTMLElement,
-	ctx: SettingsTabContext
+	ctx: ModelTabContext
 ): void {
-	updateModelCount(card, provider, ctx.plugin.t);
-	refreshCardState(card, provider, ctx.plugin.t);
+	updateModelCount(card, provider, ctx.t);
+	refreshCardState(card, provider, ctx.t);
 }
 
 function parseIntSafe(value: string): number | undefined {

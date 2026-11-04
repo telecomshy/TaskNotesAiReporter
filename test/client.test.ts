@@ -91,7 +91,7 @@ function assertErrorCode(code: string) {
 test("listModels 正常返回模型 ID 列表", async () => {
 	await capture();
 	respond = () => ({ status: 200, json: { data: [{ id: "a" }, { id: "b" }, { id: "" }] } });
-	const models = await client.listModels("https://x.com", "sk");
+	const models = await client.listModels("https://x.com", "sk", 30);
 	assert.deepEqual(models, ["a", "b"]);
 	assert.equal(captured[0].url, "https://x.com/models");
 	assert.equal(captured[0].method, "GET");
@@ -101,21 +101,21 @@ test("listModels 正常返回模型 ID 列表", async () => {
 test("listModels 兼容 models 字段", async () => {
 	await capture();
 	respond = () => ({ status: 200, json: { models: [{ id: "m1" }] } });
-	const models = await client.listModels("https://x.com", "sk");
+	const models = await client.listModels("https://x.com", "sk", 30);
 	assert.deepEqual(models, ["m1"]);
 });
 
 test("listModels 无 apiKey 时不带 Authorization 头", async () => {
 	await capture();
 	respond = () => ({ status: 200, json: { data: [{ id: "m1" }] } });
-	await client.listModels("https://x.com", "   ");
+	await client.listModels("https://x.com", "   ", 30);
 	assert.equal(captured[0].headers.Authorization, undefined);
 });
 
 test("listModels 非 2xx 抛出 AIClientError 并含服务端错误信息", async () => {
 	await capture();
 	respond = () => ({ status: 401, json: { error: { message: "invalid key" } } });
-	await assert.rejects(() => client.listModels("https://x.com", "sk"), (e: unknown) => {
+	await assert.rejects(() => client.listModels("https://x.com", "sk", 30), (e: unknown) => {
 		assert.ok(e instanceof client.AIClientError);
 		assert.ok((e as Error).message.includes("invalid key"));
 		return true;
@@ -125,7 +125,7 @@ test("listModels 非 2xx 抛出 AIClientError 并含服务端错误信息", asyn
 test("listModels 响应无 data/models 时返回空数组", async () => {
 	await capture();
 	respond = () => ({ status: 200, json: { unexpected: [] } });
-	const models = await client.listModels("https://x.com", "sk");
+	const models = await client.listModels("https://x.com", "sk", 30);
 	assert.deepEqual(models, []);
 });
 
@@ -248,7 +248,7 @@ test("chatCompletion 带 JSON 内容类型头", async () => {
 test("listModels 无请求体不带 Content-Type", async () => {
 	await capture();
 	respond = () => ({ status: 200, json: { data: [] } });
-	await client.listModels("https://x.com", "sk");
+	await client.listModels("https://x.com", "sk", 30);
 	assert.equal(captured[0].headers["Content-Type"], undefined);
 });
 
@@ -305,7 +305,7 @@ test("listModels 透传 AIClientError，不被网络错误重包", async () => {
 	respond = () => {
 		throw original;
 	};
-	await assert.rejects(() => client.listModels("https://x.com", "sk"), (e: unknown) => {
+	await assert.rejects(() => client.listModels("https://x.com", "sk", 30), (e: unknown) => {
 		assert.equal(e, original);
 		return true;
 	});

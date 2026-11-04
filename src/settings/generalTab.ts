@@ -5,12 +5,22 @@
 
 import { Setting } from "obsidian";
 import { DATE_FIELDS, DEFAULT_SETTINGS } from "../types";
-import { dateFieldLabelKey } from "../i18n";
-import type { SettingsTabContext } from "./index";
+import { dateFieldLabelKey, type Translator } from "../i18n";
+import type { AppSettings } from "./appSettings";
+import type { SettingsSnapshot } from "./owner";
+
+/** 「常规配置」Tab 的依赖面：非供应商设置命令与界面语言应用。 */
+export interface GeneralTabContext {
+	settings: SettingsSnapshot;
+	appSettings: AppSettings;
+	t: Translator;
+	applyLanguage: () => void;
+	refresh: () => void;
+}
 
 /** 渲染「常规配置」Tab */
-export function renderGeneralTab(container: HTMLElement, ctx: SettingsTabContext): void {
-	const t = ctx.plugin.t;
+export function renderGeneralTab(container: HTMLElement, ctx: GeneralTabContext): void {
+	const t = ctx.t;
 	container.createEl("h3", { text: t("settings.generalHeading") });
 
 	new Setting(container)
@@ -19,9 +29,9 @@ export function renderGeneralTab(container: HTMLElement, ctx: SettingsTabContext
 		.addText((text) =>
 			text
 				.setPlaceholder(DEFAULT_SETTINGS.reportFolder)
-				.setValue(ctx.plugin.settings.reportFolder)
+				.setValue(ctx.settings.reportFolder)
 				.onChange((value) => {
-					void ctx.plugin.appSettings.setReportFolder(value);
+					void ctx.appSettings.setReportFolder(value);
 				})
 		);
 
@@ -37,9 +47,9 @@ export function renderGeneralTab(container: HTMLElement, ctx: SettingsTabContext
 			.setName(t(dateFieldLabelKey(field)))
 			.addToggle((toggle) =>
 				toggle
-					.setValue(ctx.plugin.settings.dateFields.includes(field))
+					.setValue(ctx.settings.dateFields.includes(field))
 					.onChange((value) => {
-						void ctx.plugin.appSettings.toggleDateField(field, value);
+						void ctx.appSettings.toggleDateField(field, value);
 					})
 			);
 	}
@@ -49,9 +59,9 @@ export function renderGeneralTab(container: HTMLElement, ctx: SettingsTabContext
 		.setDesc(t("settings.weekStartsMondayDesc"))
 		.addToggle((toggle) =>
 			toggle
-				.setValue(ctx.plugin.settings.weekStartsOnMonday)
+				.setValue(ctx.settings.weekStartsOnMonday)
 				.onChange((value) => {
-					void ctx.plugin.appSettings.setWeekStartsOnMonday(value);
+					void ctx.appSettings.setWeekStartsOnMonday(value);
 				})
 		);
 
@@ -61,9 +71,9 @@ export function renderGeneralTab(container: HTMLElement, ctx: SettingsTabContext
 		.addText((text) =>
 			text
 				.setPlaceholder(t("settings.reportLanguagePlaceholder"))
-				.setValue(ctx.plugin.settings.language)
+				.setValue(ctx.settings.language)
 				.onChange((value) => {
-					void ctx.plugin.appSettings.setReportLanguage(value);
+					void ctx.appSettings.setReportLanguage(value);
 				})
 		);
 
@@ -76,10 +86,10 @@ export function renderGeneralTab(container: HTMLElement, ctx: SettingsTabContext
 				.addOption("auto", t("settings.uiLanguageAuto"))
 				.addOption("zh", t("settings.uiLanguageZh"))
 				.addOption("en", t("settings.uiLanguageEn"))
-				.setValue(ctx.plugin.settings.uiLanguage)
+				.setValue(ctx.settings.uiLanguage)
 				.onChange((value) => {
-					void ctx.plugin.appSettings.setUiLanguage(value);
-					ctx.plugin.applyLanguage();
+					void ctx.appSettings.setUiLanguage(value);
+					ctx.applyLanguage();
 					ctx.refresh();
 				})
 		);

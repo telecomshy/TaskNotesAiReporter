@@ -5,13 +5,21 @@
  * 预设与自定义供应商共用同一对话框；启停语义在 providerSettings 命令里，本模块只做呈现与收集。
  */
 
-import { Modal, Notice } from "obsidian";
+import { Modal, Notice, type App } from "obsidian";
 import type { ModelProvider } from "../types";
-import { catalogOf, isModelStale, modelsOf } from "./providerSettings";
-import type { SettingsTabContext } from "./index";
+import type { Translator } from "../i18n";
+import { catalogOf, isModelStale, modelsOf, type ProviderSettings } from "./providerSettings";
+
+/** 挑选对话框的依赖面：供应商命令 + 弹窗所需的 app。 */
+export interface ModelPickerContext {
+	app: App;
+	providers: ProviderSettings;
+	t: Translator;
+	refresh: () => void;
+}
 
 /** 打开挑选对话框（调用方先完成拉取与「模型清单」刷新）。 */
-export function openModelPicker(ctx: SettingsTabContext, provider: ModelProvider): void {
+export function openModelPicker(ctx: ModelPickerContext, provider: ModelProvider): void {
 	new ModelPickerModal(ctx, provider).open();
 }
 
@@ -29,14 +37,14 @@ class ModelPickerModal extends Modal {
 	private readonly rowInputs = new Map<string, HTMLInputElement>();
 
 	constructor(
-		private readonly ctx: SettingsTabContext,
+		private readonly ctx: ModelPickerContext,
 		private readonly provider: ModelProvider
 	) {
 		super(ctx.app);
 	}
 
 	onOpen(): void {
-		const t = this.ctx.plugin.t;
+		const t = this.ctx.t;
 		this.modalEl.addClass("tah-model-picker");
 		this.setTitle(t("model.pickerTitle"));
 		this.contentEl.createEl("p", {
@@ -71,7 +79,7 @@ class ModelPickerModal extends Modal {
 	}
 
 	private renderRow(list: HTMLElement, model: string): void {
-		const t = this.ctx.plugin.t;
+		const t = this.ctx.t;
 		const row = list.createEl("label", { cls: "tah-model-picker-row" });
 		const checkbox = row.createEl("input", { type: "checkbox" });
 		checkbox.checked = this.checked.has(model);
@@ -83,7 +91,7 @@ class ModelPickerModal extends Modal {
 		checkbox.addEventListener("change", () => {
 			if (
 				!checkbox.checked &&
-				this.ctx.plugin.providers.isModelProtected(this.provider.id, model)
+				this.ctx.providers.isModelProtected(this.provider.id, model)
 			) {
 				checkbox.checked = true;
 				new Notice(t("model.protectActiveModel"));
@@ -97,7 +105,7 @@ class ModelPickerModal extends Modal {
 	/** 全选 / 全不选；「全不选」也保留受保护的「当前模型」。 */
 	private setCheckedAll(checked: boolean): void {
 		for (const [model, input] of this.rowInputs) {
-			const next = checked || this.ctx.plugin.providers.isModelProtected(this.provider.id, model);
+			const next = checked || this.ctx.providers.isModelProtected(this.provider.id, model);
 			input.checked = next;
 			if (next) this.checked.add(model);
 			else this.checked.delete(model);
@@ -105,7 +113,7 @@ class ModelPickerModal extends Modal {
 	}
 
 	private confirm(): void {
-		this.ctx.plugin.providers.applyPickedModels(this.provider.id, [...this.checked]);
+		this.ctx.providers.applyPickedModels(this.provider.id, [...this.checked]);
 		this.close();
 		this.ctx.refresh();
 	}

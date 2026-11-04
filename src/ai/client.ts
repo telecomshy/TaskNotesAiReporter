@@ -57,11 +57,12 @@ const defaultRequest: RequestFn = requestUrlTransport;
 /**
  * 动态获取供应商支持的模型列表（GET /models）。
  * 返回模型 ID 数组；失败时抛出 AIClientError。
+ * `timeoutSeconds` 必填：缺省会让调用方漏传用户的超时而不自知（#93）。
  */
 export async function listModels(
 	baseUrl: string,
 	apiKey: string,
-	timeoutSeconds = 30,
+	timeoutSeconds: number,
 	request: RequestFn = defaultRequest
 ): Promise<string[]> {
 	return requestJson(

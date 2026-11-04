@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildReportPrompt, formatTaskLine } from "../src/core/prompt";
+import { buildReportPrompt, formatTaskLine, PLACEHOLDER_NAMES } from "../src/core/prompt";
+import { en } from "../src/i18n/en";
+import { zh } from "../src/i18n/zh";
 import { makeTask } from "./fakes/task";
 import type { StatusDefinition, TaskInfo } from "../src/types";
 
@@ -234,4 +236,28 @@ test("formatTaskLine 完整保留超长详情（不限 200 字）", () => {
 	const line = formatTaskLine(t);
 	assert.ok(line.includes(longDetail), "超长详情应完整出现在行内");
 	assert.ok(!line.includes("…"), "不应出现截断省略号");
+});
+
+test("模板编辑提示与引擎占位符名单对等（双语；遗留 type 除外）", () => {
+	const supported = new Set<string>(PLACEHOLDER_NAMES);
+	const hints: Array<[string, string]> = [
+		["en", en.template.modalContentHint],
+		["zh", zh.template.modalContentHint],
+	];
+
+	for (const [lang, hint] of hints) {
+		const mentioned = (hint.match(/\{\{[^{}]+\}\}/g) ?? []).map((token) =>
+			token.slice(2, -2).trim().toLowerCase()
+		);
+
+		const unknown = mentioned.filter((name) => !supported.has(name));
+		assert.deepEqual(unknown, [], `${lang} 提示提到引擎不支持的占位符`);
+
+		const missing = PLACEHOLDER_NAMES.filter((name) => !mentioned.includes(name));
+		assert.deepEqual(
+			missing,
+			["type"],
+			`${lang} 提示漏了新占位符（遗留 type 刻意不提示）`
+		);
+	}
 });

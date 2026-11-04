@@ -28,7 +28,7 @@ export default class TaskNotesAIHelperPlugin extends Plugin {
 	 */
 	private settingsOwner!: SettingsOwner;
 	/**
-	 * 设置查询：owner 自持的唯一副本的**深只读快照**，调用方无法借共享引用改写状态。
+	 * 设置查询：owner 自持的唯一副本的只读快照（编译期：字段与数组不可改；嵌套元素仍可变）。
 	 * 一切变更走 `appSettings` / `providers` 的命令（见 #46）。
 	 */
 	settings: SettingsSnapshot;

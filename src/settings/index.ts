@@ -12,14 +12,6 @@ import { renderModelTab } from "./modelTab";
 import { renderGeneralTab } from "./generalTab";
 import { renderTemplateTab } from "./templateTab";
 
-/** 各 Tab 渲染共享的上下文 */
-export interface SettingsTabContext {
-	plugin: TaskNotesAIHelperPlugin;
-	app: App;
-	/** 重新渲染整个设置页（切换 Tab 或保存后刷新）。 */
-	refresh: () => void;
-}
-
 type TabName = "model" | "general" | "template";
 
 export class TaskNotesAIHelperSettingTab extends PluginSettingTab {
@@ -65,17 +57,31 @@ export class TaskNotesAIHelperSettingTab extends PluginSettingTab {
 			templateTabBtn.toggleClass("tah-tab-active", this.currentTab === "template");
 
 			content.empty();
-			const ctx: SettingsTabContext = {
-				plugin: this.plugin,
-				app: this.app,
-				refresh,
-			};
+			// 切片按当前 tab 现场构造（#98）：界面语言切换后 t 是最新的，且每个 tab 只拿到自己的依赖。
 			if (this.currentTab === "model") {
-				renderModelTab(content, ctx);
+				renderModelTab(content, {
+					app: this.app,
+					settings: this.plugin.settings,
+					providers: this.plugin.providers,
+					t: this.plugin.t,
+					refresh,
+				});
 			} else if (this.currentTab === "template") {
-				renderTemplateTab(content, ctx);
+				renderTemplateTab(content, {
+					app: this.app,
+					settings: this.plugin.settings,
+					appSettings: this.plugin.appSettings,
+					t: this.plugin.t,
+					refresh,
+				});
 			} else {
-				renderGeneralTab(content, ctx);
+				renderGeneralTab(content, {
+					settings: this.plugin.settings,
+					appSettings: this.plugin.appSettings,
+					t: this.plugin.t,
+					applyLanguage: () => this.plugin.applyLanguage(),
+					refresh,
+				});
 			}
 		};
 

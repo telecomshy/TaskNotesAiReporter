@@ -27,6 +27,7 @@ import {
 	clearLearnedThinking,
 	resolveActive,
 	isSecretMissing,
+	activeModelInfo,
 	createProviderSettings,
 	type ProviderState,
 } from "../src/settings/providerSettings";
@@ -778,4 +779,107 @@ test("resolveActive 生成路径同样以习得为准（#89）：习得关参数
 		"习得＞内置"
 	);
 	assert.deepEqual(result.ok && result.config.thinking.learned, LEARNED_SWITCHABLE);
+});
+
+// ===== 「当前模型」呈现读面（#94） =====
+
+test("activeModelInfo：无当前供应商时双空，按能力未知呈现（开关置灰、测试入口可点）", () => {
+	const s = state({
+		providers: [provider({ id: "p", models: ["m"] })],
+		activeProviderId: "gone",
+		activeModel: "m",
+	});
+	const info = activeModelInfo(s);
+	assert.equal(info.providerId, "", "悬空供应商 id 不冒充");
+	assert.equal(info.model, "", "无供应商即无当前模型");
+	assert.equal(info.thinking.note, "unknown");
+	assert.equal(info.thinking.setting, "off");
+	assert.equal(info.display.state, "unknown");
+	assert.equal(info.display.toggleEnabled, false);
+	assert.equal(info.display.testEntry, "available");
+});
+
+test("activeModelInfo：有供应商但未选模型 → 供应商 id 保留、模型为空、能力未知", () => {
+	const s = state({
+		providers: [provider({ id: "p", models: ["m"] })],
+		activeProviderId: "p",
+		activeModel: "",
+	});
+	const info = activeModelInfo(s);
+	assert.equal(info.providerId, "p");
+	assert.equal(info.model, "");
+	assert.equal(info.display.state, "unknown");
+});
+
+test("activeModelInfo：内置可关模型 → builtin 行，开关可用，两档取值如实回显", () => {
+	const p = provider({
+		id: "deepseek",
+		models: ["deepseek-v4-pro"],
+		thinkingByModel: { "deepseek-v4-pro": "on" },
+	});
+	const s = state({ providers: [p], activeProviderId: "deepseek", activeModel: "deepseek-v4-pro" });
+	const info = activeModelInfo(s);
+	assert.equal(info.thinking.setting, "on");
+	assert.deepEqual(
+		info.thinking.param,
+		{ name: "thinking", value: { type: "enabled" } },
+		"开＝发开参数"
+	);
+	assert.equal(info.display.state, "builtin");
+	assert.equal(info.display.toggleEnabled, true);
+	assert.equal(info.display.testEntry, "done");
+});
+
+test("activeModelInfo：强制思考 / 无思考 → 对应行且开关不可用", () => {
+	const forced = state({
+		providers: [provider({ id: "kimi", models: ["kimi-k3-pro"] })],
+		activeProviderId: "kimi",
+		activeModel: "kimi-k3-pro",
+	});
+	const f = activeModelInfo(forced);
+	assert.equal(f.display.state, "forced");
+	assert.equal(f.display.toggleEnabled, false);
+	assert.equal(f.display.footnoteWarn, true);
+
+	const none = state({
+		providers: [provider({ id: "kimi", models: ["moonshot-v1-8k"] })],
+		activeProviderId: "kimi",
+		activeModel: "moonshot-v1-8k",
+	});
+	assert.equal(activeModelInfo(none).display.state, "none");
+});
+
+test("activeModelInfo：习得能力盖过内置 → learned 行与「重新测试」入口", () => {
+	const p = provider({
+		id: "deepseek",
+		models: ["deepseek-v4-pro"],
+		learnedByModel: { "deepseek-v4-pro": LEARNED_SWITCHABLE },
+	});
+	const s = state({ providers: [p], activeProviderId: "deepseek", activeModel: "deepseek-v4-pro" });
+	const info = activeModelInfo(s);
+	assert.deepEqual(info.thinking.learned, LEARNED_SWITCHABLE);
+	assert.equal(info.display.state, "learned-switchable");
+	assert.equal(info.display.testEntry, "retest");
+	assert.equal(info.display.toggleEnabled, true);
+});
+
+test("activeModelInfo 门面：选择当前模型后读面跟着变；与 resolveActive 分开（不要求凭据）", () => {
+	const p = provider({ id: "deepseek", models: ["a", "b"] }); // 未配置密钥名
+	const live = {
+		...DEFAULT_SETTINGS,
+		...state({ providers: [p], activeProviderId: "deepseek", activeModel: "" }),
+	};
+	const owner = createSettingsOwner(live, {
+		save: () => Promise.resolve(),
+		getSecret: () => null,
+	});
+	const facade = createProviderSettings({ owner });
+	assert.equal(facade.activeModelInfo().model, "", "未选模型 → 空");
+
+	facade.selectActiveModel("deepseek", "b");
+	const info = facade.activeModelInfo();
+	assert.equal(info.providerId, "deepseek");
+	assert.equal(info.model, "b");
+	assert.equal(info.display.state, "builtin", "未配置凭据也照样给出呈现信息");
+	assert.equal(facade.resolveActive().ok, false, "生成期解析仍要求凭据");
 });

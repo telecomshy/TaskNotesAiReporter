@@ -17,9 +17,14 @@ import type {
 	ThinkingResolution,
 	ThinkingSetting,
 } from "../types";
-import { resolveThinking } from "../core/thinking";
+import {
+	resolveThinking,
+	thinkingDisplay,
+	unknownThinking,
+	type ThinkingDisplay,
+} from "../core/thinking";
 import { resolveSecretValue } from "./secrets";
-import { coerceModelIds } from "./values";
+import { coerceModelIds, makeId } from "./values";
 import type { SettingsOwner } from "./owner";
 
 /** 新自定义供应商的默认名称：作为持久化数据，保持语言无关。 */
@@ -134,7 +139,7 @@ export function isActiveModel(
 /** 生成新自定义供应商。 */
 export function addProvider(state: ProviderState): ProviderState {
 	state.providers.push({
-		id: `custom_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+		id: makeId("custom"),
 		name: DEFAULT_CUSTOM_PROVIDER_NAME,
 		type: "custom",
 		baseUrl: "",
@@ -271,7 +276,7 @@ function syncCustomModelRows(provider: ModelProvider, wanted: string[]): void {
 		}
 	}
 	for (const id of wanted) {
-		if (!seen.has(id)) kept.push({ id: makeModelConfigId(), modelId: id });
+		if (!seen.has(id)) kept.push({ id: makeId("mc"), modelId: id });
 	}
 	provider.customModels = kept;
 }
@@ -298,7 +303,7 @@ export function addModel(state: ProviderState, providerId: string): ProviderStat
 	if (!provider) return state;
 	if (!provider.customModels) provider.customModels = [];
 	provider.customModels.push({
-		id: makeModelConfigId(),
+		id: makeId("mc"),
 		modelId: "",
 	});
 	return state;
@@ -456,6 +461,40 @@ export function resolveActive(
 	return { ok: true, providerId: state.activeProviderId, config };
 }
 
+/**
+ * 「当前模型」的呈现信息：供应商 + 模型 + 思考解析 + 显示矩阵。
+ * 设置页「选择模型」卡的唯一读面（无当前供应商 / 未选模型时按能力未知呈现）。
+ */
+export interface ActiveModelInfo {
+	/** 解析到的供应商 id；没有当前供应商时为空串（悬空 id 不冒充）。 */
+	providerId: string;
+	/** 当前模型 id；没有可用供应商或未选模型时为空串。 */
+	model: string;
+	thinking: ThinkingResolution;
+	display: ThinkingDisplay;
+}
+
+/**
+ * 读「当前模型」的呈现信息（#94）：无当前供应商 / 未选模型时按能力未知呈现（开关置灰）。
+ * 与生成期 `resolveActive`（要求凭据齐备）回答的是两个问题：设置页在未配置时也要画这张卡，
+ * 故本读面**不**校验密钥值。
+ */
+export function activeModelInfo(state: ProviderStateRead): ActiveModelInfo {
+	const provider = findProvider(state, state.activeProviderId);
+	const model = state.activeModel;
+	if (!provider || model === "") {
+		const thinking = unknownThinking("off");
+		return {
+			providerId: provider?.id ?? "",
+			model: "",
+			thinking,
+			display: thinkingDisplay(thinking),
+		};
+	}
+	const thinking = thinkingFor(provider, model);
+	return { providerId: provider.id, model, thinking, display: thinkingDisplay(thinking) };
+}
+
 /** 所选密钥名在存储中缺失（区别于存在但值为空）。 */
 export function isSecretMissing(
 	secretId: string,
@@ -484,11 +523,6 @@ function migrateModelKey<T>(map: Record<string, T> | undefined, oldKey: string, 
 /** 模型 ID 是否非空且在该供应商的模型列表中。 */
 function modelExists(provider: ModelProvider, model: string): boolean {
 	return model !== "" && modelsOf(provider).includes(model);
-}
-
-/** 模型行的行内唯一标识（行是界面行级概念，标识不解释、不复用）。 */
-function makeModelConfigId(): string {
-	return `mc_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
 }
 
 function findProvider(state: ProviderStateRead, providerId: string): ModelProvider | undefined {
@@ -539,6 +573,8 @@ export interface ProviderSettings {
 	clearLearnedThinking(providerId: string, model: string): void;
 	selectActiveModel(providerId: string, model: string): void;
 	resolveActive(): ActiveModelResolution;
+	/** 「当前模型」呈现信息（无当前模型时按能力未知呈现；设置页唯一读面）。 */
+	activeModelInfo(): ActiveModelInfo;
 	secretValue(secretId: string): string;
 	isSecretMissing(secretId: string): boolean;
 }
@@ -579,6 +615,7 @@ export function createProviderSettings(deps: ProviderSettingsDeps): ProviderSett
 		selectActiveModel: (providerId, model) =>
 			run((s) => selectActiveModel(s, providerId, model)),
 		resolveActive: () => resolveActive(owner.get(), (id) => owner.readSecret(id)),
+		activeModelInfo: () => activeModelInfo(owner.get()),
 		secretValue: (secretId) => resolveSecretValue(secretId, (id) => owner.readSecret(id)),
 		isSecretMissing: (secretId) => isSecretMissing(secretId, (id) => owner.readSecret(id)),
 	};

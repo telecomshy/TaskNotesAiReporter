@@ -85,6 +85,32 @@ function totalTrackedMinutes(tasks: readonly TaskInfo[]): number {
 }
 
 /**
+ * 引擎支持的占位符名单（键统一小写，替换时大小写不敏感）。
+ * 加占位符 = 此处加名字 + 取值表加一项（`Record<PlaceholderName, string>` 会逼齐）
+ * + 双语 `template.modalContentHint` 补一句；提示与名单的对等由 test/prompt.test.ts 兜底。
+ * `type` 是遗留兼容占位符（ADR-0009），**刻意不**出现在提示里。
+ */
+export const PLACEHOLDER_NAMES = [
+	"tasks",
+	"range",
+	"range.start",
+	"range.end",
+	"type",
+	"today",
+	"count",
+	"totaltrackedtime",
+	"completedtasks",
+	"inprogresstasks",
+	"opentasks",
+	"completedcount",
+	"inprogresscount",
+	"opencount",
+] as const;
+
+/** 占位符名字（小写形式）。 */
+export type PlaceholderName = (typeof PLACEHOLDER_NAMES)[number];
+
+/**
  * 构造占位符 → 文本的取值表；键统一小写，以支持大小写不敏感。
  * 只列出「模型算不准或拿不到」的信息与状态子集，不做纯重述的项目 / 标签汇总。
  */
@@ -92,7 +118,7 @@ function buildPlaceholderValues(
 	tasks: readonly TaskInfo[],
 	options: BuildPromptOptions,
 	rangeText: string
-): Record<string, string> {
+): Record<PlaceholderName, string> {
 	const { range } = options;
 	const statuses = options.statuses ?? [];
 	const now = options.now ?? new Date();

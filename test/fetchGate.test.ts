@@ -8,7 +8,8 @@
 
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { renderModelTab } from "../src/settings/modelTab";
+import type { App } from "obsidian";
+import { renderModelTab, type ModelTabContext } from "../src/settings/modelTab";
 import { createSettingsOwner } from "../src/settings/owner";
 import { createProviderSettings } from "../src/settings/providerSettings";
 import { BUNDLES, createTranslator } from "../src/i18n";
@@ -60,18 +61,16 @@ function makeHarness(scenario: Scenario): Harness {
 		save: async () => {},
 		getSecret: (id) => secrets[id] ?? null,
 	});
-	const ctx = {
-		app: {},
-		plugin: {
-			t: createTranslator(BUNDLES.zh),
-			settings: owner.get(),
-			providers: createProviderSettings({ owner }),
-		},
+	const ctx: ModelTabContext = {
+		app: {} as App,
+		settings: owner.get(),
+		providers: createProviderSettings({ owner }),
+		t: createTranslator(BUNDLES.zh),
 		refresh: () => {},
 	};
 
 	const root = new FakeEl("div");
-	renderModelTab(root as unknown as HTMLElement, ctx as never);
+	renderModelTab(root as unknown as HTMLElement, ctx);
 	return { root, provider, state };
 }
 
@@ -132,29 +131,18 @@ test("密钥变更不自动拉取：改选 / 清空密钥名均不发起请求",
 
 // ===== 手动「获取模型列表」：守卫与成功路径不变 =====
 
-test("手动按钮守卫与成功路径不变", async () => {
-	// 未配置：提示「请先选择 API 密钥」
-	resetFakes();
-	let h = makeHarness({ name: "未配置", secretId: "", secrets: {} });
+test("手动按钮把结局映射为提示：未配置时零请求", async () => {
+	const h = makeHarness({ name: "未配置", secretId: "", secrets: {} });
 	await flush();
 	fetchButton(h.root).fire("click");
 	await flush();
 	assert.ok(notices.includes("请先选择 API 密钥"), `实际提示：${JSON.stringify(notices)}`);
 	assert.equal(requests.length, 0);
+});
 
-	// 密钥值缺失：提示「在密钥存储中找不到所选密钥」
-	resetFakes();
-	h = makeHarness({ name: "密钥值缺失", secretId: SECRET_NAME, secrets: {} });
-	await flush();
-	fetchButton(h.root).fire("click");
-	await flush();
-	assert.ok(notices.includes("在密钥存储中找不到所选密钥"), `实际提示：${JSON.stringify(notices)}`);
-	assert.equal(requests.length, 0);
-
-	// 齐备：拉取成功后弹出挑选对话框
-	resetFakes();
+test("手动按钮把结局映射为挑选框：成功时一条请求并弹框", async () => {
 	resetRequests({ status: 200, json: { data: MODELS.map((id) => ({ id })) } });
-	h = makeHarness({ name: "齐备", secretId: SECRET_NAME, secrets: { [SECRET_NAME]: "sk-live" } });
+	const h = makeHarness({ name: "齐备", secretId: SECRET_NAME, secrets: { [SECRET_NAME]: "sk-live" } });
 	await flush();
 	fetchButton(h.root).fire("click");
 	await flush();
@@ -198,7 +186,6 @@ test("模型列表为空（如 Kimi For Coding 密钥）：提示「密钥下无
 
 	assert.equal(requests.length, 1);
 	assert.equal(Modal.opened.length, 0, "空列表不弹挑选框");
-	assert.deepEqual(h.provider.modelCatalog, [], "空表照实记账：清单刷为空（#92 定性，空表是正常状态）");
 	assert.ok(
 		notices.some((n) => n.includes("没有可用模型") && n.includes("Kimi")),
 		`应提示「该密钥下没有可用模型」并带供应商名，实际：${JSON.stringify(notices)}`

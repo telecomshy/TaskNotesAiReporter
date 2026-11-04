@@ -6,7 +6,8 @@
  *
  * 不变式：owner 是设置的**唯一可变副本**。命令就地改写它、并由命令自身维护值域不变式，
  * 不再有「getState 返回浅拷贝、templates/dateFields 却与外部共享引用」的偷改路径（见 #46）。
- * 查询交出的是**深只读快照**，调用方无法借共享引用改写状态。
+ * 查询交出的是**编译期只读**的快照：字段不可重新赋值、数组不可增删改；
+ * 嵌套元素保持可变类型（见 `SettingsSnapshot`），状态改写仍以「一切变更走命令」为约定。
  *
  * 落盘失败**不被吞掉**：`apply` 把保存的 Promise 交回调用方，等待与传播都由调用方决定（#51 会消费它）。
  *
@@ -21,11 +22,11 @@ import type {
 } from "../types";
 
 /**
- * 设置的只读快照：查询交出的东西。
+ * 设置的只读快照（编译期）：查询交出的东西。
  *
  * 字段不可重新赋值、数组不可增删改（`readonly T[]`）；元素本身保持可变类型，
  * 使只读消费方（如 `resolveActive`）无需收窄即可工作。
- * 想改状态只能走命令——这是 #46「不借共享引用偷改状态」的封口。
+ * 状态改写以「一切变更走命令」为约定（#46）；编译期只挡字段与数组的误改，不挡嵌套元素。
  */
 export type SettingsSnapshot = Readonly<
 	Omit<TaskNotesAIHelperSettings, "providers" | "templates" | "dateFields">
@@ -46,7 +47,7 @@ export interface SettingsOwnerIO {
 /** 设置 owner。 */
 export interface SettingsOwner {
 	/**
-	 * 查询当前设置的只读快照——**调用方不得改写**（字段不可赋值、数组不可增删）；一切变更走 `apply`。
+	 * 查询当前设置的只读快照（编译期）——**调用方不得改写**（字段不可赋值、数组不可增删）；一切变更走 `apply`。
 	 */
 	get(): SettingsSnapshot;
 	/**

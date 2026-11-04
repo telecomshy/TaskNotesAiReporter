@@ -31,12 +31,15 @@ export function isDateField(value: unknown): value is DateField {
 	return DATE_FIELD_VALUES.includes(value as DateField);
 }
 
+/** 行内唯一标识的前缀：模板 / 自定义模型行 / 自定义供应商。 */
+export type IdPrefix = "tpl" | "mc" | "custom";
+
 /**
- * 铸造一个不透明 id（模板、自定义模型配置用）。
- * 不是值域规则，见模块头注释。
+ * 铸造一个不透明 id（模板、自定义模型配置、自定义供应商共用）。
+ * 前缀区分用途，形状对上层不解释。不是值域规则，见模块头注释。
  */
-export function makeId(): string {
-	return `tpl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+export function makeId(prefix: IdPrefix): string {
+	return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 /**
@@ -106,7 +109,7 @@ export function coerceTemplate(value: unknown): ReportTemplate | null {
 	const raw = value as { id?: unknown; name?: unknown; content?: unknown };
 	if (typeof raw.name !== "string" || typeof raw.content !== "string") return null;
 	return {
-		id: typeof raw.id === "string" ? raw.id : makeId(),
+		id: typeof raw.id === "string" ? raw.id : makeId("tpl"),
 		name: raw.name,
 		content: raw.content,
 	};

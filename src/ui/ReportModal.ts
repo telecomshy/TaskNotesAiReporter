@@ -9,11 +9,10 @@ import type TaskNotesAIHelperPlugin from "../../main";
 import type { TaskInfo } from "../types";
 import type { TaskRepository } from "../tasks/repository";
 import { chatCompletion } from "../ai/client";
-import { runThinkingTestFlow } from "../ai/thinkingTest";
-import { thinkingVerdictNoticeKey } from "../i18n";
 import { saveReport } from "../report/writer";
 import { createGeneration, type GenerateSettings } from "../report/generate";
 import { describeReportFailure } from "../report/errorMessage";
+import { runAndAnnounceThinkingTest } from "./thinkingTestAction";
 import { TaskSelectionView } from "./TaskSelectionView";
 import {
 	applyGenerateButtonState,
@@ -238,12 +237,13 @@ export class ReportModal extends Modal {
 	 * 解析失败同样提示「请先选择模型」（与设置页测试入口一致，不留静默路径）。
 	 */
 	private async retestThinking(): Promise<void> {
-		const t = this.plugin.t;
-		const result = await runThinkingTestFlow(
-			this.plugin.providers,
-			this.plugin.settings.timeoutSeconds,
+		await runAndAnnounceThinkingTest(
+			{
+				providers: this.plugin.providers,
+				timeoutSeconds: this.plugin.settings.timeoutSeconds,
+				t: this.plugin.t,
+			},
 			true
 		);
-		new Notice(result ? t(thinkingVerdictNoticeKey(result.verdict)) : t("model.thinkingTestNeedModel"));
 	}
 }

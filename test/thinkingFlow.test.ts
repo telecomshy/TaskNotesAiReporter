@@ -10,6 +10,9 @@ import assert from "node:assert/strict";
 import { runThinkingTestFlow, type ThinkingTestStateSlice } from "../src/ai/thinkingTest";
 import type { HttpResponse, RequestFn } from "../src/ai/request";
 import type { ActiveModelResolution, LearnedCapability } from "../src/types";
+import { runAndAnnounceThinkingTest } from "../src/ui/thinkingTestAction";
+import { BUNDLES, createTranslator } from "../src/i18n";
+import { notices } from "./fakes/obsidian-stub";
 
 /** 带推理段的微型响应（基线「会思考」）。 */
 function reasoningPresent(): HttpResponse {
@@ -103,4 +106,55 @@ test("解析失败不动习得数据：不清也不跑", async () => {
 	assert.deepEqual(slice.cleared, [], "解析失败不清习得");
 	assert.deepEqual(slice.recorded, [], "解析失败不落习得");
 	assert.equal(calls.length, 0, "解析失败不发探测请求");
+});
+
+// ===== 共享界面动作（#97）：跑 + 报 + 回调 =====
+
+test("共享动作：成功路径提示结论并回调刷新", async () => {
+	notices.length = 0;
+	const t = createTranslator(BUNDLES.zh);
+	const { request } = replayRequest([reasoningPresent(), reasoningAbsent()]);
+	const slice = fakeSlice(activeResolution());
+	let done = 0;
+
+	const result = await runAndAnnounceThinkingTest(
+		{
+			providers: slice,
+			timeoutSeconds: 5,
+			t,
+			onDone: () => void done++,
+			request,
+		},
+		false
+	);
+
+	assert.ok(result);
+	assert.equal(result.verdict, "switchable");
+	assert.equal(
+		notices[notices.length - 1],
+		t("model.thinkingTestVerdictSwitchable"),
+		"结论以提示上浮"
+	);
+	assert.equal(done, 1, "跑完回调刷新");
+});
+
+test("共享动作：当前模型不可用也提示并回调（不留静默路径）", async () => {
+	notices.length = 0;
+	const t = createTranslator(BUNDLES.zh);
+	const slice = fakeSlice({ ok: false, reason: "no-model" });
+	let done = 0;
+
+	const result = await runAndAnnounceThinkingTest(
+		{
+			providers: slice,
+			timeoutSeconds: 5,
+			t,
+			onDone: () => void done++,
+		},
+		true
+	);
+
+	assert.equal(result, null);
+	assert.equal(notices[notices.length - 1], t("model.thinkingTestNeedModel"), "提示先选择模型");
+	assert.equal(done, 1, "失败也回调（设置页刷新语义）");
 });

@@ -131,7 +131,7 @@ export function normalizeSettings(raw: unknown): NormalizedSettings {
 				if (type === "custom" && !Array.isArray(provider.customModels)) {
 					const legacyModels = Array.isArray(providerRaw.models) ? (providerRaw.models as string[]) : [];
 					provider.customModels = legacyModels.map((modelId) => ({
-						id: makeId(),
+						id: makeId("mc"),
 						modelId,
 					}));
 				}
@@ -176,7 +176,7 @@ export function normalizeSettings(raw: unknown): NormalizedSettings {
 					apiKeySecretId: "",
 					models: data.model ? [data.model] : [],
 					authType: "bearer",
-					customModels: data.model ? [{ id: makeId(), modelId: data.model }] : [],
+					customModels: data.model ? [{ id: makeId("mc"), modelId: data.model }] : [],
 				};
 				if (data.apiKey) pendingSecrets.push({ providerId: customId, plaintext: data.apiKey });
 				settings.providers.push(legacyProvider);

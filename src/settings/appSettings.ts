@@ -105,7 +105,7 @@ export function setGenerationParams(state: AppState, params: GenerationParams): 
 
 /** 追加一个报告模板（生成唯一 id）。 */
 export function addTemplate(state: AppState, name: string, content: string): AppState {
-	state.templates.push({ id: makeId(), name, content });
+	state.templates.push({ id: makeId("tpl"), name, content });
 	return state;
 }
 

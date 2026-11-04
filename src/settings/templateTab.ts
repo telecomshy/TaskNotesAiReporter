@@ -6,14 +6,24 @@
 import { Modal, Notice, type App } from "obsidian";
 import type { ReportTemplate } from "../types";
 import type { Translator } from "../i18n";
-import type { SettingsTabContext } from "./index";
+import type { AppSettings } from "./appSettings";
+import type { SettingsSnapshot } from "./owner";
+
+/** 「模板配置」Tab 的依赖面：模板列表 + 模板命令 + 编辑弹窗所需的 app。 */
+export interface TemplateTabContext {
+	app: App;
+	settings: SettingsSnapshot;
+	appSettings: AppSettings;
+	t: Translator;
+	refresh: () => void;
+}
 
 /** 新建模板的默认名称：作为持久化数据，保持语言无关，不随界面语言变化。 */
 const NEW_TEMPLATE_NAME = "新模板";
 
 /** 渲染「模板配置」Tab */
-export function renderTemplateTab(container: HTMLElement, ctx: SettingsTabContext): void {
-	const t = ctx.plugin.t;
+export function renderTemplateTab(container: HTMLElement, ctx: TemplateTabContext): void {
+	const t = ctx.t;
 	container.createEl("h3", { text: t("template.heading") });
 	container.createEl("p", {
 		text: t("template.intro"),
@@ -28,7 +38,7 @@ export function renderTemplateTab(container: HTMLElement, ctx: SettingsTabContex
 
 	// 模板列表
 	const list = container.createDiv({ cls: "tah-template-list" });
-	const templates = ctx.plugin.settings.templates;
+	const templates = ctx.settings.templates;
 	if (templates.length === 0) {
 		list.createDiv({ text: t("template.empty"), cls: "tah-empty" });
 	}
@@ -40,9 +50,9 @@ export function renderTemplateTab(container: HTMLElement, ctx: SettingsTabContex
 function renderTemplateItem(
 	container: HTMLElement,
 	template: ReportTemplate,
-	ctx: SettingsTabContext
+	ctx: TemplateTabContext
 ): void {
-	const t = ctx.plugin.t;
+	const t = ctx.t;
 	const item = container.createDiv({ cls: "tah-template-item" });
 
 	const header = item.createDiv({ cls: "tah-template-item-header" });
@@ -62,31 +72,31 @@ function renderTemplateItem(
 	delBtn.addEventListener("click", () => deleteTemplate(template.id, ctx));
 }
 
-function addTemplate(ctx: SettingsTabContext): void {
+function addTemplate(ctx: TemplateTabContext): void {
 	const modal = new TemplateEditModal(
 		ctx.app,
-		ctx.plugin.t,
+		ctx.t,
 		{ name: NEW_TEMPLATE_NAME, content: "" },
 		(name, content) => {
-			void ctx.plugin.appSettings.addTemplate(name, content);
+			void ctx.appSettings.addTemplate(name, content);
 			ctx.refresh();
 		}
 	);
 	modal.open();
 }
 
-function deleteTemplate(id: string, ctx: SettingsTabContext): void {
-	void ctx.plugin.appSettings.removeTemplate(id);
+function deleteTemplate(id: string, ctx: TemplateTabContext): void {
+	void ctx.appSettings.removeTemplate(id);
 	ctx.refresh();
 }
 
-function editTemplate(template: ReportTemplate, ctx: SettingsTabContext): void {
+function editTemplate(template: ReportTemplate, ctx: TemplateTabContext): void {
 	const modal = new TemplateEditModal(
 		ctx.app,
-		ctx.plugin.t,
+		ctx.t,
 		template,
 		(name, content) => {
-			void ctx.plugin.appSettings.updateTemplate(template.id, name, content);
+			void ctx.appSettings.updateTemplate(template.id, name, content);
 			ctx.refresh();
 		}
 	);

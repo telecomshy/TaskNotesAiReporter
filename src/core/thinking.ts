@@ -110,6 +110,14 @@ export const THINKING_CAPABILITIES: readonly ThinkingCapabilityRow[] = [
 ];
 
 /**
+ * 「未知能力」的解析结果（形状单源）：能力表未命中、或尚未选出可用（供应商, 模型）时共用。
+ * 只带两档取值，不发明参数与习得条目。
+ */
+export function unknownThinking(setting: ThinkingSetting): ThinkingResolution {
+	return { setting, param: null, note: "unknown", learned: null };
+}
+
+/**
  * 解析「思考」两档到请求参数与 UI 标注（#88 两档语义）：
  * - 习得能力命中即生效（习得 ＞ 内置能力表 ＞ 未知，#89）：「可关」的「关」发习得关参数，
  *   「开」无开参数则不发；「未检出思考」「未能关闭」不发参数（措辞在呈现层，诚实化）；
@@ -135,7 +143,7 @@ export function resolveThinking(
 	const row = table.find(
 		(r) => r.providerId === input.providerId && matchModel(r.modelPattern, input.model)
 	);
-	if (!row) return { setting, param: null, note: "unknown", learned: null };
+	if (!row) return unknownThinking(setting);
 
 	const cap = row.capability;
 	if (cap.kind === "forced") return { setting, param: null, note: "forced", learned: null };
