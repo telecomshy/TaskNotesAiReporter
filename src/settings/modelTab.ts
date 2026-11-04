@@ -411,7 +411,7 @@ function onPresetSecretChange(
 	showEnabled();
 }
 
-/** 渲染单个模型标签；若为当前模型则高亮；上游消失的启用模型标「已失效」（AC6）。 */
+/** 渲染单个模型标签（仅展示，#91：选择只走「选择模型」下拉）；若为当前模型则高亮；上游消失的启用模型标「已失效」（AC6）。 */
 function appendModelTag(
 	container: HTMLElement,
 	provider: ModelProvider,
@@ -428,7 +428,6 @@ function appendModelTag(
 	if (isActiveModel(settings.activeProviderId, settings.activeModel, provider.id, model)) {
 		tag.addClass("tah-model-tag-active");
 	}
-	tag.addEventListener("click", () => selectModel(provider.id, model, ctx));
 }
 
 /** 渲染模型标签：只显示主要几个（前2个），其余折叠为「还有 N 个」 */
@@ -818,9 +817,4 @@ function syncCustomModels(
 function parseIntSafe(value: string): number | undefined {
 	const n = parseInt(value, 10);
 	return Number.isFinite(n) && n > 0 ? n : undefined;
-}
-
-function selectModel(providerId: string, model: string, ctx: SettingsTabContext): void {
-	ctx.plugin.providers.selectActiveModel(providerId, model);
-	ctx.refresh();
 }

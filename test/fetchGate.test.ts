@@ -164,6 +164,31 @@ test("手动按钮守卫与成功路径不变", async () => {
 	assert.equal(Modal.opened.length, 1, "手动拉取成功后弹出挑选对话框");
 });
 
+// ===== 供应商卡片模型标签仅展示（#91）：选择唯一入口是「选择模型」下拉 =====
+
+test("点击供应商卡片的模型标签不改「当前模型」（仅做列表展示）", async () => {
+	const h = makeHarness({ name: "已配置", secretId: SECRET_NAME, secrets: { [SECRET_NAME]: "sk-live" } });
+	await flush();
+	const tag = h.root.querySelector(".tah-model-tag");
+	assert.ok(tag, "应有模型标签");
+	tag.fire("click");
+	await flush();
+	assert.equal(h.state.activeModel, "", "点击标签不应选中模型");
+	assert.equal(h.state.activeProviderId, PROVIDER_ID, "「当前模型」的供应商不应被标签点击改动");
+});
+
+test("「选择模型」下拉是选择的唯一入口：change 即选中", async () => {
+	const h = makeHarness({ name: "已配置", secretId: SECRET_NAME, secrets: { [SECRET_NAME]: "sk-live" } });
+	await flush();
+	const select = h.root.querySelector(".tah-model-select");
+	assert.ok(select, "应有「选择模型」下拉");
+	select.value = `${PROVIDER_ID}::${MODELS[1]}`;
+	select.fire("change");
+	await flush();
+	assert.equal(h.state.activeProviderId, PROVIDER_ID);
+	assert.equal(h.state.activeModel, MODELS[1], "下拉 change 应选中该模型");
+});
+
 // ===== 未配置 ⇒ 无启用模型（清空联动在 UI 层可见） =====
 
 test("清空密钥名：卡片立即不再显示启用模型", async () => {

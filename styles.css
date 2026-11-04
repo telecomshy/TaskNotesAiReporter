@@ -333,17 +333,13 @@
 	align-items: center;
 }
 
+/* 模型标签仅做列表展示（#91），不可点击选择 */
 .tah-model-tag {
 	padding: 0.3rem 0.75rem;
 	border: 1px solid var(--background-modifier-border);
 	border-radius: 6px;
 	font-size: 0.85rem;
-	cursor: pointer;
 	background: var(--background-primary);
-}
-
-.tah-model-tag:hover {
-	background: var(--background-modifier-hover);
 }
 
 /* 当前生效的模型标签 */
