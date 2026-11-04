@@ -39,12 +39,15 @@ Kimi 系「按量 / 会员 / 海外」的准确映射（Kimi Code 文档 FAQ 原
 - Kimi for Coding（会员线）与开放平台按量 Key **购买途径不同、Base URL 不同**，会员线不走 `/v1/models`（kimi-cli 社区同证）；
 - 国内与海外 Key 互不通用（`platform.kimi.com` 与 `platform.kimi.ai` Keys 不可混用）；
 - 判别一把 Key 归属哪条线：`GET /v1/users/me/balance`（开放平台特有）200+余额 JSON＝按量 Key；401/404＝非开放平台 Key。
-- 已知「模型列表为空」的两种成因：① 会员线 Key 打开放平台端点（Kimi Code FAQ 记为 platform-mismatch 症状）；② **账户无可用模型**——`/v1/models` 列的是「当前 Key 可用」的模型，随账户余额 / 代金券状态变：余额为零时 API 请求 403（免费权益页）；`kimi-k3.1-pro` 需充值（最低 10 元）解锁、注册赠券不覆盖它（问题排查页）；官方 401/404 排查清单第 3 条即「账户是否有可用余额，代金券是否支持目标模型」。实测样本（2026-11-04，用户现场，已确认为开放平台按量 Key）：`/v1/models` → 200 + `{"object":"list","data":[]}`；`/v1/users/me/balance` → 200 + `{"code":0,"data":{"available_balance":15,"voucher_balance":15,"cash_balance":0}}`（**赠券 15 元在账，排除"余额为零"**）；`/v1/chat/completions`（`kimi-k2.6`）→ 404 `resource_not_found_error`「Not found the model kimi-k2.6 or Permission denied」——**空列表与 404 同源：账号对模型的访问权未生效**（404 文档口径含"当前账号无权限访问，检查账号 tier"）。待多模型矩阵探针排除"模型名下线"后定论：全 404/403 → 账号侧开通问题（先试充值 10 元解锁，再走官方反馈表单带 `request_id`）；某模型 200 → `/v1/models` 可见性怪癖，插件走自定义供应商手动加模型行即用，并向反馈表单报备。
+- 已知「模型列表为空」的两种成因：① 会员线 Key 打开放平台端点（Kimi Code FAQ 记为 platform-mismatch 症状）；② **账户当前可用模型为零**——`/v1/models` 列的是「当前 Key 可用」的模型，随账户余额 / 代金券 / 注册时间变：余额为零时 API 请求 403（免费权益页）；`kimi-k3.1-pro` 需充值（最低 10 元）解锁、注册赠券不覆盖它（问题排查页）；官方 401/404 排查清单第 3 条即「账户是否有可用余额，代金券是否支持目标模型」。
+- **实测链（2026-11-04，用户现场，开放平台按量 Key，新注册账号）与官方「模型列表」清单完全自洽**：`/v1/models` → 200 + 空列表；`/v1/users/me/balance` → 200 + 赠券 15 元在账（`voucher_balance:15, cash_balance:0`）；chat 矩阵 `kimi-k2.6`/`kimi-k2.7-code`/`kimi-k3.1-pro(-highspeed)` → 404「Not found … or Permission denied」，`kimi-k2.5`/`moonshot-v1-8k` → 429。解释：K2 线**已停供新注册用户**（11-01 前注册者可用至 2026-12 底）、`kimi-k2.5`/`moonshot-v1-*` **已下线**、K3 线**需充值 ≥10 元解锁且赠券不可用** ⇒ 新账号当前可用模型为零，空列表是"真话"；429 系连发探针打满 tier0 RPM（官方 FAQ：一次操作可耗光 tier0 RPM），非权限问题。
+- **收口结论：插件零缺陷、平台零缺陷**；解法＝充值最低 10 元解锁 K3 线，`/v1/models` 即出货，插件「获取模型列表」走现有流程即可。插件侧无需改动；#92 的提示语「该 API 密钥下没有可用模型」正中此情形。
 
 ## 来源
 
 - Kimi Code 文档 FAQ「注意区分平台」对照表（2026-11-04 访问）：https://www.kimi.com/code/docs/kimi-code/faq.html
 - Kimi 开放平台「与 Kimi 其他产品对比」（2026-11-04 访问）：https://platform.kimi.com/docs/guide/product-plans
+- Kimi 开放平台「模型列表」（当前可用＝K3 线；K2 线停供新注册用户、`kimi-k2.5`/`moonshot-v1-*` 已下线；2026-11-04 访问）：https://platform.kimi.com/docs/models
 - Kimi 开放平台「问题排查」（401/404 清单第 3 条「账户余额 / 代金券是否支持目标模型」、K3.1 Pro 需充值解锁；2026-11-04 访问）：https://platform.kimi.com/docs/guide/troubleshooting
 - Kimi 帮助中心「免费测试权益」（余额为零 API 请求返回 403；2026-11-04 访问）：https://www.kimi.com/help/kimi-api/api-free-trial
 - Kimi 开放平台「查询余额」`GET /v1/users/me/balance`（2026-11-04 访问）：https://platform.kimi.com/docs/api/balance
