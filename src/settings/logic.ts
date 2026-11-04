@@ -13,6 +13,7 @@ import {
 } from "../types";
 import type { PendingSecret } from "./secrets";
 import {
+	coerceModelIds,
 	coerceReportLanguage,
 	coerceSelectedTemplateId,
 	coerceTemplates,
@@ -126,6 +127,9 @@ export function normalizeSettings(raw: unknown): NormalizedSettings {
 						modelId,
 					}));
 				}
+				// #87 迁移（幂等）：模型清单缺失时初值＝启用集（存量模型并入清单）；
+				// 已有清单只做非法值清洗，不并入启用集（否则「已失效」跨载入存活不了）。
+				migrateModelCatalog(provider, providerRaw.modelCatalog);
 				return provider;
 			});
 	} else {
@@ -164,6 +168,7 @@ export function normalizeSettings(raw: unknown): NormalizedSettings {
 					apiKeySecretId: "",
 					models: data.model ? [data.model] : [],
 					authType: "bearer",
+					customModels: data.model ? [{ id: makeId(), modelId: data.model }] : [],
 				};
 				if (data.apiKey) pendingSecrets.push({ providerId: customId, plaintext: data.apiKey });
 				settings.providers.push(legacyProvider);
@@ -171,6 +176,8 @@ export function normalizeSettings(raw: unknown): NormalizedSettings {
 				settings.activeModel = data.model ?? "";
 			}
 		}
+		// #87 迁移：旧版单模型路径无「模型清单」可考，清单初值＝启用集（存量模型并入清单）。
+		for (const p of settings.providers) migrateModelCatalog(p, undefined);
 	}
 
 	// 选用的供应商与模型
@@ -197,6 +204,23 @@ function readApiKeySecretId(
 		apiKeySecretId:
 			typeof providerRaw.apiKeySecretId === "string" ? providerRaw.apiKeySecretId : "",
 	};
+}
+
+/**
+ * #87 模型清单迁移（幂等）：`catalogRaw` 非数组（缺失或非法，按缺失对待）时
+ * 清单初值＝启用集（存量模型并入清单）；已有清单只做非法值清洗、不并入启用集——
+ * 并入会把「已启用但上游消失」的模型洗进清单，下次载入「已失效」标记就没了。
+ */
+function migrateModelCatalog(provider: ModelProvider, catalogRaw: unknown): void {
+	if (Array.isArray(catalogRaw)) {
+		provider.modelCatalog = coerceModelIds(catalogRaw);
+		return;
+	}
+	const enabled =
+		provider.type === "custom"
+			? (provider.customModels ?? []).map((m) => m.modelId)
+			: provider.models;
+	provider.modelCatalog = coerceModelIds(enabled);
 }
 
 /** 归一「思考」三态映射：只保留合法三态值；无合法条目返回 undefined（＝不发明，读取侧缺省关）。 */

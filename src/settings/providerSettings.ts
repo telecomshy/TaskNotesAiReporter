@@ -18,6 +18,7 @@ import type {
 } from "../types";
 import { resolveThinking } from "../core/thinking";
 import { resolveSecretValue } from "./secrets";
+import { coerceModelIds } from "./values";
 import type { SettingsOwner } from "./owner";
 
 /** 新自定义供应商的默认名称：作为持久化数据，保持语言无关。 */
@@ -42,7 +43,7 @@ export interface ProviderStateRead {
 
 // ===== 判定谓词 =====
 
-/** 统一读取供应商的模型 ID：预设取已拉取的列表；自定义由 customModels 派生（去空白）。 */
+/** 统一读取供应商的「启用模型」ID：预设取挑选集；自定义由 customModels 派生（去空白）。 */
 export function modelsOf(provider: ModelProvider): string[] {
 	if (provider.type === "custom") {
 		return (provider.customModels ?? [])
@@ -50,6 +51,22 @@ export function modelsOf(provider: ModelProvider): string[] {
 			.filter((id) => id.trim() !== "");
 	}
 	return provider.models;
+}
+
+/** 统一读取「模型清单」（模型全集）；未迁移的旧数据缺失该字段时读作空清单（#87）。 */
+export function catalogOf(provider: ModelProvider): string[] {
+	return provider.modelCatalog ?? [];
+}
+
+/**
+ * 「已失效」（#87）：已启用但不在「模型清单」中（上游已消失），保留可移除。
+ * 清单为空＝没有上游信息（如从未拉取），不标失效。
+ */
+export function isModelStale(provider: ModelProvider, model: string): boolean {
+	const catalog = catalogOf(provider);
+	return (
+		catalog.length > 0 && modelsOf(provider).includes(model) && !catalog.includes(model)
+	);
 }
 
 /**
@@ -76,6 +93,18 @@ export function isConfigured(provider: ModelProvider): boolean {
 export function isSelectable(provider: ModelProvider): boolean {
 	const credentialed = provider.authType === "none" || provider.apiKeySecretId.trim() !== "";
 	return provider.baseUrl.trim() !== "" && modelsOf(provider).length > 0 && credentialed;
+}
+
+/**
+ * 「当前模型」受保护（#87）：不可被移除，真正移除需先切换模型。
+ * 空模型 ID 不受保护（空白行是编辑中的草稿，可随时删除）。
+ */
+export function isModelProtected(
+	state: ProviderStateRead,
+	providerId: string,
+	model: string
+): boolean {
+	return model !== "" && state.activeProviderId === providerId && state.activeModel === model;
 }
 
 /** 判断某个供应商下的模型是否为当前生效的模型。 */
@@ -132,17 +161,13 @@ export function setProviderBaseUrl(state: ProviderState, providerId: string, bas
 }
 
 /**
- * 设置密钥名。清空预设供应商的密钥名会连带清空其模型列表；
- * 若因此使当前模型不复存在，则清空当前模型。
+ * 设置密钥名（去空白）。只动密钥名本身：启用集与模型清单是用户的策展结果，
+ * 密钥变更不改动它们（与「静默拉取不改动启用集」同门，#87）。
  */
 export function setSecretId(state: ProviderState, providerId: string, secretId: string): ProviderState {
 	const provider = findProvider(state, providerId);
 	if (!provider) return state;
 	provider.apiKeySecretId = secretId.trim();
-	if (provider.type === "preset" && provider.apiKeySecretId === "") {
-		provider.models = [];
-	}
-	clearActiveIfModelGone(state);
 	return state;
 }
 
@@ -159,16 +184,82 @@ export function setAuthType(
 	return state;
 }
 
-/** 应用拉取到的模型列表（预设供应商）；不影响当前模型（见 ADR-0010）。 */
-export function applyFetchedModels(
+/**
+ * 挑选确认（#87）：挑选集成为「启用模型」，取消挑选即移出。
+ * 自定义供应商连带同步模型行：保留行（id 与上下文长度 / 最大输出参数）不换行，
+ * 新挑选的补出空参数行，空白行（编辑中的草稿）不动。
+ * 「当前模型」受保护：挑选集不含它也强制保留（真正移除需先切换模型）。
+ * 移出只动启用集本身——该模型的「思考」偏好与习得能力一并保留（重新添加后原样生效）。
+ */
+export function applyPickedModels(
+	state: ProviderState,
+	providerId: string,
+	picked: string[]
+): ProviderState {
+	const provider = findProvider(state, providerId);
+	if (!provider) return state;
+	const wanted = coerceModelIds(picked);
+	const active = state.activeModel;
+	if (
+		isModelProtected(state, providerId, active) &&
+		modelExists(provider, active) &&
+		!wanted.includes(active)
+	) {
+		wanted.push(active);
+	}
+	if (provider.type === "custom") {
+		const kept: ModelConfig[] = [];
+		const seen = new Set<string>();
+		for (const row of provider.customModels ?? []) {
+			const id = row.modelId.trim();
+			if (id === "") {
+				kept.push(row);
+				continue;
+			}
+			if (wanted.includes(id) && !seen.has(id)) {
+				seen.add(id);
+				kept.push(row);
+			}
+		}
+		for (const id of wanted) {
+			if (!seen.has(id)) kept.push({ id: makeModelConfigId(), modelId: id });
+		}
+		provider.customModels = kept;
+	} else {
+		provider.models = wanted;
+	}
+	return state;
+}
+
+/**
+ * 刷新「模型清单」（#87，静默拉取与手动拉取共用）：只替换清单本身，
+ * 不动启用集、不动当前模型（「静默拉取永不自动启用」）。空列表视为拉取异常，不刷清单。
+ */
+export function refreshModelCatalog(
 	state: ProviderState,
 	providerId: string,
 	models: string[]
 ): ProviderState {
 	const provider = findProvider(state, providerId);
 	if (!provider) return state;
-	provider.models = models;
+	const cleaned = coerceModelIds(models);
+	if (cleaned.length === 0) return state;
+	provider.modelCatalog = cleaned;
 	return state;
+}
+
+/**
+ * 「有 N 个新模型可挑选」的 N（#87）：清单新出现且尚未启用的模型数。
+ * 已启用的模型不算「可挑选」，旧清单已有的不算「新」。
+ */
+export function countNewPickable(
+	before: readonly string[],
+	after: readonly string[],
+	enabled: readonly string[]
+): number {
+	const beforeSet = new Set(before);
+	const enabledSet = new Set(enabled);
+	return after.filter((m) => !beforeSet.has(m) && !enabledSet.has(m)).length;
 }
 
 /** 为自定义供应商追加一个空模型配置。 */
@@ -177,13 +268,18 @@ export function addModel(state: ProviderState, providerId: string): ProviderStat
 	if (!provider) return state;
 	if (!provider.customModels) provider.customModels = [];
 	provider.customModels.push({
-		id: `mc_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+		id: makeModelConfigId(),
 		modelId: "",
 	});
 	return state;
 }
 
-/** 改写某个模型配置的模型 ID；若改的是当前模型，则清空当前模型。思考偏好随模型改名迁移。 */
+/**
+ * 改写某个模型配置的模型 ID；若改的是当前模型，则清空当前模型。
+ * 重命名改变模型身份，走 ADR-0010 的变更命令清理；与 removeModel 的
+ * 「受保护、先切换后移除」（ADR-0026）不对称是刻意的——删除可逆，改名不可逆。
+ * 思考偏好随模型改名迁移。
+ */
 export function renameModel(
 	state: ProviderState,
 	providerId: string,
@@ -217,7 +313,7 @@ export function setModelParams(
 	return state;
 }
 
-/** 删除某个模型配置；若删的是当前模型，则清空当前模型。 */
+/** 删除某个模型配置；「当前模型」受保护（需先切换模型）；移除不清「思考」偏好（#87）。 */
 export function removeModel(
 	state: ProviderState,
 	providerId: string,
@@ -226,9 +322,8 @@ export function removeModel(
 	const provider = findProvider(state, providerId);
 	if (!provider || !provider.customModels) return state;
 	const target = provider.customModels.find((m) => m.id === modelConfigId);
-	if (target) deleteThinking(provider, target.modelId);
+	if (!target || isModelProtected(state, providerId, target.modelId.trim())) return state;
 	provider.customModels = provider.customModels.filter((m) => m.id !== modelConfigId);
-	clearActiveIfModelGone(state);
 	return state;
 }
 
@@ -326,6 +421,11 @@ function modelExists(provider: ModelProvider, model: string): boolean {
 	return model !== "" && modelsOf(provider).includes(model);
 }
 
+/** 模型行的行内唯一标识（行是界面行级概念，标识不解释、不复用）。 */
+function makeModelConfigId(): string {
+	return `mc_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
 function findProvider(state: ProviderStateRead, providerId: string): ModelProvider | undefined {
 	return state.providers.find((p) => p.id === providerId);
 }
@@ -353,7 +453,12 @@ export interface ProviderSettings {
 	setProviderBaseUrl(providerId: string, baseUrl: string): void;
 	setSecretId(providerId: string, secretId: string): void;
 	setAuthType(providerId: string, authType: ModelProvider["authType"]): void;
-	applyFetchedModels(providerId: string, models: string[]): void;
+	/** 刷新「模型清单」（不动启用集），返回「有 N 个新模型可挑选」的 N（#87）。 */
+	refreshModelCatalog(providerId: string, models: string[]): number;
+	/** 挑选确认：挑选集成为启用集（当前模型受保护，移除不清思考偏好；#87）。 */
+	applyPickedModels(providerId: string, picked: string[]): void;
+	/** 「当前模型」是否受保护（不可被移除，需先切换模型；#87）。 */
+	isModelProtected(providerId: string, model: string): boolean;
 	addModel(providerId: string): void;
 	renameModel(providerId: string, modelConfigId: string, newModelId: string): void;
 	setModelParams(
@@ -385,8 +490,20 @@ export function createProviderSettings(deps: ProviderSettingsDeps): ProviderSett
 			run((s) => setProviderBaseUrl(s, providerId, baseUrl)),
 		setSecretId: (providerId, secretId) => run((s) => setSecretId(s, providerId, secretId)),
 		setAuthType: (providerId, authType) => run((s) => setAuthType(s, providerId, authType)),
-		applyFetchedModels: (providerId, models) =>
-			run((s) => applyFetchedModels(s, providerId, models)),
+		refreshModelCatalog: (providerId, models) => {
+			let count = 0;
+			void owner.apply((state) => {
+				const provider = state.providers.find((p) => p.id === providerId);
+				if (!provider) return;
+				const before = catalogOf(provider);
+				refreshModelCatalog(state, providerId, models);
+				count = countNewPickable(before, catalogOf(provider), modelsOf(provider));
+			});
+			return count;
+		},
+		applyPickedModels: (providerId, picked) => run((s) => applyPickedModels(s, providerId, picked)),
+		isModelProtected: (providerId, model) =>
+			isModelProtected(owner.get(), providerId, model),
 		addModel: (providerId) => run((s) => addModel(s, providerId)),
 		renameModel: (providerId, modelConfigId, newModelId) =>
 			run((s) => renameModel(s, providerId, modelConfigId, newModelId)),

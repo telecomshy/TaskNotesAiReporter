@@ -92,6 +92,7 @@ test("normalizeSettings 迁移旧版 DeepSeek 配置到预设供应商", () => {
 	const deepseek = settings.providers.find((p) => p.id === "deepseek")!;
 	assert.equal(deepseek.apiKeySecretId, "", "尚未解析为密钥名");
 	assert.ok(deepseek.models.includes("deepseek-v4-pro"));
+	assert.deepEqual(deepseek.modelCatalog, ["deepseek-v4-pro"], "清单初值＝启用集（#87）");
 	assert.deepEqual(pendingSecrets, [{ providerId: "deepseek", plaintext: "sk-test" }]);
 });
 
@@ -106,6 +107,12 @@ test("normalizeSettings 迁移不匹配的旧配置创建自定义供应商", ()
 	assert.ok(custom);
 	assert.equal(custom.apiKeySecretId, "");
 	assert.deepEqual(custom.models, ["my-model"]);
+	assert.deepEqual(
+		custom.customModels?.map((m) => m.modelId),
+		["my-model"],
+		"存量模型迁移进启用集（customModels 行，#87）"
+	);
+	assert.deepEqual(custom.modelCatalog, ["my-model"], "清单初值＝启用集（#87）");
 	assert.equal(settings.activeProviderId, custom.id);
 	assert.equal(settings.activeModel, "my-model");
 	assert.deepEqual(pendingSecrets, [{ providerId: custom.id, plaintext: "sk-custom" }]);
@@ -302,4 +309,123 @@ test("normalizeSettings 旧设置无思考偏好：不发明条目（每模型�
 	for (const p of settings.providers) {
 		assert.equal(p.thinkingByModel, undefined);
 	}
+});
+
+// ===== 模型清单与启用集迁移（#87，ADR-0026） =====
+
+test("normalizeSettings 迁移：存量模型成为启用集且模型清单初值＝启用集", () => {
+	const providers = [
+		{
+			id: "deepseek",
+			name: "DeepSeek",
+			type: "preset" as const,
+			baseUrl: "https://api.deepseek.com",
+			apiKeySecretId: "k",
+			models: ["a", "b"],
+			authType: "bearer" as const,
+		},
+	];
+	const settings = load({ providers, activeProviderId: "deepseek", activeModel: "a" });
+	const p = settings.providers.find((x) => x.id === "deepseek")!;
+	assert.deepEqual(p.models, ["a", "b"], "存量模型全部保留为启用集");
+	assert.deepEqual(p.modelCatalog, ["a", "b"], "清单初值＝启用集");
+});
+
+test("normalizeSettings 迁移自定义供应商：存量模型行并入模型清单（空白行不入）", () => {
+	const providers = [
+		{
+			id: "custom_x",
+			name: "旧自定义",
+			type: "custom" as const,
+			baseUrl: "https://x.com/v1",
+			apiKeySecretId: "k",
+			models: [],
+			authType: "bearer" as const,
+			customModels: [
+				{ id: "mc1", modelId: "m1", maxTokens: 4096 },
+				{ id: "mc2", modelId: "  " },
+			],
+		},
+	];
+	const settings = load({ providers, activeProviderId: "custom_x", activeModel: "m1" });
+	const p = settings.providers.find((x) => x.id === "custom_x")!;
+	assert.deepEqual(p.modelCatalog, ["m1"]);
+	assert.equal(p.customModels!.length, 2, "模型行全部保留");
+	assert.equal(p.customModels![1].modelId, "  ");
+});
+
+test("normalizeSettings 已有模型清单不被启用集并入（已失效标记跨载入存活）", () => {
+	const providers = [
+		{
+			id: "p",
+			name: "p",
+			type: "preset" as const,
+			baseUrl: "https://x",
+			apiKeySecretId: "k",
+			models: ["a", "x"],
+			modelCatalog: ["x"],
+			authType: "bearer" as const,
+		},
+	];
+	const settings = load({ providers, activeProviderId: "p", activeModel: "a" });
+	const p = settings.providers.find((x) => x.id === "p")!;
+	assert.deepEqual(p.modelCatalog, ["x"], "a 不被并入清单——它的已失效状态保留");
+});
+
+test("normalizeSettings 迁移幂等：二次归一后模型字段不再变化", () => {
+	const providers = [
+		{
+			id: "p",
+			name: "p",
+			type: "preset" as const,
+			baseUrl: "https://x",
+			apiKeySecretId: "k",
+			models: ["a", "b"],
+			authType: "bearer" as const,
+		},
+	];
+	const once = load({ providers, activeProviderId: "p", activeModel: "a" });
+	const twice = load(once);
+	for (const id of ["p"]) {
+		const a = once.providers.find((x) => x.id === id)!;
+		const b = twice.providers.find((x) => x.id === id)!;
+		assert.deepEqual(b.models, a.models);
+		assert.deepEqual(b.modelCatalog, a.modelCatalog);
+	}
+});
+
+test("normalizeSettings 模型清单非法值照旧剔除：去空白、去重、剔除非字符串", () => {
+	const providers = [
+		{
+			id: "p",
+			name: "p",
+			type: "preset" as const,
+			baseUrl: "https://x",
+			apiKeySecretId: "k",
+			models: ["a"],
+			modelCatalog: [" a ", "a", "", "  ", 7, "b"],
+			authType: "bearer" as const,
+		},
+	];
+	const settings = load({ providers, activeProviderId: "p" });
+	const p = settings.providers.find((x) => x.id === "p")!;
+	assert.deepEqual(p.modelCatalog, ["a", "b"]);
+});
+
+test("normalizeSettings 模型清单整块非法（非数组）按缺失对待：回退清单初值＝启用集", () => {
+	const providers = [
+		{
+			id: "p",
+			name: "p",
+			type: "preset" as const,
+			baseUrl: "https://x",
+			apiKeySecretId: "k",
+			models: ["a"],
+			modelCatalog: "corrupt",
+			authType: "bearer" as const,
+		},
+	];
+	const settings = load({ providers, activeProviderId: "p" });
+	const p = settings.providers.find((x) => x.id === "p")!;
+	assert.deepEqual(p.modelCatalog, ["a"], "非法清单不残留，按迁移补默认");
 });

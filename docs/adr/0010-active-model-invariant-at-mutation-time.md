@@ -1,5 +1,7 @@
 # 「当前模型」失效只在变更命令处清理，载入时不校验
 
+> **部分被 [ADR-0026](0026-thinking-test-learned-capability-model-catalog.md) 修订**：「删除 / 取消挑选当前模型」路径改为「受保护、先切换后移除」（不再走「删除即清空当前选择」），「重命名当前模型清空当前选择」与「删除供应商重置当前选择」不变；载入不校验的决定原样有效。
+
 「当前模型」由 `activeProviderId` + `activeModel` 两个字段共同决定，理论上应始终指向某个已配置供应商已列出的模型。做法上有两个时点可选：载入时校验（在 `normalizeSettings` 里检查 `activeModel` 是否存在于 `modelsOf(当前供应商)`，不在就清空），或变更时清理（删除/重命名模型、删除供应商的命令里清空或重置），并由读取端 `resolveActive()` 在解析失败时返回带原因的失败。
 
 决定：**只在变更命令处清理，载入时不校验**——`normalizeSettings` 维持现状，只保证 `activeProviderId` 存在于 `providers`；`resolveActive()` 承担「模型已不在列表中」的判定，返回 `no-model` 一类失败。

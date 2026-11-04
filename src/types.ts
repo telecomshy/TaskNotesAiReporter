@@ -105,8 +105,14 @@ export interface ModelProvider {
 	type: "preset" | "custom"; // 内置 or 自定义
 	baseUrl: string; // OpenAI 兼容 base URL（内置的固定；自定义的手动填）
 	apiKeySecretId: string; // SecretStorage 中的密钥名（不存密钥值本身）
-	models: string[]; // 可用模型 ID 列表（预设为动态拉取的真实存储；自定义请用 provider.modelsOf 读取，勿直接依赖）
+	models: string[]; // 「启用模型」（预设）：用户从模型清单挑选的子集，「选择模型」的唯一来源；自定义请用 provider.modelsOf 读取，勿直接依赖
 	authType: "none" | "bearer"; // 认证方式（自定义供应商使用）
+	/**
+	 * 「模型清单」（#87）：「获取模型列表」从供应商接口取回的模型全集，供挑选对话框呈现；
+	 * 「启用模型」从中挑选，挑选与否不影响清单本身。缺失（未迁移的旧数据）由迁移补齐，
+	 * 读取侧经 `catalogOf` 兜底为空清单。
+	 */
+	modelCatalog?: string[];
 	customModels?: ModelConfig[]; // 仅自定义供应商：手动维护的模型配置（每模型含 contextLength/maxTokens）
 	/**
 	 * 每模型「思考」三态（键＝模型 ID；缺省＝「关」），随模型持久化，见 ADR-0024。

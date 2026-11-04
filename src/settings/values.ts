@@ -39,6 +39,22 @@ export function makeId(): string {
 	return `tpl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/**
+ * 模型 ID 清单（「模型清单」与挑选集共用）：去空白、去重、剔除非字符串。
+ * 清单属派生数据，非法值不入清单（#87）。
+ */
+export function coerceModelIds(value: unknown): string[] {
+	if (!Array.isArray(value)) return [];
+	const out: string[] = [];
+	for (const m of value) {
+		if (typeof m !== "string") continue;
+		const id = m.trim();
+		if (id === "" || out.includes(id)) continue;
+		out.push(id);
+	}
+	return out;
+}
+
 // ===== 标量 =====
 
 /** 报告输出目录：去空白（**变更侧**规则；载入保留用户既有值，含空白）。 */
