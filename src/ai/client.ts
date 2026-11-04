@@ -160,7 +160,15 @@ export async function thinkingProbe(
 				}),
 				timeoutSeconds: config.timeoutSeconds,
 			},
-			(json) => detectReasoning(json),
+			(json) => {
+				// 200 不算证据（AC2）：响应体不是对话补全体（如错误体回 200）时读面不可信，
+				// 抛出后按中断归类，不落结论。
+				const body = json as { choices?: unknown };
+				if (!Array.isArray(body.choices) || body.choices.length === 0) {
+					throw new AIClientError("chat.parse");
+				}
+				return detectReasoning(json);
+			},
 			request
 		);
 		return hasReasoning ? "reasoning-present" : "reasoning-absent";

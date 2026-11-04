@@ -260,7 +260,7 @@ function normalizeLearnedByModel(raw: unknown): Record<string, LearnedCapability
 	return Object.keys(out).length > 0 ? out : undefined;
 }
 
-/** 单条习得能力归一；非法返回 undefined。 */
+/** 单条习得能力归一；非法返回 undefined。「可关」条目缺关参数视为脏数据剔除。 */
 function normalizeLearnedCapability(value: unknown): LearnedCapability | undefined {
 	if (typeof value !== "object" || value === null) return undefined;
 	const raw = value as Record<string, unknown>;
@@ -269,8 +269,9 @@ function normalizeLearnedCapability(value: unknown): LearnedCapability | undefin
 		return undefined;
 	}
 	if (typeof raw.testedAt !== "string" || raw.testedAt === "") return undefined;
-	const entry: LearnedCapability = { verdict, testedAt: raw.testedAt };
 	const off = normalizeThinkingParam(raw.off);
+	if (verdict === "switchable" && !off) return undefined;
+	const entry: LearnedCapability = { verdict, testedAt: raw.testedAt };
 	if (off) entry.off = off;
 	if (typeof raw.triedFields === "number" && Number.isFinite(raw.triedFields)) {
 		entry.triedFields = raw.triedFields;

@@ -355,6 +355,7 @@ test("normalizeSettings 习得能力：合法条目保留（含测试时间戳�
 				learnedByModel: {
 					good,
 					weak,
+					noOff: { verdict: "switchable", testedAt: "t" },
 					badVerdict: { verdict: "forced", testedAt: "t" },
 					interrupted: { verdict: "interrupted", testedAt: "t" },
 					noTime: { verdict: "not-detected" },

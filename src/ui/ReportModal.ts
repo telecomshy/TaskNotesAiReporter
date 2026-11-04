@@ -9,7 +9,7 @@ import type TaskNotesAIHelperPlugin from "../../main";
 import type { TaskInfo } from "../types";
 import type { TaskRepository } from "../tasks/repository";
 import { chatCompletion } from "../ai/client";
-import { runThinkingTest } from "../ai/thinkingTest";
+import { runThinkingTestFlow } from "../ai/thinkingTest";
 import { thinkingVerdictNoticeKey } from "../i18n";
 import { saveReport } from "../report/writer";
 import { createGeneration, type GenerateSettings } from "../report/generate";
@@ -232,21 +232,19 @@ export class ReportModal extends Modal {
 		});
 	}
 
-	/** 假关告警的「重新测试」（#89）：清习得并重跑思考测试；中断不留结论，可再触发。 */
+	/** 假关告警的「重新测试」（#89）：走共享流程——解析失败不动习得；清习得并重跑；中断不留结论。 */
 	private async retestThinking(): Promise<void> {
 		const t = this.plugin.t;
 		const providerId = this.plugin.settings.activeProviderId;
 		const model = this.plugin.settings.activeModel;
-		this.plugin.providers.clearLearnedThinking(providerId, model);
-		const resolved = this.plugin.providers.resolveActive();
-		if (!resolved.ok) return;
-		const result = await runThinkingTest({
-			baseUrl: resolved.config.baseUrl,
-			apiKey: resolved.config.apiKey,
-			model: resolved.config.model,
-			timeoutSeconds: this.plugin.settings.timeoutSeconds,
-		});
-		if (result.entry) this.plugin.providers.recordThinkingTest(providerId, model, result.entry);
+		const result = await runThinkingTestFlow(
+			this.plugin.providers,
+			this.plugin.settings.timeoutSeconds,
+			providerId,
+			model,
+			true
+		);
+		if (!result) return;
 		new Notice(t(thinkingVerdictNoticeKey(result.verdict)));
 	}
 }

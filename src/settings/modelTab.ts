@@ -7,7 +7,7 @@ import { Notice, SecretComponent } from "obsidian";
 import type { LearnedCapability, ModelConfig, ModelProvider, ThinkingResolution } from "../types";
 import { thinkingVerdictNoticeKey, type Translator } from "../i18n";
 import { listModels, testConnection } from "../ai/client";
-import { runThinkingTest } from "../ai/thinkingTest";
+import { runThinkingTestFlow } from "../ai/thinkingTest";
 import { describeAIError } from "../ai/errorMessage";
 import {
 	thinkingDisplay,
@@ -209,7 +209,7 @@ function renderThinkingRow(card: HTMLElement, ctx: SettingsTabContext): void {
 		if (!provider || activeModel === "") return;
 		btn.setAttribute("disabled", "true");
 		btn.setText(t("model.thinkingTestRunning"));
-		void runThinkingTestFlow(ctx, provider.id, activeModel, retest);
+		void startThinkingTestFlow(ctx, provider.id, activeModel, retest);
 	};
 
 	if (display.testEntry === "available") {
@@ -237,31 +237,24 @@ function renderThinkingRow(card: HTMLElement, ctx: SettingsTabContext): void {
 }
 
 /**
- * 思考测试流程（#89）：重测先清习得（清习得并重跑），再基线 → 逐字段 → 四值判定；
- * 判定为「中断」不留结论（入口保持可点），其余落「习得能力」并刷新呈现。
+ * 思考测试入口（#89）：按钮进入「测试中…」，流程走 ai/thinkingTest 的共享编排
+ * （解析 → 重测先清习得 → 基线 → 逐字段 → 落习得），结束刷��呈现并结论文案上浮。
  */
-async function runThinkingTestFlow(
+async function startThinkingTestFlow(
 	ctx: SettingsTabContext,
 	providerId: string,
 	model: string,
 	retest: boolean
 ): Promise<void> {
 	const t = ctx.plugin.t;
-	if (retest) ctx.plugin.providers.clearLearnedThinking(providerId, model);
-	const resolved = ctx.plugin.providers.resolveActive();
-	if (!resolved.ok) {
-		new Notice(t("model.thinkingTestNeedModel"));
-		ctx.refresh();
-		return;
-	}
-	const result = await runThinkingTest({
-		baseUrl: resolved.config.baseUrl,
-		apiKey: resolved.config.apiKey,
-		model: resolved.config.model,
-		timeoutSeconds: ctx.plugin.settings.timeoutSeconds,
-	});
-	if (result.entry) ctx.plugin.providers.recordThinkingTest(providerId, model, result.entry);
-	new Notice(t(thinkingVerdictNoticeKey(result.verdict)));
+	const result = await runThinkingTestFlow(
+		ctx.plugin.providers,
+		ctx.plugin.settings.timeoutSeconds,
+		providerId,
+		model,
+		retest
+	);
+	new Notice(result ? t(thinkingVerdictNoticeKey(result.verdict)) : t("model.thinkingTestNeedModel"));
 	ctx.refresh();
 }
 
