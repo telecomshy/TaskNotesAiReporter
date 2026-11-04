@@ -319,7 +319,12 @@
 	margin-top: 0.4rem;
 }
 
+/* 「启用模型」标签行：标签居左，「获取模型列表」居右（本区半自动入口，拉取 → 挑选） */
 .tah-provider-models-label {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
 	font-size: 0.85rem;
 	color: var(--text-muted);
 	margin-top: 0.5rem;
@@ -718,11 +723,6 @@ button.tah-thinking-test-link:disabled {
 .tah-model-del-btn:hover {
 	color: var(--text-error);
 	background: rgba(var(--text-error-rgb), 0.1);
-}
-
-/* 「获取模型列表」行（半自动引入：拉取 → 挑选，独占一行） */
-.tah-fetch-models-row {
-	margin-top: 0.5rem;
 }
 
 /* 列表尾「手动添加」追加行：虚线一行，示意往列表里添一行草稿 */
