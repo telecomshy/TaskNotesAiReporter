@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<!--
+  PROTOTYPE — 丢弃物，验证「思考」控件在真实「模型配置」页的摆放位置后丢入 throwaway 分支，不进 main。
+  计划一行：复刻当前「模型配置」页（截图版式），三个「思考」控件摆放变体 P1 同卡第二行 /
+  P2 独立卡片 / P3 行内紧凑，经 ?variant= 切换；底部浮条切换变体与能力状态；键盘 ←/→ 切换变体。
+  控件形态已定案：两档开关（开/关，无「自动」）。本原型只比较摆放位置。
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>PROTOTYPE · 思考控件摆放位置</title>
+<style>
+  :root {
+    --bg: #ffffff; --card: #f6f6f7; --card-border: #e8e8ea; --provider-card: #ffffff;
+    --text: #1f1f22; --text-muted: #8b8b93; --text-chip: #6d6d75;
+    --border: #e2e2e6; --chip-bg: #ededef; --accent: #6b5ce7;
+    --radius: 10px; --radius-sm: 7px;
+    --font: "Inter", -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 14px; }
+
+  /* ---- Obsidian 设置窗口骨架 ---- */
+  .win { display: flex; min-height: 100vh; }
+  .side { width: 220px; border-right: 1px solid var(--border); padding: 14px 12px; background: var(--bg); }
+  .side .search { background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius-sm);
+    padding: 7px 10px; color: var(--text-muted); font-size: 13px; margin-bottom: 12px; }
+  .side .item { padding: 6px 10px; border-radius: var(--radius-sm); color: var(--text); font-size: 13.5px; }
+  .side .group { color: var(--text-muted); font-size: 11px; font-weight: 700; padding: 12px 10px 4px; }
+  .side .item.plugin { font-weight: 700; }
+
+  .main { flex: 1; padding: 18px 26px 90px; max-width: 720px; }
+  .tabs { display: flex; gap: 10px; margin-bottom: 22px; }
+  .tab { border: 1px solid var(--card-border); background: var(--card); border-radius: var(--radius-sm);
+    padding: 8px 16px; font-size: 13.5px; font-weight: 600; color: var(--text); }
+  .tab.active { background: var(--chip-bg); }
+
+  h2.section { font-size: 16px; margin: 18px 0 12px; }
+
+  .card { background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius);
+    padding: 16px 18px; margin-bottom: 12px; }
+  .card .row { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+  .card .name { font-weight: 700; font-size: 14px; }
+  .card .desc { color: var(--text-muted); font-size: 12.5px; margin-top: 3px; line-height: 1.55; }
+  .card .divider { border-top: 1px solid var(--card-border); margin: 13px 0; }
+
+  select.pill { font: inherit; font-size: 13.5px; padding: 8px 30px 8px 14px; border-radius: var(--radius-sm);
+    border: 1px solid var(--card-border); background: var(--bg); color: var(--text); cursor: pointer;
+    appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%), linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+    background-position: calc(100% - 15px) 17px, calc(100% - 10px) 17px; background-size: 5px 5px; background-repeat: no-repeat; }
+
+  /* 提供商卡片 */
+  .prov { background: var(--provider-card); border: 1px solid var(--card-border); border-radius: var(--radius);
+    padding: 13px 16px; margin-bottom: 10px; display: flex; align-items: center; gap: 12px; }
+  .prov .tri { color: var(--text-muted); font-size: 11px; }
+  .prov .dot { width: 9px; height: 9px; border-radius: 50%; background: #9d9da5; }
+  .prov .dot.on { background: var(--accent); }
+  .prov .pname { font-weight: 600; font-size: 14px; flex: 1; }
+  .prov .stat { display: inline-flex; gap: 8px; align-items: center; }
+  .chip { background: var(--chip-bg); color: var(--text-chip); border-radius: 999px; font-size: 11.5px;
+    padding: 3px 10px; font-weight: 600; }
+  .prov .x { color: var(--text-muted); font-size: 13px; border: 1px solid var(--card-border);
+    border-radius: var(--radius-sm); width: 26px; height: 26px; display: inline-flex;
+    align-items: center; justify-content: center; }
+  .add-btn { width: 100%; border: 1px solid var(--card-border); background: var(--card); border-radius: var(--radius);
+    padding: 12px; font: inherit; font-weight: 600; color: var(--text); cursor: pointer; margin-top: 4px; }
+
+  /* ---- 思考控件（已定案：两档开关） ---- */
+  .switch { position: relative; width: 42px; height: 23px; border-radius: 12px; background: #c9c9cf;
+    cursor: pointer; flex: none; transition: background .15s; border: none; }
+  .switch::after { content: ""; position: absolute; top: 2.5px; left: 2.5px; width: 18px; height: 18px;
+    border-radius: 50%; background: #fff; transition: left .15s; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+  .switch.on { background: var(--accent); }
+  .switch.on::after { left: 21.5px; }
+  .switch:disabled { opacity: .42; cursor: not-allowed; }
+
+  .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; padding: 3px 9px;
+    border-radius: 999px; font-weight: 700; white-space: nowrap; }
+  .badge .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .badge.builtin { background: #eae6ff; color: #5b4bd4; } .badge.builtin .dot { background: #6b5ce7; }
+  .badge.learned  { background: #e2f4e8; color: #2c7a44; } .badge.learned .dot { background: #2c7a44; }
+  .badge.unknown  { background: var(--chip-bg); color: var(--text-chip); } .badge.unknown .dot { background: #b6b6be; }
+  .badge.warn     { background: #fbeedc; color: #9a6224; } .badge.warn .dot { background: #cf8b3c; }
+
+  .note { font-size: 12px; color: var(--text-muted); }
+  .note.warn { color: #9a6224; }
+  .btn-test { font: inherit; font-size: 12px; padding: 5px 13px; border-radius: var(--radius-sm);
+    border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer;
+    font-weight: 700; white-space: nowrap; }
+  .btn-test.done { background: transparent; color: var(--text-muted); border-color: var(--card-border);
+    cursor: default; font-weight: 400; }
+  .btn-link { font: inherit; font-size: 12px; background: none; border: none; color: var(--accent);
+    cursor: pointer; text-decoration: underline; padding: 4px 2px; }
+  .footline { display: flex; align-items: center; gap: 10px; margin-top: 11px; }
+  .footline .sp { flex: 1; }
+
+  /* P3 行内紧凑 */
+  .inline-think { display: inline-flex; align-items: center; gap: 8px; }
+
+  /* ---- 浮动切换条（原型件） ---- */
+  .proto-bar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+    background: #1c1b22; color: #fff; border-radius: 14px; padding: 10px 14px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.4); z-index: 99; user-select: none; }
+  .proto-bar .row1 { display: flex; align-items: center; gap: 12px; justify-content: center; }
+  .proto-bar .arrow { background: #35333e; color: #fff; border: none; width: 30px; height: 30px;
+    border-radius: 8px; font-size: 16px; cursor: pointer; }
+  .proto-bar .vlabel { font-size: 13px; font-weight: 700; min-width: 210px; text-align: center; }
+  .proto-bar .row2 { display: flex; gap: 6px; justify-content: center; margin-top: 9px; flex-wrap: wrap; }
+  .proto-bar .chip2 { font-size: 11px; padding: 4px 10px; border-radius: 999px; border: 1px solid #4a4756;
+    background: transparent; color: #b9b6c4; cursor: pointer; }
+  .proto-bar .chip2.sel { background: #fff; color: #1c1b22; border-color: #fff; font-weight: 700; }
+  .proto-bar .hint { font-size: 10px; color: #7d7a8a; text-align: center; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<div class="win">
+  <div class="side">
+    <div class="search">搜索设置…</div>
+    <div class="item">编辑器</div>
+    <div class="item">文件与链接</div>
+    <div class="item">快捷键</div>
+    <div class="item">钥匙串</div>
+    <div class="item">核心插件</div>
+    <div class="item">第三方插件</div>
+    <div class="group">第三方插件</div>
+    <div class="item plugin">TaskNotes AI Reporter</div>
+  </div>
+
+  <div class="main">
+    <div class="tabs">
+      <div class="tab active">模型配置</div>
+      <div class="tab">模板配置</div>
+      <div class="tab">常规配置</div>
+    </div>
+
+    <h2 class="section">当前模型</h2>
+
+    <!-- ============ 被评设计：思考控件摆放（变体渲染挂载点） ============ -->
+    <div id="think-host"></div>
+
+    <h2 class="section">AI 提供商</h2>
+    <div class="desc" style="color:var(--text-muted);font-size:12.5px;margin:-6px 0 12px;">
+      配置供应商的 API 密钥后，即可在下方选择「当前模型」。
+    </div>
+    <div class="prov"><span class="tri">▸</span><span class="dot on"></span><span class="pname">深度求索（DeepSeek）</span>
+      <span class="stat"><span class="chip">2模型</span><span class="chip">已配置</span></span></div>
+    <div class="prov"><span class="tri">▸</span><span class="dot"></span><span class="pname">阿里云百炼（通义千问）</span>
+      <span class="stat"><span class="chip">未配置</span></span></div>
+    <div class="prov"><span class="tri">▸</span><span class="dot"></span><span class="pname">Kimi（月之暗面）</span>
+      <span class="stat"><span class="chip">未配置</span></span></div>
+    <div class="prov"><span class="tri">▸</span><span class="dot"></span><span class="pname">MiniMax</span>
+      <span class="stat"><span class="chip">未配置</span></span></div>
+    <div class="prov"><span class="tri">▸</span><span class="dot on"></span><span class="pname">科创办</span>
+      <span class="stat"><span class="chip">1模型</span><span class="chip">已配置</span><span class="x">✕</span></span></div>
+    <button class="add-btn">＋ 添加模型供应商</button>
+  </div>
+</div>
+
+<div class="proto-bar">
+  <div class="row1">
+    <button class="arrow" id="prev">←</button>
+    <div class="vlabel" id="vlabel">P1 (同卡第二行)</div>
+    <button class="arrow" id="next">→</button>
+  </div>
+  <div class="row2" id="state-chips"></div>
+  <div class="hint">PROTOTYPE · ←/→ 切换摆放方案 · 上排标签切换能力状态 · 点开关试交互</div>
+</div>
+
+<script>
+// ---------- 能力状态 ----------
+const STATES = [
+  { key: "unknown",   label: "未知" },
+  { key: "builtin",   label: "内置·可关" },
+  { key: "forced",    label: "内置·强制" },
+  { key: "none",      label: "内置·无思考" },
+  { key: "learnedOk", label: "实测·可关" },
+  { key: "learnedNo", label: "实测·未能关闭" },
+];
+const stateInfo = {
+  unknown:   { switchable: false, badge: ["unknown","未知能力"], note: "此模型思考能力未知，测试后可用。", noteWarn: true,
+               test: "test", testLabel: "测试思考能力" },
+  builtin:   { switchable: true,  badge: ["builtin","内置能力表"], note: "来自内置能力表", noteWarn: false,
+               test: "done", testLabel: "已知，无需测试" },
+  forced:    { switchable: false, badge: ["warn","强制思考"], note: "此模型强制思考，无法关闭", noteWarn: true,
+               test: "done", testLabel: "已知，无需测试" },
+  none:      { switchable: false, badge: ["unknown","无思考"], note: "此模型无思考", noteWarn: false,
+               test: "done", testLabel: "已知，无需测试" },
+  learnedOk: { switchable: true,  badge: ["learned","实测 2026-11-04"], note: "实测可关（2026-11-04）", noteWarn: false,
+               test: "done", testLabel: "重新测试" },
+  learnedNo: { switchable: false, badge: ["warn","实测 2026-11-04"], note: "实测 5 个字段未能关闭", noteWarn: true,
+               test: "done", testLabel: "重新测试" },
+};
+
+let vi = 0, si = 0, pref = "off";
+
+function st() { return Object.assign({}, stateInfo[STATES[si].key], { pref }); }
+function badgeHTML(s) { return `<span class="badge ${s.badge[0]}"><span class="dot"></span>${s.badge[1]}</span>`; }
+function testHTML(s) {
+  return s.test === "test"
+    ? `<button class="btn-test">${s.testLabel}</button>`
+    : `<button class="btn-link">${s.testLabel}</button>`;
+}
+function switchHTML(s) {
+  return `<button class="switch ${s.pref === "on" && s.switchable ? "on" : ""}" ${s.switchable ? "" : "disabled"}
+    onclick="togglePref()"></button>`;
+}
+function footHTML(s) {
+  return `<div class="footline">${badgeHTML(s)}<span class="note ${s.noteWarn ? "warn" : ""}">${s.note}</span>
+    <span class="sp"></span>${testHTML(s)}</div>`;
+}
+
+// P1：选择模型卡内第二行（分隔线下：左「思考」+desc，右开关；卡脚注：徽标+备注+测试）
+function VariantP1(s) {
+  return `
+    <div class="card">
+      <div class="row">
+        <div><div class="name">选择模型</div><div class="desc">选择生成报告使用的模型。</div></div>
+        <select class="pill"><option>deepseek-flash</option></select>
+      </div>
+      <div class="divider"></div>
+      <div class="row">
+        <div><div class="name">思考</div>
+        <div class="desc">模型生成前的内部推理。关闭可显著提速，开启回答更周密。</div></div>
+        ${switchHTML(s)}
+      </div>
+      ${footHTML(s)}
+    </div>`;
+}
+
+// P2：独立「思考」卡片（同款卡片紧随选择模型卡之后）
+function VariantP2(s) {
+  return `
+    <div class="card">
+      <div class="row">
+        <div><div class="name">选择模型</div><div class="desc">选择生成报告使用的模型。</div></div>
+        <select class="pill"><option>deepseek-flash</option></select>
+      </div>
+    </div>
+    <div class="card">
+      <div class="row">
+        <div><div class="name">思考</div>
+        <div class="desc">模型生成前的内部推理。关闭可显著提速，开启回答更周密。</div></div>
+        ${switchHTML(s)}
+      </div>
+      ${footHTML(s)}
+    </div>`;
+}
+
+// P3：行内紧凑（开关并入「选择模型」行，备注在 desc 下方展开）
+function VariantP3(s) {
+  return `
+    <div class="card">
+      <div class="row">
+        <div><div class="name">选择模型</div><div class="desc">选择生成报告使用的模型。</div></div>
+        <div class="inline-think">
+          <span class="note">思考</span>${switchHTML(s)}
+          <select class="pill"><option>deepseek-flash</option></select>
+        </div>
+      </div>
+      ${footHTML(s)}
+    </div>`;
+}
+
+const VARIANTS = [
+  { key: "P1", name: "同卡第二行",  render: VariantP1 },
+  { key: "P2", name: "独立卡片",    render: VariantP2 },
+  { key: "P3", name: "行内紧凑",    render: VariantP3 },
+];
+
+function render() {
+  const host = document.getElementById("think-host");
+  host.innerHTML = VARIANTS[vi].render(st());
+  document.getElementById("vlabel").textContent = VARIANTS[vi].key + " (" + VARIANTS[vi].name + ")";
+  document.querySelectorAll("#state-chips .chip2").forEach((c, i) => c.classList.toggle("sel", i === si));
+}
+function togglePref() { if (st().switchable) { pref = pref === "on" ? "off" : "on"; render(); } }
+function cycle(d) { vi = (vi + d + VARIANTS.length) % VARIANTS.length; render(); }
+
+document.getElementById("prev").onclick = () => cycle(-1);
+document.getElementById("next").onclick = () => cycle(1);
+document.addEventListener("keydown", (e) => {
+  const t = e.target.tagName;
+  if (t === "INPUT" || t === "TEXTAREA" || t === "SELECT" || e.target.isContentEditable) return;
+  if (e.key === "ArrowLeft") cycle(-1);
+  if (e.key === "ArrowRight") cycle(1);
+});
+STATES.forEach((s, i) => {
+  const b = document.createElement("button");
+  b.className = "chip2"; b.textContent = s.label;
+  b.onclick = () => { si = i; render(); };
+  document.getElementById("state-chips").appendChild(b);
+});
+const q = new URLSearchParams(location.search).get("variant");
+if (q) { const i = VARIANTS.findIndex(v => v.key === q.toUpperCase()); if (i >= 0) vi = i; }
+render();
+</script>
+</body>
+</html>
