@@ -720,16 +720,20 @@ button.tah-thinking-test-link:disabled {
 	background: rgba(var(--text-error-rgb), 0.1);
 }
 
-/* 新增模型按钮 */
-.tah-add-model-row {
-	margin-top: 0.35rem;
+/* 「获取模型列表」行（半自动引入：拉取 → 挑选，独占一行） */
+.tah-fetch-models-row {
+	margin-top: 0.5rem;
 }
 
-.tah-add-model-btn {
+/* 列表尾「手动添加」追加行：虚线一行，示意往列表里添一行草稿 */
+button.tah-add-model-btn {
+	appearance: none;
+	width: 100%;
 	padding: 0.45rem 1rem;
 	border: 1px dashed var(--background-modifier-border);
 	border-radius: 6px;
 	background: transparent;
+	box-shadow: none;
 	cursor: pointer;
 	font-size: 0.85rem;
 	color: var(--text-muted);

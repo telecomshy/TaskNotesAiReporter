@@ -663,20 +663,24 @@ function renderCustomProviderCard(
 		for (const mc of provider.customModels ?? []) {
 			renderCustomModelRow(modelsList, provider, mc, card, ctx);
 		}
+		// 列表尾「手动添加」追加行：手动配置＝给列表添一行草稿，与列表编辑同属一体
+		const appendBtn = modelsList.createEl("button", {
+			cls: "tah-add-model-btn",
+			text: t("model.newModel"),
+		});
+		appendBtn.addEventListener("click", () => {
+			ctx.plugin.providers.addModel(provider.id);
+			renderModelRows();
+			refreshCardState(card, provider, t);
+		});
 	};
 
-	// 「获取模型列表」（仅手动触发、无静默拉取，走同一挑选对话框，AC7）+ 新增模型按钮
-	const addModelRow = body.createDiv({ cls: "tah-add-model-row" });
-	const fetchBtn = addModelRow.createEl("button", { text: t("model.fetchModels") });
+	// 「获取模型列表」（仅手动触发、无静默拉取，走同一挑选对话框，AC7）：从上游引入
+	// 「启用模型」的半自动入口（拉取 → 挑选两步），独占一行，与列表尾的手动添加分属两径
+	const fetchRow = body.createDiv({ cls: "tah-fetch-models-row" });
+	const fetchBtn = fetchRow.createEl("button", { text: t("model.fetchModels") });
 	fetchBtn.addClass("tah-fetch-models-btn");
 	fetchBtn.addEventListener("click", () => void fetchModels(provider, ctx));
-	const addModelBtn = addModelRow.createEl("button", { text: t("model.newModel") });
-	addModelBtn.addClass("tah-add-model-btn");
-	addModelBtn.addEventListener("click", () => {
-		ctx.plugin.providers.addModel(provider.id);
-		renderModelRows();
-		refreshCardState(card, provider, t);
-	});
 
 	renderModelRows();
 

@@ -190,7 +190,7 @@ export const zh: Strings = {
 		authNone: "无认证",
 		apiKeyLabel: "API 密钥",
 		apiKeyPlaceholder: "输入 API 密钥",
-		newModel: "+ 新增模型",
+		newModel: "+ 手动添加模型 ID",
 		modelId: "模型 ID",
 		modelIdPlaceholder: "deepseek-v4-pro",
 		contextLength: "Context Length",

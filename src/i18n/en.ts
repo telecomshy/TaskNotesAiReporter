@@ -198,7 +198,7 @@ export const en = {
 		authNone: "No auth",
 		apiKeyLabel: "API key",
 		apiKeyPlaceholder: "Enter API key",
-		newModel: "+ Add model",
+		newModel: "+ Add model ID manually",
 		modelId: "Model ID",
 		modelIdPlaceholder: "deepseek-v4-pro",
 		contextLength: "Context Length",
