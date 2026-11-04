@@ -136,19 +136,18 @@ function learnedDate(learned: LearnedCapability): string {
 	return learned.testedAt.slice(0, 10);
 }
 
-/** 备注文案：习得档带时间戳 / 字段数变量，其余按行状态直取。 */
+/** 备注文案：「未能关闭」带实测字段数，其余按行状态直取（测试时间戳只在徽标出现一处）。 */
 function footnoteText(
 	state: ThinkingDisplayState,
 	learned: LearnedCapability | null,
 	t: Translator
 ): string {
-	if (!learned) return t(DISPLAY_COPY[state].footnote);
 	if (state === "learned-not-switchable") {
 		return t(DISPLAY_COPY[state].footnote, {
-			count: learned.triedFields ?? THINKING_OFF_CANDIDATES.length,
+			count: learned?.triedFields ?? THINKING_OFF_CANDIDATES.length,
 		});
 	}
-	return t(DISPLAY_COPY[state].footnote, { date: learnedDate(learned) });
+	return t(DISPLAY_COPY[state].footnote);
 }
 
 /**

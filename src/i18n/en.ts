@@ -157,8 +157,8 @@ export const en = {
 		thinkingTestRetest: "Retest",
 		thinkingTestNeedModel: "Select a model first",
 		thinkingBadgeLearned: "Measured {{date}}",
-		thinkingNoteLearnedSwitchable: "Measured: can be turned off ({{date}})",
-		thinkingNoteLearnedNotDetected: "No thinking detected in test ({{date}})",
+		thinkingNoteLearnedSwitchable: "Measured: can be turned off",
+		thinkingNoteLearnedNotDetected: "No thinking detected in test",
 		thinkingNoteLearnedNotSwitchable: "Tested {{count}} fields — could not turn it off",
 		thinkingTestVerdictNotDetected:
 			"Test result: no thinking detected. This does not mean the model never thinks.",
