@@ -1,6 +1,10 @@
 ## Plain language (白话)
 
-While running a mattpocock skill (grilling, to-spec, implement, code-review, …), user-facing explanations carry a **白话** pass: after the precise wording, one short paragraph restating the point in everyday words a non-programmer can follow. Keep both: the precise wording stays exact, the 白话 pass adds the everyday restatement.
+**Scope: mattpocock skill pack only.** Add the **白话** pass when running the grill-series skills (`grilling` and its variants), `to-spec`, `code-review`, `improve-codebase-architecture`, `diagnose-bugs`, and their close relatives. Every other task — ordinary edits, deployments, status updates, direct answers — gets no extra 白话 restatement.
+
+In scope, user-facing explanations carry the pass: after the precise wording, one short paragraph restating the point in everyday words a non-programmer can follow. Keep both: the precise wording stays exact, the 白话 pass adds the everyday restatement.
+
+When such a skill hands the user recommendations to confirm, give **each recommendation its own 白话 explanation** — not a single summary for the whole list. State plainly what the change does, what it touches, and what happens if the user declines, so a non-engineer can approve or reject each item without decoding jargon.
 
 ## Agent skills
 
