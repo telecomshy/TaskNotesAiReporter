@@ -41,6 +41,11 @@ Rules a reviewer applies to the diff:
   set `appearance`, `background`, `border`, and `box-shadow` explicitly; theme
   selectors outrank a bare class. This is a judgement call: check the control in
   the app.
+- A `button.<class>` rule that sets `box-shadow: none` owns the focus ring: pair
+  it with an explicit
+  `button.<class>.<class>:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }`
+  so keyboard focus stays visible (existing idiom:
+  `button.tah-thinking-switch.tah-thinking-switch:focus-visible`).
 - There are no DOM or visual tests. A UI change is done only after manual
   acceptance of hover, focus-visible, selected/expanded, disabled, and the state
   after a filter or tab re-render.

@@ -9,6 +9,7 @@
 		"lint": "eslint . --max-warnings 0",
 		"dev": "node esbuild.config.mjs",
 		"test": "node --import tsx --import ./test/fakes/obsidian-shim.mjs --experimental-test-module-mocks --test \"test/*.test.ts\"",
+		"test:one": "node --import tsx --import ./test/fakes/obsidian-shim.mjs --experimental-test-module-mocks --test",
 		"typecheck": "tsc -noEmit -skipLibCheck",
 		"prepare": "husky"
 	},

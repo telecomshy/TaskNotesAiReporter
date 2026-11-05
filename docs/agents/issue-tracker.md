@@ -24,10 +24,11 @@ Every command here runs under Windows PowerShell 5.1 with codepage 936 (GBK). Tw
 
 - **Never pipe a body.** `... | gh issue create --body-file -` travels as GB2312 bytes and arrives mangled. Use `--body-file <path>` on a file the `write` tool created (UTF-8, no BOM), or pass inline `--body "..."` — argv goes through UTF-16 `CreateProcess` and survives intact.
 - **Never `Set-Content -Encoding UTF8` / `Out-File -Encoding UTF8`.** On 5.1 these write an `EF BB BF` BOM, which lands at the top of the issue body. `[IO.File]::WriteAllText` and the `write` tool both write UTF-8 without a BOM.
+- **Long Chinese `git commit -m` messages can be rejected by the shell scanner** (`invalid-structure`) before git even runs. Write the message to a UTF-8 file (the `write` tool, no BOM) and commit with `git commit -F <file>`; `.temp/` (gitignored) is the scratch home for these. Same pattern as `--body-file` below.
 
 Switching to PowerShell 7 does **not** fix this: pwsh 7.6.5 is installed but not on PATH, and its `[Console]::OutputEncoding` is `gb2312` too — it emits byte-for-byte the same output as 5.1. It only drops the BOM.
 
-To read `gh` output back without mojibake, prefix the command:
+To read any command's output back without mojibake — `gh` bodies, `npm test` failure names, `npm run deploy` logs — prefix the command:
 
 ```powershell
 chcp 65001 > $null; [Console]::OutputEncoding=[Text.Encoding]::UTF8; [Console]::InputEncoding=[Text.Encoding]::UTF8; $OutputEncoding=[Text.Encoding]::UTF8
