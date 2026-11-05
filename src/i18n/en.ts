@@ -102,6 +102,19 @@ export const en = {
 		parseContexts: "Contexts: {{value}}",
 		emptyPickRange: "Pick a date range first.",
 		emptyNoTasks: "No matching tasks.",
+
+		statusFilterGroup: "Filter by status class",
+		statusFilterTodo: "To do",
+		statusFilterInProgress: "In progress",
+		statusFilterCompleted: "Completed",
+		statusFilterTodoHint:
+			"To do = tasks that aren't completed and whose status value isn't in-progress",
+		statusFilterInProgressHint:
+			"In progress = tasks whose status value is in-progress (TaskNotes limitation: renaming the value defeats this)",
+		statusFilterCompletedHint:
+			"Completed = tasks whose status is marked completed (isCompleted)",
+		statusFilterDisabled: "Status catalog unavailable; filtering by status is disabled",
+		unknownHidden: "{{count}} more tasks with unknown status are hidden",
 	},
 	settings: {
 		tabModel: "Model",

@@ -76,9 +76,12 @@ export class ReportModal extends Modal {
 		// 任务就绪后锁定弹窗高度；加载 / 来源缺失态仍按内容自适应
 		this.contentEl.addClass("tah-report-ready");
 		this.bodyEl.empty();
+		// 状态目录与报告生成同一来源（repository.statuses()，见 ADR-0021）；读不到即空目录
+		const statuses = await repository.statuses();
 		this.selectionView = new TaskSelectionView({
 			container: this.bodyEl,
 			dateFields: this.plugin.settings.dateFields,
+			statuses,
 			weekStartsOnMonday: this.plugin.settings.weekStartsOnMonday,
 			t: this.plugin.t,
 			lang: this.plugin.lang,

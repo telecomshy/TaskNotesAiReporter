@@ -1311,6 +1311,66 @@ button.tah-clear-range-btn:hover {
 	flex-shrink: 0;
 }
 
+/* 状态筛选 chips 行：页签栏之下、各页专属筛选控件之上，跨页签恒定（ADR-0021） */
+.tah-status-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+	margin-bottom: 0.75rem;
+	flex-shrink: 0;
+}
+
+/* chip：多选切换按钮（胶囊形，与一次性动作的矩形快捷按钮区分） */
+.tah-status-chip {
+	padding: 0.2rem 0.7rem;
+	border-radius: 999px;
+	font-size: 0.85rem;
+	cursor: pointer;
+}
+
+button.tah-status-chip {
+	appearance: none;
+	-webkit-appearance: none;
+	height: auto;
+	background: transparent;
+	border: 1px solid var(--background-modifier-border);
+	box-shadow: none;
+	color: var(--text-muted);
+}
+
+button.tah-status-chip:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+/* 键盘聚焦可见（基类 box-shadow: none 压掉了默认焦点环，显式补 outline） */
+button.tah-status-chip.tah-status-chip:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 2px;
+	box-shadow: none;
+}
+
+/* 选中档：实心高亮（与周期快捷按钮的选中语态一致） */
+button.tah-status-chip-selected {
+	background: var(--interactive-accent);
+	border-color: var(--interactive-accent);
+	color: var(--text-on-accent);
+	box-shadow: none;
+}
+
+button.tah-status-chip-selected:hover {
+	background: var(--interactive-accent-hover);
+	color: var(--text-on-accent);
+}
+
+/* 状态目录为空：禁用不隐藏，防布局跳动（ADR-0021） */
+button.tah-status-chip:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+	background: transparent;
+	color: var(--text-muted);
+}
+
 .tah-picker-filter {
 	margin-bottom: 0.75rem;
 	flex-shrink: 0;
@@ -1328,6 +1388,14 @@ button.tah-clear-range-btn:hover {
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+}
+
+/* 「另有 N 条状态未知的任务未显示」：列表底部的弱提示条，滚动区之外常驻可见（ADR-0021） */
+.tah-unknown-hint {
+	flex-shrink: 0;
+	margin-top: 0.4rem;
+	color: var(--text-muted);
+	font-size: 0.85rem;
 }
 
 /* 操作行：左「全选」+ 计数，右「清空选择」 */

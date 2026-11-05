@@ -17,6 +17,7 @@ import {
 	removeTask,
 	setQuery,
 	switchTab,
+	toggleStatusClass,
 	type LeftEmptyReason,
 	type RangePick,
 	type SelectionFrame,
@@ -24,12 +25,15 @@ import {
 	type SelectionTab,
 } from "./selectionSession";
 import { getMonthRange, getQuarterRange, getWeekRange, getYearRange } from "../core/dates";
-import type { DateField, DateRange, TaskInfo } from "../types";
+import type { StatusFilterClass } from "../core/status";
+import type { DateField, DateRange, StatusDefinition, TaskInfo } from "../types";
 import type { UiLanguage, Translator } from "../i18n";
 
 export interface TaskSelectionViewOptions {
 	container: HTMLElement;
 	dateFields: readonly DateField[];
+	/** 状态目录（与报告生成同一来源，ADR-0021）：chips 判定与禁用的依据。 */
+	statuses: readonly StatusDefinition[];
 	weekStartsOnMonday: boolean;
 	t: Translator;
 	lang: UiLanguage;
@@ -47,7 +51,15 @@ export class TaskSelectionView {
 	private readonly timeTabBtn: HTMLButtonElement;
 	private readonly titleTabBtn: HTMLButtonElement;
 	private readonly filterEl: HTMLElement;
+	private readonly statusRowEl: HTMLElement;
+	/** 状态筛选 chips（三档固定，跨页签恒定）：按下态经帧回显刷新。 */
+	private readonly statusChips: Array<{
+		el: HTMLButtonElement;
+		statusClass: StatusFilterClass;
+		hintKey: string;
+	}>;
 	private readonly leftListEl: HTMLElement;
+	private readonly unknownHintEl: HTMLElement;
 	private readonly rightListEl: HTMLElement;
 	private readonly resultCountEl: HTMLElement;
 	private readonly addAllBtn: HTMLButtonElement;
@@ -104,6 +116,44 @@ export class TaskSelectionView {
 		this.timeTabBtn.addEventListener("click", () => this.changeTab("time"));
 		this.titleTabBtn.addEventListener("click", () => this.changeTab("title"));
 
+		// 状态筛选 chips 行：页签栏之下、各页专属筛选控件之上，跨页签恒定、切换不重建
+		// （ADR-0021：位置本身表达「共享维度」的语义）。档位与折叠规则见 ADR-0015。
+		this.statusRowEl = this.leftEl.createDiv({
+			cls: "tah-status-row",
+			attr: { role: "group", "aria-label": t("taskSelection.statusFilterGroup") },
+		});
+		const chipSpecs: Array<{
+			statusClass: StatusFilterClass;
+			labelKey: string;
+			hintKey: string;
+		}> = [
+			{
+				statusClass: "todo",
+				labelKey: "taskSelection.statusFilterTodo",
+				hintKey: "taskSelection.statusFilterTodoHint",
+			},
+			{
+				statusClass: "in-progress",
+				labelKey: "taskSelection.statusFilterInProgress",
+				hintKey: "taskSelection.statusFilterInProgressHint",
+			},
+			{
+				statusClass: "completed",
+				labelKey: "taskSelection.statusFilterCompleted",
+				hintKey: "taskSelection.statusFilterCompletedHint",
+			},
+		];
+		this.statusChips = chipSpecs.map((spec) => {
+			const el = this.statusRowEl.createEl("button", {
+				text: t(spec.labelKey),
+				cls: "tah-status-chip",
+			});
+			el.addEventListener("click", () =>
+				this.update((session) => toggleStatusClass(session, spec.statusClass))
+			);
+			return { el, statusClass: spec.statusClass, hintKey: spec.hintKey };
+		});
+
 		this.filterEl = this.leftEl.createDiv({ cls: "tah-picker-filter" });
 		const actions = this.leftEl.createDiv({ cls: "tah-picker-actions tah-selection-actions" });
 		this.resultCountEl = actions.createDiv({ cls: "tah-range-label" });
@@ -113,6 +163,8 @@ export class TaskSelectionView {
 		});
 		this.addAllBtn.addEventListener("click", () => this.update(addAllAddable));
 		this.leftListEl = this.leftEl.createDiv({ cls: "tah-task-list tah-selection-list" });
+		// 「另有 N 条状态未知的任务未显示」提示条：列表底部的弱提示，仅在有任务被藏起时出现
+		this.unknownHintEl = this.leftEl.createDiv({ cls: "tah-unknown-hint tah-hidden" });
 
 		this.rightEl = layoutEl.createDiv({ cls: "tah-selection-pane tah-selection-right" });
 		const rightHeader = this.rightEl.createDiv({ cls: "tah-main-header" });
@@ -131,7 +183,7 @@ export class TaskSelectionView {
 
 	/** 注入任务快照并回到初始状态。 */
 	setTasks(tasks: TaskInfo[]): void {
-		this.session = createSelectionSession(tasks, this.options.dateFields);
+		this.session = createSelectionSession(tasks, this.options.dateFields, this.options.statuses);
 		this.lastFrame = null;
 		this.render(frame(this.session), null);
 	}
@@ -185,7 +237,7 @@ export class TaskSelectionView {
 
 	/**
 	 * 唯一的重绘规则：切页签重建筛选区；时间页仅区间变化时更新区间控件；
-	 * 标题页仅查询变化时更新解析提示；动作区与两栏每帧刷新。
+	 * 标题页仅查询变化时更新解析提示；状态 chips、动作区、未知提示条与两栏每帧刷新。
 	 * 日历的**重置**不在此处——那是交互来源的知识（快捷/清空要重置，日历内选择不能重置，
 	 * 否则两次点击的起点会丢），见 applyRangePick 与日历回调。
 	 */
@@ -203,9 +255,40 @@ export class TaskSelectionView {
 		} else if (prev.filter.query !== f.filter.query) {
 			this.updateTitleMeta(f);
 		}
+		this.renderStatusChips(f);
 		this.renderActions(f);
 		this.renderLeftList(f);
+		this.renderUnknownHint(f);
 		this.renderRightList(f);
+	}
+
+	/**
+	 * 状态筛选 chips：按下态来自帧回显（aria-pressed 与选中态一致），
+	 * 禁用态来自状态目录（目录为空 → 三档禁用不隐藏，防布局跳动，ADR-0021）。
+	 */
+	private renderStatusChips(f: SelectionFrame): void {
+		const disabled = this.options.statuses.length === 0;
+		for (const chip of this.statusChips) {
+			const selected = f.filter.statusClasses.includes(chip.statusClass);
+			chip.el.toggleClass("tah-status-chip-selected", selected);
+			chip.el.setAttr("aria-pressed", String(selected));
+			chip.el.disabled = disabled;
+			chip.el.toggleAttribute("aria-disabled", disabled);
+			chip.el.setAttr(
+				"title",
+				disabled
+					? this.options.t("taskSelection.statusFilterDisabled")
+					: this.options.t(chip.hintKey)
+			);
+		}
+	}
+
+	/** 「另有 N 条状态未知的任务未显示」：N > 0 且选中任一档时出现的弱提示条。 */
+	private renderUnknownHint(f: SelectionFrame): void {
+		this.unknownHintEl.setText(
+			this.options.t("taskSelection.unknownHidden", { count: f.counts.unknownHidden })
+		);
+		this.unknownHintEl.toggleClass("tah-hidden", f.counts.unknownHidden === 0);
 	}
 
 	private renderActions(f: SelectionFrame): void {

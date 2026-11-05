@@ -4,6 +4,7 @@ import {
 	taskNotesStatusClass,
 	statusClassOf,
 	filterTasksBySubset,
+	filterTasksByStatusClasses,
 } from "../src/core/status";
 import { makeTask } from "./fakes/task";
 import type { StatusDefinition } from "../src/types";
@@ -82,4 +83,38 @@ test("未知的去向：只进未完成，绝不谎报成已完成或进行中�
 	assert.deepEqual(open.map((t) => t.id), ["b", "c", "d", "e"]);
 	assert.deepEqual(inProgress.map((t) => t.id), ["b"]);
 	assert.deepEqual(completed.map((t) => t.id), ["a"]);
+});
+
+// ===== 状态筛选的三档投影（#75 / ADR-0021） =====
+
+test("filterTasksByStatusClasses：档间 OR；未知不设档，选中任一档即被排除并计数", () => {
+	const tasks = [
+		makeTask({ id: "a", status: "open" }),
+		makeTask({ id: "b", status: "in-progress" }),
+		makeTask({ id: "c", status: "done" }),
+		makeTask({ id: "d", status: "认不出的值" }),
+	];
+	const todoOnly = filterTasksByStatusClasses(tasks, ["todo"], statuses);
+	assert.deepEqual(todoOnly.matching.map((t) => t.id), ["a"]);
+	assert.equal(todoOnly.unknownHidden, 1);
+
+	// 待办 + 已结束 = 两者并集；进行中与未知都不出现
+	const union = filterTasksByStatusClasses(tasks, ["todo", "completed"], statuses);
+	assert.deepEqual(union.matching.map((t) => t.id), ["a", "c"]);
+	assert.equal(union.unknownHidden, 1);
+});
+
+test("filterTasksByStatusClasses：自定义状态按目录归类命中对应档；悬空值 → 未知", () => {
+	const catalog: StatusDefinition[] = [
+		{ value: "open", statusClass: "todo" },
+		{ value: "doing", statusClass: "in-progress" },
+		{ value: "done", statusClass: "completed" },
+	];
+	const tasks = [
+		makeTask({ id: "a", status: "doing" }),
+		makeTask({ id: "b", status: "renamed-away" }),
+	];
+	const inProgress = filterTasksByStatusClasses(tasks, ["in-progress"], catalog);
+	assert.deepEqual(inProgress.matching.map((t) => t.id), ["a"]);
+	assert.equal(inProgress.unknownHidden, 1);
 });

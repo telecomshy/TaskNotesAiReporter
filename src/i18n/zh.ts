@@ -99,6 +99,16 @@ export const zh: Strings = {
 		parseContexts: "上下文：{{value}}",
 		emptyPickRange: "请先选择时间范围。",
 		emptyNoTasks: "没有匹配的任务。",
+
+		statusFilterGroup: "按状态归类筛选",
+		statusFilterTodo: "待办",
+		statusFilterInProgress: "进行中",
+		statusFilterCompleted: "已结束",
+		statusFilterTodoHint: "待办 = 未完成且状态值名不是 in-progress 的任务",
+		statusFilterInProgressHint: "进行中 = 状态值名为 in-progress 的任务（TaskNotes 限制：改名后失效）",
+		statusFilterCompletedHint: "已结束 = 状态目录中标记为已完成（isCompleted）的任务",
+		statusFilterDisabled: "状态目录不可用，无法按状态筛选",
+		unknownHidden: "另有 {{count}} 条状态未知的任务未显示",
 	},
 	settings: {
 		tabModel: "模型配置",

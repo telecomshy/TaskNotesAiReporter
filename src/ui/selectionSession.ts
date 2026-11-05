@@ -15,7 +15,8 @@ import {
 	parseTitleQuery,
 	type TitleQuery,
 } from "../core/filter";
-import type { DateField, DateRange, TaskInfo } from "../types";
+import { filterTasksByStatusClasses, type StatusFilterClass } from "../core/status";
+import type { DateField, DateRange, StatusDefinition, TaskInfo } from "../types";
 
 export type SelectionTab = "time" | "title";
 
@@ -50,7 +51,10 @@ export interface SelectionFrame {
 		addable: number;
 		/** 已加入条数 = right.rows.length */
 		joined: number;
-		/** 「状态筛选」预留位（ADR-0021）：本版恒 0。 */
+		/**
+		 * 「状态筛选」（ADR-0021）：选中任一档后被藏起的「未知」任务数——
+		 * 「另有 N 条状态未知的任务未显示」提示条的数据；全不选恒 0。
+		 */
 		unknownHidden: number;
 	};
 	/** 右栏：报告集合，按加入顺序。不受当前筛选影响。 */
@@ -67,6 +71,11 @@ export interface SelectionFrame {
 		rangeSource: RangeSource;
 		/** 日历初值：仅 custom 来源回填；快捷区间从不预选日历。 */
 		calendarSeed: DateRange | null;
+		/**
+		 * 状态筛选的选中档（状态归类的三档投影，ADR-0021）：chips 的按下态回显。
+		 * 多选、档间 OR；全不选＝不过滤。
+		 */
+		statusClasses: readonly StatusFilterClass[];
 	};
 }
 
@@ -80,11 +89,11 @@ export interface SelectionSession {
 }
 
 /**
- * 内部状态。`tasks` / `dateFields` 是打开弹窗时注入、生命周期内恒定的输入。
- * `joined` 保持加入顺序，供右栏与生成共用。
+ * 内部状态。`tasks` / `dateFields` / `statuses` 是打开弹窗时注入、生命周期内恒定的输入
+ * （状态目录与报告生成同一来源，见 ADR-0021）。`joined` 保持加入顺序，供右栏与生成共用。
  *
  * 不变式（内部保证，缝外不可见）：`rangeSource === null` 当且仅当 `range === null`；
- * `preset` / `custom` 必有区间。区间只由 `chooseRange` 改变。
+ * `preset` / `custom` 必有区间。区间只由 `chooseRange` 改变；状态筛选只由 `toggleStatusClass` 改变。
  */
 interface SessionState {
 	tasks: TaskInfo[];
@@ -94,6 +103,9 @@ interface SessionState {
 	rangeSource: RangeSource;
 	query: string;
 	dateFields: readonly DateField[];
+	statuses: readonly StatusDefinition[];
+	/** 状态筛选的选中档：多选，档间 OR；全不选＝不过滤。 */
+	statusFilter: readonly StatusFilterClass[];
 }
 
 function stateOf(session: SelectionSession): SessionState {
@@ -104,10 +116,14 @@ function sessionOf(state: SessionState): SelectionSession {
 	return state as unknown as SelectionSession;
 }
 
-/** 构造初始会话：时间页、无区间、空查询、报告集合为空。 */
+/**
+ * 构造初始会话：时间页、无区间、空查询、状态筛选全不选、报告集合为空。
+ * `statuses` 是状态目录（与报告生成同一来源），供状态筛选按「状态归类」判定。
+ */
 export function createSelectionSession(
 	tasks: TaskInfo[],
-	dateFields: readonly DateField[]
+	dateFields: readonly DateField[],
+	statuses: readonly StatusDefinition[]
 ): SelectionSession {
 	return sessionOf({
 		tasks: [...tasks],
@@ -117,6 +133,8 @@ export function createSelectionSession(
 		rangeSource: null,
 		query: "",
 		dateFields,
+		statuses,
+		statusFilter: [],
 	});
 }
 
@@ -135,7 +153,17 @@ export function frame(session: SelectionSession): SelectionFrame {
 				: []
 			: filterTasksByTitleQuery(state.tasks, parsed);
 
-	const rows: SelectionFrame["left"]["rows"] = matching.map((task) => ({
+	// 状态筛选在区间 / 查询之上收窄（三维叠加为 AND，ADR-0021）：档间 OR、全不选不过滤，
+	// 选中任一档时「未知」被排除并计数（提示条）。
+	let visible = matching;
+	let unknownHidden = 0;
+	if (state.statusFilter.length > 0) {
+		const projection = filterTasksByStatusClasses(matching, state.statusFilter, state.statuses);
+		visible = projection.matching;
+		unknownHidden = projection.unknownHidden;
+	}
+
+	const rows: SelectionFrame["left"]["rows"] = visible.map((task) => ({
 		task,
 		state: state.joined.has(task.id) ? "joined" : "addable",
 	}));
@@ -143,7 +171,7 @@ export function frame(session: SelectionSession): SelectionFrame {
 
 	let empty: LeftEmptyReason = null;
 	if (state.tab === "time" && state.range === null) empty = "no-range";
-	else if (matching.length === 0) empty = "no-match";
+	else if (visible.length === 0) empty = "no-match";
 
 	return {
 		left: { rows, empty },
@@ -151,7 +179,7 @@ export function frame(session: SelectionSession): SelectionFrame {
 			matching: rows.length,
 			addable,
 			joined: state.joined.size,
-			unknownHidden: 0,
+			unknownHidden,
 		},
 		right: { rows: Array.from(state.joined.values()) },
 		filter: {
@@ -161,6 +189,7 @@ export function frame(session: SelectionSession): SelectionFrame {
 			range: state.range,
 			rangeSource: state.rangeSource,
 			calendarSeed: state.rangeSource === "custom" ? state.range : null,
+			statusClasses: state.statusFilter,
 		},
 	};
 }
@@ -201,6 +230,21 @@ export function setQuery(session: SelectionSession, query: string): SelectionSes
 	const state = stateOf(session);
 	if (state.query === query) return session;
 	return sessionOf({ ...state, query });
+}
+
+/**
+ * 切换状态筛选的一个档位（#75 / ADR-0021）：已选则取消，未选则选中。
+ * 唯一改状态筛选的转移：只改左栏呈现，不改变报告集合与其它筛选维度。
+ */
+export function toggleStatusClass(
+	session: SelectionSession,
+	cls: StatusFilterClass
+): SelectionSession {
+	const state = stateOf(session);
+	const statusFilter = state.statusFilter.includes(cls)
+		? state.statusFilter.filter((selected) => selected !== cls)
+		: [...state.statusFilter, cls];
+	return sessionOf({ ...state, statusFilter });
 }
 
 /** 加入单个任务；已在报告集合中则无操作。 */

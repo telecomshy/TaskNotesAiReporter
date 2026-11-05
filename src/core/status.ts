@@ -7,8 +7,16 @@
 
 import type { StatusClass, StatusDefinition, TaskInfo } from "../types";
 
-/** 任务子集口径（四档 → 三子集，见 #47 修订一）。 */
+/**
+ * 任务子集口径（四档 → 三子集，见 #47 修订一）。
+ */
 export type TaskSubset = "completed" | "in-progress" | "open";
+
+/**
+ * 「状态筛选」的三档 chip 口径（#75 / ADR-0021）：状态归类的投影，不含「未知」——
+ * 未知不设档，只在全不选时出现。
+ */
+export type StatusFilterClass = Exclude<StatusClass, "unknown">;
 
 /**
  * TaskNotes 规则（ADR-0015 的值名限制如实保留）：
@@ -50,4 +58,33 @@ export function filterTasksBySubset(
 		default:
 			return tasks.filter((task) => statusClassOf(task.status, statuses) !== "completed");
 	}
+}
+
+/** 按状态归类筛选的投影：命中集合 + 被藏起的未知数（左栏一次问全）。 */
+export interface StatusFilterProjection {
+	/** 选中档内的任务，保持原顺序。 */
+	matching: TaskInfo[];
+	/** 被状态筛选藏起的「未知」任务数（「另有 N 条…未显示」提示条用）。 */
+	unknownHidden: number;
+}
+
+/**
+ * 「状态筛选」的按归类筛选（#75 / ADR-0021）：命中任一选中档即保留，档间为 OR；
+ * 选中任一档时「未知」一律被排除，只计数供提示条使用——认不出的状态绝不谎报进任何档。
+ * 全不选（classes 为空）的「不过滤」语义由调用方（选择会话）短路，这里陈述集合语义本身。
+ */
+export function filterTasksByStatusClasses(
+	tasks: readonly TaskInfo[],
+	classes: readonly StatusFilterClass[],
+	statuses: readonly StatusDefinition[]
+): StatusFilterProjection {
+	const selected = new Set(classes);
+	const matching: TaskInfo[] = [];
+	let unknownHidden = 0;
+	for (const task of tasks) {
+		const statusClass = statusClassOf(task.status, statuses);
+		if (statusClass === "unknown") unknownHidden++;
+		else if (selected.has(statusClass)) matching.push(task);
+	}
+	return { matching, unknownHidden };
 }
