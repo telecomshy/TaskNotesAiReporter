@@ -11,6 +11,7 @@ import type TaskNotesAIHelperPlugin from "../../main";
 import { renderModelTab } from "./modelTab";
 import { renderGeneralTab } from "./generalTab";
 import { renderTemplateTab } from "./templateTab";
+import type { ModelTabViewState } from "./providerCard";
 
 type TabName = "model" | "general" | "template";
 
@@ -46,6 +47,13 @@ export class TaskNotesAIHelperSettingTab extends PluginSettingTab {
 
 		const content = containerEl.createDiv({ cls: "tah-tab-content" });
 
+		// 「模型配置」Tab 的展开态账本（#100 step 1）：display 期内跨多次 refresh 重绘存活，
+		// 重开设置页即归零。
+		const viewState: ModelTabViewState = {
+			expandedProviders: new Set(),
+			expandedTags: new Set(),
+		};
+
 		const refresh = () => {
 			// 语言可能已切换：同步 Tab 文案
 			modelTabBtn.setText(this.plugin.t("settings.tabModel"));
@@ -65,6 +73,7 @@ export class TaskNotesAIHelperSettingTab extends PluginSettingTab {
 					providers: this.plugin.providers,
 					t: this.plugin.t,
 					refresh,
+					viewState,
 				});
 			} else if (this.currentTab === "template") {
 				renderTemplateTab(content, {

@@ -67,6 +67,7 @@ function makeHarness(scenario: Scenario): Harness {
 		providers: createProviderSettings({ owner }),
 		t: createTranslator(BUNDLES.zh),
 		refresh: () => {},
+		viewState: { expandedProviders: new Set(), expandedTags: new Set() },
 	};
 
 	const root = new FakeEl("div");
