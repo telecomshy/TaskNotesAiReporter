@@ -1,6 +1,8 @@
 /**
  * 设置页「模型配置」Tab：内置供应商（仅 api key + 动态拉取模型）与自定义供应商。
  * 本模块只导出 renderModelTab 入口，内部辅助函数均为本模块私有。
+ * 领域规则（count 显隐 / stale / active / 孤儿判定）在 ./modelTabModel 投影，
+ * 卡壳与标签折叠控件在 ./providerCard；本模块只剩渲染接线（#100）。
  */
 
 import { Notice, SecretComponent, type App } from "obsidian";
@@ -10,23 +12,25 @@ import { testConnection } from "../ai/client";
 import { describeAIError } from "../ai/errorMessage";
 import { THINKING_OFF_CANDIDATES, type ThinkingDisplayState } from "../core/thinking";
 import { runAndAnnounceThinkingTest } from "../ui/thinkingTestAction";
-import { enabledModels, isModelStale, modelRows, type ModelRowView } from "./providerModels";
 import {
-	isConfigured,
-	isSelectable,
-	isActiveModel,
-	type ActiveModelInfo,
-	type ProviderSettings,
-} from "./providerSettings";
-import type { SettingsSnapshot } from "./owner";
-import { runFetchModelsFlow } from "./fetchModels";
-import { openModelPicker } from "./modelPicker";
+	activeModelCardModel,
+	providerCardModel,
+	type CustomCardModel,
+	type CustomModelRowModel,
+	type PresetCardModel,
+	type ProviderCardModel,
+} from "./modelTabModel";
 import {
 	createProviderCard,
 	renderModelTagList,
 	type ModelTagRow,
 	type ModelTabViewState,
+	type ProviderCardHandle,
 } from "./providerCard";
+import type { ActiveModelInfo, ProviderSettings } from "./providerSettings";
+import type { SettingsSnapshot } from "./owner";
+import { runFetchModelsFlow } from "./fetchModels";
+import { openModelPicker } from "./modelPicker";
 
 /** 「模型配置」Tab 的依赖面：模型 / 供应商相关；不含非供应商设置命令。 */
 export interface ModelTabContext {
@@ -41,7 +45,9 @@ export interface ModelTabContext {
 
 /** 渲染「模型配置」Tab */
 export function renderModelTab(container: HTMLElement, ctx: ModelTabContext): void {
-	renderActiveModelSection(container, ctx);
+	// 本帧唯一一次「当前模型」读（顶部读面）：当前模型卡与两张供应商卡的投影共用。
+	const info = ctx.providers.activeModelInfo();
+	renderActiveModelSection(container, ctx, info);
 
 	const t = ctx.t;
 	container.createEl("h3", { text: t("model.providersHeading"), cls: "tah-provider-title" });
@@ -52,10 +58,11 @@ export function renderModelTab(container: HTMLElement, ctx: ModelTabContext): vo
 
 	const list = container.createDiv({ cls: "tah-provider-list" });
 	for (const provider of ctx.settings.providers) {
-		if (provider.type === "preset") {
-			renderPresetProviderCard(list, provider, ctx);
+		const model = providerCardModel(provider, info);
+		if (model.kind === "preset") {
+			renderPresetProviderCard(list, model, provider, ctx);
 		} else {
-			renderCustomProviderCard(list, provider, ctx);
+			renderCustomProviderCard(list, model, provider, ctx);
 		}
 	}
 
@@ -64,6 +71,13 @@ export function renderModelTab(container: HTMLElement, ctx: ModelTabContext): vo
 	const addBtn = addRow.createEl("button", { text: t("model.addProvider") });
 	addBtn.addClass("tah-add-provider-btn");
 	addBtn.addEventListener("click", () => addCustomProvider(ctx));
+}
+
+/** 头部三件套 + 计数显隐：卡级投影 → 卡壳句柄（视图不再回查 DOM，#100 step 2）。 */
+function applyCardHead(card: ProviderCardHandle, model: ProviderCardModel): void {
+	card.setName(model.name);
+	card.setStatus(model.configured);
+	card.setCount(model.count.show ? model.count.value : null);
 }
 
 /** 「选择模型」卡的一行：左名称＋说明，右控件（P1 卡片设计语言）。返回行容器。 */
@@ -79,13 +93,19 @@ function cardRow(card: HTMLElement, name: string, desc: string): HTMLElement {
  * 顶部「当前模型」区：「选择模型」卡（#88，P1 同卡第二行摆放）。
  * 卡内第一行选择模型；分隔线下第二行「思考开关」两档滑动开关（开关跟模型走）；
  * 卡脚注行放能力徽标 ＋ 备注 ＋ 右对齐测试入口位。
+ * 分组选项 / 当前值 / 孤儿占位由 activeModelCardModel 投影给出（#100 step 2）；
+ * `info` 由 renderModelTab 顶部传入（本帧唯一一次读）。
  */
-function renderActiveModelSection(container: HTMLElement, ctx: ModelTabContext): void {
+function renderActiveModelSection(
+	container: HTMLElement,
+	ctx: ModelTabContext,
+	info: ActiveModelInfo
+): void {
 	const t = ctx.t;
 	container.createEl("h3", { text: t("model.activeHeading") });
 
-	const selectable = ctx.settings.providers.filter(isSelectable);
-	if (selectable.length === 0) {
+	const model = activeModelCardModel(ctx.settings, info, t);
+	if (model.options.length === 0) {
 		container.createEl("p", {
 			text: t("model.noModels"),
 			cls: "setting-item-description",
@@ -94,24 +114,27 @@ function renderActiveModelSection(container: HTMLElement, ctx: ModelTabContext):
 	}
 
 	const card = container.createDiv({ cls: "tah-model-card" });
-	// 本屏唯一一次「当前模型」读：下拉当前值与思考行共用（无当前模型时按能力未知呈现）。
-	const info = ctx.providers.activeModelInfo();
 
 	// 第一行：选择模型（下拉按供应商分组；「已失效」模型仍可选（保留可移除，AC6））
 	const selectRow = cardRow(card, t("model.selectModelName"), t("model.selectModelDesc"));
 	const selectEl = selectRow.createEl("select", { cls: "tah-model-select" });
-	for (const provider of selectable) {
+	// 孤儿占位（裁决 7）：当前值不在选项里时补一个占位 option（置于分组之前的顶级位），
+	// 让下拉如实呈现当前值；无当前模型时不算孤儿、不显示。
+	if (model.orphan) {
+		const placeholder = selectEl.createEl("option");
+		placeholder.value = model.selected;
+		placeholder.text = `${info.model} · ${t("model.activeModelUnavailable")}`;
+	}
+	for (const group of model.options) {
 		const optgroup = selectEl.createEl("optgroup");
-		optgroup.label = provider.name;
-		for (const model of enabledModels(provider)) {
-			const option = optgroup.createEl("option");
-			option.value = `${provider.id}::${model}`;
-			option.text = isModelStale(provider, model)
-				? `${model} · ${t("model.staleBadge")}`
-				: model;
+		optgroup.label = group.providerName;
+		for (const option of group.models) {
+			const optionEl = optgroup.createEl("option");
+			optionEl.value = option.value;
+			optionEl.text = option.label;
 		}
 	}
-	selectEl.value = `${info.providerId}::${info.model}`;
+	selectEl.value = model.selected;
 	selectEl.addEventListener("change", () => {
 		const value = selectEl.value;
 		const sepIndex = value.indexOf("::");
@@ -123,7 +146,7 @@ function renderActiveModelSection(container: HTMLElement, ctx: ModelTabContext):
 
 	// 分隔线之下第二行：「思考」两档开关 + 卡脚注
 	card.createDiv({ cls: "tah-model-card-divider" });
-	renderThinkingRow(card, info, ctx);
+	renderThinkingRow(card, model.info, ctx);
 }
 
 /** 习得徽标「实测 {{date}}」的日期（测试时间戳的日期部分）。 */
@@ -232,15 +255,17 @@ function renderThinkingRow(card: HTMLElement, info: ActiveModelInfo, ctx: ModelT
 	}
 }
 
-/** 内置供应商卡片：仅需 api key，模型动态拉取。头部与开合走卡壳（#100 step 1）。 */
+/** 内置供应商卡片：仅需 api key，模型动态拉取。头部与标签列由卡级投影给出（#100 step 2）。 */
 function renderPresetProviderCard(
 	container: HTMLElement,
+	model: PresetCardModel,
 	provider: ModelProvider,
 	ctx: ModelTabContext
 ): void {
 	const t = ctx.t;
 	const card = createProviderCard(container, {
-		name: provider.name,
+		name: model.name,
+		deletable: model.deletable,
 		t,
 		viewState: ctx.viewState,
 		key: provider.id,
@@ -269,21 +294,10 @@ function renderPresetProviderCard(
 	modelsLabel.addClass("tah-hidden");
 	const modelsRow = card.body.createDiv({ cls: "tah-provider-models" });
 
-	/** 标签列行数据：stale / active 在此处一次算好（不再逐标签读「当前模型」）。 */
-	const tagRows = (): ModelTagRow[] => {
-		const info = ctx.providers.activeModelInfo();
-		return enabledModels(provider).map((modelId) => ({
-			modelId,
-			stale: isModelStale(provider, modelId),
-			active: isActiveModel(info.providerId, info.model, provider.id, modelId),
-		}));
-	};
-
 	/** 标签列：展开态以 viewState 为初值，toggle 回写（卡内重画不再丢展开）。 */
-	const renderTags = (): void => {
-		const rows = tagRows();
-		modelsLabel.toggleClass("tah-hidden", rows.length === 0);
-		renderModelTagList(modelsRow, rows, {
+	const renderTags = (entries: ModelTagRow[]): void => {
+		modelsLabel.toggleClass("tah-hidden", entries.length === 0);
+		renderModelTagList(modelsRow, entries, {
 			expanded: ctx.viewState.expandedTags.has(provider.id),
 			onToggle: (next) => {
 				if (next) ctx.viewState.expandedTags.add(provider.id);
@@ -293,19 +307,16 @@ function renderPresetProviderCard(
 		});
 	};
 
-	const syncHead = (): void => {
-		card.setCount(countBadge(provider));
-		card.setStatus(isConfigured(provider));
-	};
-
-	/** 卡内重画（密钥变更入口）：头部与标签列一起同步，不动整页。 */
+	// 卡内重画是它自己的帧：重算一次投影，头部与标签列一起同步（密钥变更入口）。
+	// 本卡由预设供应商渲染，投影恒为 preset 型——kind 判别只为对齐视图分支。
 	const redraw = (): void => {
-		syncHead();
-		renderTags();
+		const fresh = providerCardModel(provider, ctx.providers.activeModelInfo());
+		applyCardHead(card, fresh);
+		if (fresh.kind === "preset") renderTags(fresh.entries);
 	};
 
-	syncHead();
-	renderTags();
+	applyCardHead(card, model);
+	renderTags(model.entries);
 }
 
 /** 固定位数的密钥掩码（8 颗圆点），替代原生「点 + ×」显示。 */
@@ -411,12 +422,6 @@ async function fetchModels(provider: ModelProvider, ctx: ModelTabContext): Promi
 	void exhaustive;
 }
 
-/** 卡头计数（#100 step 1 过渡形态）：有启用模型才显示；显隐规则 step 2 收进 providerCardModel。 */
-function countBadge(provider: ModelProvider): number | null {
-	const count = enabledModels(provider).length;
-	return count > 0 ? count : null;
-}
-
 /** 添加自定义供应商：直接新增一张卡片，在卡片内维护配置与模型 */
 function addCustomProvider(ctx: ModelTabContext): void {
 	ctx.providers.addProvider();
@@ -430,16 +435,17 @@ function deleteCustomProvider(provider: ModelProvider, ctx: ModelTabContext): vo
 }
 
 /** 自定义供应商卡片：全局配置（名称/API 地址/认证方式）+ 多模型列表（每行独立参数 + 测试）。
- * 头部（含删除按钮）与开合走卡壳（#100 step 1）。 */
+ * 头部（含删除按钮）与开合走卡壳，模型行由卡级投影给出（#100 step 2）。 */
 function renderCustomProviderCard(
 	container: HTMLElement,
+	model: CustomCardModel,
 	provider: ModelProvider,
 	ctx: ModelTabContext
 ): void {
 	const t = ctx.t;
 	const card = createProviderCard(container, {
-		name: provider.name,
-		deletable: true,
+		name: model.name,
+		deletable: model.deletable,
 		onDelete: () => deleteCustomProvider(provider, ctx),
 		t,
 		viewState: ctx.viewState,
@@ -521,16 +527,15 @@ function renderCustomProviderCard(
 	fetchBtn.addEventListener("click", () => void fetchModels(provider, ctx));
 	const modelsList = body.createDiv({ cls: "tah-custom-models-list" });
 
-	/** 头部同步（地址 / 密钥 / 认证方式变更后）：计数与状态跟随，不重画列表。 */
+	/** 头部同步（地址 / 密钥 / 认证方式 / 行参数变更后）：计数与状态跟随，不重画列表。 */
 	const syncHead = (): void => {
-		card.setCount(countBadge(provider));
-		card.setStatus(isConfigured(provider));
+		applyCardHead(card, providerCardModel(provider, ctx.providers.activeModelInfo()));
 	};
 
-	const renderModelRows = () => {
+	const renderModelRows = (rows: CustomModelRowModel[]): void => {
 		modelsList.empty();
-		for (const row of modelRows(provider)) {
-			renderCustomModelRow(modelsList, provider, row, ctx, syncHead, rerender);
+		for (const row of rows) {
+			renderCustomModelRow(modelsList, provider, row, ctx, syncHead, redraw);
 		}
 		// 列表尾「手动添加」追加行：手动配置＝给列表添一行草稿，与列表编辑同属一体
 		const appendBtn = modelsList.createEl("button", {
@@ -539,35 +544,37 @@ function renderCustomProviderCard(
 		});
 		appendBtn.addEventListener("click", () => {
 			ctx.providers.addModel(provider.id);
-			rerender();
+			redraw();
 		});
 	};
 
-	/** 行删除后的重画：整张列表（含列表尾追加行）＋ 头部计数 / 状态。 */
-	const rerender = (): void => {
-		renderModelRows();
-		syncHead();
+	// 卡内重画是它自己的帧：重算一次投影，头部与模型行一起同步（删除行 / 追加行入口）。
+	// 本卡由自定义供应商渲染，投影恒为 custom 型——kind 判别只为对齐视图分支。
+	const redraw = (): void => {
+		const fresh = providerCardModel(provider, ctx.providers.activeModelInfo());
+		applyCardHead(card, fresh);
+		if (fresh.kind === "custom") renderModelRows(fresh.rows);
 	};
 
-	renderModelRows();
-	syncHead();
+	applyCardHead(card, model);
+	renderModelRows(model.rows);
 }
 
-/** 渲染单个模型配置行（模型ID + Context Length + Max Tokens + 测试 + 删除）；行数据来自 providerModels 读面。 */
+/** 渲染单个模型配置行（模型ID + Context Length + Max Tokens + 测试 + 删除）；
+ * 行 flag（stale / active / draft）由卡级投影算好（#100 step 2），本函数只接线。 */
 function renderCustomModelRow(
 	listEl: HTMLElement,
 	provider: ModelProvider,
-	row: ModelRowView,
+	row: CustomModelRowModel,
 	ctx: ModelTabContext,
 	/** 行参数 / 名称变更后的头部同步（计数 / 状态），不重画列表。 */
 	syncHead: () => void,
-	/** 删除后重画整张列表（含列表尾的追加行）＋ 头部；由卡片传入 rerender。 */
-	rerender: () => void
+	/** 删除后重画整张列表（含列表尾的追加行）＋ 头部；由卡片传入 redraw。 */
+	redraw: () => void
 ): void {
 	const t = ctx.t;
 	const rowEl = listEl.createDiv({ cls: "tah-custom-model-row" });
-	const info = ctx.providers.activeModelInfo();
-	if (row.modelId !== "" && isActiveModel(info.providerId, info.model, provider.id, row.modelId)) {
+	if (row.active) {
 		rowEl.addClass("tah-custom-model-row-active");
 	}
 
@@ -585,7 +592,7 @@ function renderCustomModelRow(
 		syncHead();
 	});
 	// 上游消失的启用模型标「已失效」，保留可移除（AC6）
-	if (row.modelId !== "" && isModelStale(provider, row.modelId)) {
+	if (row.stale) {
 		idGroup.createDiv({ cls: "tah-stale-badge", text: t("model.staleBadge") });
 	}
 
@@ -661,7 +668,7 @@ function renderCustomModelRow(
 		}
 		ctx.providers.removeModel(provider.id, row.rowId);
 		// 整张列表重画（含列表尾追加行）：单删一行后不再丢「+ 手动添加模型 ID」按钮。
-		rerender();
+		redraw();
 	});
 }
 

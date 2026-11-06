@@ -193,6 +193,7 @@ export const en = {
 		pickerConfirm: "Confirm",
 		pickerCancel: "Cancel",
 		staleBadge: "Unavailable",
+		activeModelUnavailable: "No longer selectable",
 		protectActiveModel: "The active model can't be removed — switch to another model first.",
 		fetchNeedKey: "Please choose an API key first",
 		fetchSecretMissing: "The chosen secret was not found in SecretStorage",
