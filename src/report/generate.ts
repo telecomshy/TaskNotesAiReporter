@@ -13,8 +13,8 @@
 import type {
 	ActiveModelResolution,
 	DateRange,
-	ReportTemplate,
 	TaskInfo,
+	TaskNotesAIHelperSettings,
 } from "../types";
 import type { AIClientConfig, ChatResult } from "../ai/client";
 import { isThinkingFakeOff } from "../core/thinking";
@@ -32,16 +32,22 @@ export interface GenerateIntent {
 	extraRequirements?: string;
 }
 
-/** 设置查询的形状（仅持久化设置）：报告语言与生成参数在生成时读取（#49 修订三）。 */
-export interface GenerateSettings {
-	language: string;
-	weekStartsOnMonday: boolean;
-	reportFolder: string;
-	temperature: number;
-	maxTokens: number;
-	timeoutSeconds: number;
-	templates: readonly ReportTemplate[];
-}
+/**
+ * 设置查询的形状（仅持久化设置）：报告语言与生成参数在生成时读取（#49 修订三）。
+ * Pick 派生（#101）：与 `TaskNotesAIHelperSettings` 编译期同源——生成相关设置改名即编译失败；
+ * Pick 本身增删字段时，pluginGeneration 的 7 字段投影漏改也是缺属性编译错，不再静默不生效
+ * （新增生成相关设置须先入 Pick、再进投影）。
+ */
+export type GenerateSettings = Pick<
+	TaskNotesAIHelperSettings,
+	| "language"
+	| "weekStartsOnMonday"
+	| "reportFolder"
+	| "temperature"
+	| "maxTokens"
+	| "timeoutSeconds"
+	| "templates"
+>;
 
 /** 注入依赖（装配层接线）。 */
 export interface GenerateDeps {
@@ -99,6 +105,9 @@ export function createGeneration(
 		}
 	};
 }
+
+/** 生成入口（#101）：`createGeneration` 的返回——重入守卫自持；装配层建一次、界面重复调用。 */
+export type GenerateEntry = ReturnType<typeof createGeneration>;
 
 async function runGeneration(intent: GenerateIntent, deps: GenerateDeps): Promise<GenerateResult> {
 	if (intent.tasks.length === 0) {

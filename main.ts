@@ -7,6 +7,7 @@ import { getLanguage, Plugin } from "obsidian";
 import { TaskNotesAIHelperSettingTab } from "./src/settings";
 import { ReportModal } from "./src/ui/ReportModal";
 import { obsidianTaskRepository } from "./src/tasks/obsidian";
+import { createPluginGeneration } from "./src/report/pluginGeneration";
 
 import type { TaskNotesAIHelperSettings } from "./src/settings/logic";
 import { loadSettings as loadSettingsFromIO } from "./src/settings/loadSettings";
@@ -97,8 +98,24 @@ export default class TaskNotesAIHelperPlugin extends Plugin {
 	}
 
 	openReportModal(): void {
+		// 弹窗 context（#101）：封闭清单，弹窗不再触碰 plugin。
+		// 生成装配（7 字段投影 + chat / save 接线）收进 pluginGeneration 工厂，此处只预绑；
 		// 打开任务仓库：TaskNotes 运行时不可用时返回 null（= 来源缺失，见 CONTEXT.md「来源缺失」）。
-		const openRepository = () => obsidianTaskRepository(this.app);
-		new ReportModal(this.app, this, openRepository).open();
+		new ReportModal({
+			app: this.app,
+			settings: this.settings,
+			appSettings: this.appSettings,
+			providers: this.providers,
+			t: this.t,
+			lang: this.lang,
+			openRepository: () => obsidianTaskRepository(this.app),
+			createGeneration: (repository) =>
+				createPluginGeneration({
+					app: this.app,
+					settings: () => this.settings,
+					providers: this.providers,
+					repository,
+				}),
+		}).open();
 	}
 }

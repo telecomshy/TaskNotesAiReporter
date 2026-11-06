@@ -2,15 +2,20 @@
  * 生成报告主弹窗：左侧筛选任务、右侧报告集合，底部模板 / 附加要求 / 生成。
  * 「选择任务」不再单独开窗；点击左栏任务即加入右栏，右栏是唯一的移除入口。
  * 列表中的任务全部送模型生成报告。
+ *
+ * 依赖走封闭清单 `ReportModalContext`（#101，镜像 ModelTabContext 先例）：
+ * 弹窗不再触碰 plugin，装配（7 字段投影 + chat / save 接线）在 pluginGeneration 工厂，
+ * 由 main.ts 在 context 里预绑 `createGeneration`。
  */
 
-import { App, Modal, Notice, TFile } from "obsidian";
-import type TaskNotesAIHelperPlugin from "../../main";
+import { Modal, Notice, TFile, type App } from "obsidian";
 import type { TaskInfo } from "../types";
 import type { TaskRepository } from "../tasks/repository";
-import { chatCompletion } from "../ai/client";
-import { saveReport } from "../report/writer";
-import { createGeneration, type GenerateSettings } from "../report/generate";
+import type { GenerateEntry } from "../report/generate";
+import type { SettingsSnapshot } from "../settings/owner";
+import type { AppSettings } from "../settings/appSettings";
+import type { ThinkingTestStateSlice } from "../ai/thinkingTest";
+import type { Translator, UiLanguage } from "../i18n";
 import { describeReportFailure } from "../report/errorMessage";
 import { runAndAnnounceThinkingTest } from "./thinkingTestAction";
 import { TaskSelectionView } from "./TaskSelectionView";
@@ -18,6 +23,23 @@ import {
 	applyGenerateButtonState,
 	getGenerateButtonState,
 } from "./generateButton";
+
+/** 弹窗的依赖面（#101 封闭清单）：视图读设置快照、模板选择落 appSettings、重测走窄切片。 */
+export interface ReportModalContext {
+	app: App;
+	/** 设置快照（视图读：dateFields / weekStartsOnMonday / templates / selectedTemplateId / timeoutSeconds）。 */
+	settings: SettingsSnapshot;
+	/** 非供应商设置门面：footer 记住所选模板。 */
+	appSettings: AppSettings;
+	/** 供应商门面切片：仅假关告警的「重新测试」需要（ThinkingTestStateSlice，ProviderSettings 满足）。 */
+	providers: ThinkingTestStateSlice;
+	t: Translator;
+	lang: UiLanguage;
+	/** 打开任务仓库：TaskNotes 运行时不可用时返回 null（= 来源缺失，见 CONTEXT.md）。 */
+	openRepository: () => TaskRepository | null;
+	/** 生成入口工厂：repository 就绪时调用一次，入口自持重入守卫（双击只出一份报告）。 */
+	createGeneration: (repository: TaskRepository) => GenerateEntry;
+}
 
 export class ReportModal extends Modal {
 	private selectionView: TaskSelectionView | null = null;
@@ -27,21 +49,18 @@ export class ReportModal extends Modal {
 	private generateBtn: HTMLButtonElement | null = null;
 	private extraRequirementsInput: HTMLTextAreaElement | null = null;
 	private generating = false;
-	/** 按钮壳状态（生成中禁用按钮）；行为权威是 module 入口的重入守卫（其测试钉住「双击只出一份」）。 */
-	private generateEntry: ReturnType<typeof createGeneration> | null = null;
-	/** 界面打开时打开的仓库；生成期间沿用它，不重判来源缺失（见 #45 / #49 修订）。 */
-	private repository: TaskRepository | null = null;
+	/**
+	 * 生成入口：onOpen 里 repository 就绪后即建（#101）；重入守卫在 module 入口内。
+	 * 为 null ⇔ 打开时 来源缺失——此时生成按钮仍可见，点击弹提示（摩擦 #19），不留静默路径。
+	 */
+	private generateEntry: GenerateEntry | null = null;
 	// 记录并记住上次选择的模板（空字符串表示不选模板，极简模式）
 	private selectedTemplateId = "";
 
-	constructor(
-		app: App,
-		private plugin: TaskNotesAIHelperPlugin,
-		private openRepository: () => TaskRepository | null
-	) {
-		super(app);
+	constructor(private ctx: ReportModalContext) {
+		super(ctx.app);
 		// 打开弹窗时恢复上次选择的模板
-		this.selectedTemplateId = this.plugin.settings.selectedTemplateId ?? "";
+		this.selectedTemplateId = this.ctx.settings.selectedTemplateId ?? "";
 	}
 
 	async onOpen(): Promise<void> {
@@ -49,7 +68,7 @@ export class ReportModal extends Modal {
 		contentEl.empty();
 		contentEl.addClass("tah-modal");
 		this.modalEl.addClass("tah-modal-root");
-		this.setTitle(this.plugin.t("report.title"));
+		this.setTitle(this.ctx.t("report.title"));
 
 		// 一次性创建容器结构（后续 render* 只填充，不再新建）
 		this.bodyEl = contentEl.createDiv({ cls: "tah-selection-body" });
@@ -57,17 +76,19 @@ export class ReportModal extends Modal {
 		this.renderFooter();
 
 		// 打开任务仓库：来源判定只在此处做一次（仓库缺席即「来源缺失」，见 #45）
-		const repository = this.openRepository();
+		const repository = this.ctx.openRepository();
 		if (!repository) {
 			this.renderSourceMissing();
 			return;
 		}
-		this.repository = repository;
+		// 生成入口在 repository 就绪后即建（#101）：仓库每次打开固定，入口闭包持有它，
+		// 生成期间沿用、不重判来源缺失；装配（投影 + chat / save 接线）在工厂内（#49 修订三）。
+		this.generateEntry = this.ctx.createGeneration(repository);
 
 		// 加载任务
 		this.bodyEl.empty();
-		this.bodyEl.createDiv({ text: this.plugin.t("report.loading"), cls: "tah-loading" });
-		const tasks = await this.repository.list();
+		this.bodyEl.createDiv({ text: this.ctx.t("report.loading"), cls: "tah-loading" });
+		const tasks = await repository.list();
 		if (tasks === null) {
 			this.renderSourceMissing();
 			return;
@@ -80,11 +101,11 @@ export class ReportModal extends Modal {
 		const statuses = await repository.statuses();
 		this.selectionView = new TaskSelectionView({
 			container: this.bodyEl,
-			dateFields: this.plugin.settings.dateFields,
+			dateFields: this.ctx.settings.dateFields,
 			statuses,
-			weekStartsOnMonday: this.plugin.settings.weekStartsOnMonday,
-			t: this.plugin.t,
-			lang: this.plugin.lang,
+			weekStartsOnMonday: this.ctx.settings.weekStartsOnMonday,
+			t: this.ctx.t,
+			lang: this.ctx.lang,
 		});
 		this.selectionView.setTasks(tasks);
 	}
@@ -97,7 +118,7 @@ export class ReportModal extends Modal {
 	private renderSourceMissing(): void {
 		this.bodyEl.empty();
 		this.bodyEl.createEl("p", {
-			text: this.plugin.t("report.tasknotesMissing"),
+			text: this.ctx.t("report.tasknotesMissing"),
 			cls: "tah-error",
 		});
 	}
@@ -111,39 +132,38 @@ export class ReportModal extends Modal {
 
 	private renderFooter(): void {
 		this.footerEl.empty();
+		const t = this.ctx.t;
 
 		// 附加要求：单独一行，标签 + 多行输入（仅本次生成有效，每次打开为空）
 		const extraLabel = this.footerEl.createEl("label", { cls: "tah-extra-requirements" });
 		extraLabel.createSpan({
-			text: this.plugin.t("report.extraRequirements"),
+			text: t("report.extraRequirements"),
 			cls: "tah-extra-requirements-label",
 		});
 		this.extraRequirementsInput = extraLabel.createEl("textarea", {
 			cls: "tah-extra-requirements-input",
 		});
 		this.extraRequirementsInput.rows = 2;
-		this.extraRequirementsInput.placeholder = this.plugin.t(
-			"report.extraRequirementsPlaceholder"
-		);
+		this.extraRequirementsInput.placeholder = t("report.extraRequirementsPlaceholder");
 
 		// 模板下拉 + 生成按钮（右对齐）
 		const actions = this.footerEl.createDiv({ cls: "tah-footer-actions" });
 		const templateSelect = actions.createEl("select", { cls: "tah-template-select" });
 		templateSelect.createEl("option", {
-			text: this.plugin.t("report.noTemplate"),
+			text: t("report.noTemplate"),
 			value: "",
 		});
-		for (const template of this.plugin.settings.templates) {
+		for (const template of this.ctx.settings.templates) {
 			templateSelect.createEl("option", { text: template.name, value: template.id });
 		}
 		templateSelect.value = this.selectedTemplateId;
 		templateSelect.addEventListener("change", () => {
 			this.selectedTemplateId = templateSelect.value;
 			// 记住本次选择，下次打开弹窗自动恢复
-			void this.plugin.appSettings.setSelectedTemplateId(templateSelect.value);
+			void this.ctx.appSettings.setSelectedTemplateId(templateSelect.value);
 		});
 
-		const btn = actions.createEl("button", { text: this.plugin.t("report.generate") });
+		const btn = actions.createEl("button", { text: t("report.generate") });
 		btn.addClass("tah-generate-btn");
 		btn.addEventListener("click", () => void this.generate());
 		this.generateBtn = btn;
@@ -156,37 +176,17 @@ export class ReportModal extends Modal {
 		if (this.generateBtn) {
 			applyGenerateButtonState(
 				this.generateBtn,
-				getGenerateButtonState(true, this.plugin.t("report.generate"))
+				getGenerateButtonState(true, this.ctx.t("report.generate"))
 			);
 		}
 
 		try {
-			// 界面打开时已打开仓库；生成期间沿用它，中途读不到数据按缺详情约定处理（#49 修订一）
-			const repository = this.repository;
-			if (!repository) return;
-
-			// 装配层接线：用户意图之外的一切（设置查询、当前模型、chat / save、时间源）在此注入，
-			// 界面不拼参数（#49 修订三）。入口只建一次：重入守卫在 module 内，双击只产出一份报告。
-			const generate = (this.generateEntry ??= createGeneration({
-				repository,
-				settings: (): GenerateSettings => {
-					const s = this.plugin.settings;
-					return {
-						language: s.language,
-						weekStartsOnMonday: s.weekStartsOnMonday,
-						reportFolder: s.reportFolder,
-						temperature: s.temperature,
-						maxTokens: s.maxTokens,
-						timeoutSeconds: s.timeoutSeconds,
-						templates: s.templates,
-					};
-				},
-				resolveModel: () => this.plugin.providers.resolveActive(),
-				chat: (prompt, config) => chatCompletion(config, [{ role: "user", content: prompt }]),
-				save: (folder, range, content, templateName) =>
-					saveReport(this.app, folder, range, content, templateName),
-				now: () => new Date(),
-			}));
+			const generate = this.generateEntry;
+			// 来源缺失态（摩擦 #19）：入口缺席 ⇔ 打开时仓库缺席；点击给提示，不留静默路径。
+			if (!generate) {
+				new Notice(this.ctx.t("report.tasknotesMissing"));
+				return;
+			}
 
 			const result = await generate({
 				tasks: this.getJoinedTasks(),
@@ -195,7 +195,7 @@ export class ReportModal extends Modal {
 			});
 
 			if (result.ok === true) {
-				new Notice(this.plugin.t("report.saved", { path: result.path }));
+				new Notice(this.ctx.t("report.saved", { path: result.path }));
 				// 假关（设「关」而响应仍带推理段）：一次性非阻断告警，内含「重新测试」动作（#84 / #89）
 				if (result.fakeOff) this.showFakeOffWarning();
 				const file = this.app.vault.getAbstractFileByPath(result.path);
@@ -204,7 +204,7 @@ export class ReportModal extends Modal {
 				}
 				this.close();
 			} else if (result.ok === false) {
-				new Notice(describeReportFailure(result, this.plugin.t));
+				new Notice(describeReportFailure(result, this.ctx.t));
 			}
 			// ok === "generating"：module 的重入守卫接住的并发点击，界面静默（按钮此时已禁用）
 		} finally {
@@ -212,7 +212,7 @@ export class ReportModal extends Modal {
 			if (this.generateBtn) {
 				applyGenerateButtonState(
 					this.generateBtn,
-					getGenerateButtonState(false, this.plugin.t("report.generate"))
+					getGenerateButtonState(false, this.ctx.t("report.generate"))
 				);
 			}
 		}
@@ -223,7 +223,7 @@ export class ReportModal extends Modal {
 	 * 习得能力出错时的修正路径之一（设置页习得行另有「重新测试」文字入口）。
 	 */
 	private showFakeOffWarning(): void {
-		const t = this.plugin.t;
+		const t = this.ctx.t;
 		// 一次性告警（US29）：默认时长自动消失；重测出路另有设置页常驻入口（ADR-0026）
 		const notice = new Notice(t("report.thinkingFakeOff"));
 		const retestBtn = notice.messageEl.createEl("button", {
@@ -242,9 +242,9 @@ export class ReportModal extends Modal {
 	private async retestThinking(): Promise<void> {
 		await runAndAnnounceThinkingTest(
 			{
-				providers: this.plugin.providers,
-				timeoutSeconds: this.plugin.settings.timeoutSeconds,
-				t: this.plugin.t,
+				providers: this.ctx.providers,
+				timeoutSeconds: this.ctx.settings.timeoutSeconds,
+				t: this.ctx.t,
 			},
 			true
 		);
