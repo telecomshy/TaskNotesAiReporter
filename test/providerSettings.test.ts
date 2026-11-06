@@ -1,8 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-	modelsOf,
-	catalogOf,
 	thinkingFor,
 	isConfigured,
 	isSelectable,
@@ -15,11 +13,8 @@ import {
 	setAuthType,
 	refreshModelCatalog,
 	applyPickedModels,
-	isModelStale,
 	isModelProtected,
-	addModel,
 	renameModel,
-	setModelParams,
 	removeModel,
 	selectActiveModel,
 	setModelThinking,
@@ -31,6 +26,7 @@ import {
 	createProviderSettings,
 	type ProviderState,
 } from "../src/settings/providerSettings";
+import { enabledModels } from "../src/settings/providerModels";
 import { createSettingsOwner } from "../src/settings/owner";
 import { DEFAULT_SETTINGS, type LearnedCapability, type ModelProvider } from "../src/types";
 
@@ -51,24 +47,6 @@ function state(over: Partial<ProviderState> = {}): ProviderState {
 }
 
 // ===== 判定谓词（自 test/provider.test.ts 迁入） =====
-
-test("modelsOf 预设取已拉取列表", () => {
-	assert.deepEqual(modelsOf(provider({ id: "p", type: "preset", models: ["a", "b"] })), ["a", "b"]);
-});
-
-test("modelsOf 自定义由 customModels 派生并去空白", () => {
-	const p = provider({
-		id: "c",
-		type: "custom",
-		models: ["ignored"],
-		customModels: [
-			{ id: "1", modelId: "m1" },
-			{ id: "2", modelId: "  " },
-			{ id: "3", modelId: "m2" },
-		],
-	});
-	assert.deepEqual(modelsOf(p), ["m1", "m2"]);
-});
 
 test("isConfigured 预设：选了密钥即已配置", () => {
 	assert.equal(isConfigured(provider({ id: "p", type: "preset", apiKeySecretId: "sk" })), true);
@@ -254,83 +232,16 @@ test("setAuthType 切到 none：清空密钥名", () => {
 
 // ===== 模型清单（#87，ADR-0026） =====
 
-test("catalogOf 缺失清单读作空清单", () => {
-	assert.deepEqual(catalogOf(provider({ id: "p", type: "preset", models: ["a"] })), []);
-	assert.deepEqual(catalogOf(provider({ id: "p", type: "preset", modelCatalog: ["x"] })), ["x"]);
-});
-
 test("refreshModelCatalog 只刷模型清单：启用集与当前模型不动（手动拉取同用）", () => {
 	const p = provider({ id: "p", type: "preset", models: ["kept"], modelCatalog: ["old"] });
 	const s = state({ providers: [p], activeProviderId: "p", activeModel: "kept" });
 	refreshModelCatalog(s, "p", ["kept", "fresh"]);
 	assert.deepEqual(p.modelCatalog, ["kept", "fresh"]);
 	assert.deepEqual(p.models, ["kept"], "启用集不因拉取改动");
-	assert.equal(s.activeModel, "kept");
-});
-
-test("refreshModelCatalog 自定义供应商同样只刷清单：模型行不动", () => {
-	const p = provider({
-		id: "c",
-		type: "custom",
-		customModels: [{ id: "mc1", modelId: "m", contextLength: 4096 }],
-	});
-	const s = state({ providers: [p] });
-	refreshModelCatalog(s, "c", ["m", "n"]);
-	assert.deepEqual(p.modelCatalog, ["m", "n"]);
-	assert.deepEqual(p.customModels, [{ id: "mc1", modelId: "m", contextLength: 4096 }]);
-});
-
-test("refreshModelCatalog 空列表照实刷为空清单（#92 定性：空表是正常状态）", () => {
-	const p = provider({ id: "p", type: "preset", models: ["a"], modelCatalog: ["a"] });
-	const s = state({ providers: [p] });
-	refreshModelCatalog(s, "p", []);
-	assert.deepEqual(p.modelCatalog, [], "拉取到空照实记账，不再视为拉取异常");
-});
-
-test("refreshModelCatalog 清洗清单：去空白、去重、剔除非字符串", () => {
-	const p = provider({ id: "p", type: "preset", models: [] });
-	const s = state({ providers: [p] });
-	refreshModelCatalog(s, "p", [" a ", "a", "", "  ", 123 as unknown as string, "b"]);
-	assert.deepEqual(p.modelCatalog, ["a", "b"]);
+	assert.equal(s.activeModel, "kept", "拉取不触碰「当前模型」");
 });
 
 // ===== 启用 / 停用（挑选确认，#87） =====
-
-test("applyPickedModels 预设：挑选集成为启用集，取消挑选即移出", () => {
-	const p = provider({ id: "p", type: "preset", models: ["a", "b", "c"], modelCatalog: ["a", "b", "c"] });
-	const s = state({ providers: [p] });
-	applyPickedModels(s, "p", ["b", "c"]);
-	assert.deepEqual(p.models, ["b", "c"], "取消挑选的 a 移出启用集");
-});
-
-test("applyPickedModels 自定义：取消挑选移出模型行，保留行的 id 与参数", () => {
-	const p = provider({
-		id: "c",
-		type: "custom",
-		customModels: [
-			{ id: "mc1", modelId: "a", contextLength: 4096 },
-			{ id: "mc2", modelId: "b" },
-		],
-		modelCatalog: ["a", "b", "n"],
-	});
-	const s = state({ providers: [p] });
-	applyPickedModels(s, "c", ["a", "n"]);
-	const rows = p.customModels!;
-	assert.equal(rows.length, 2);
-	assert.equal(rows[0].id, "mc1", "保留行不换 id");
-	assert.equal(rows[0].modelId, "a");
-	assert.equal(rows[0].contextLength, 4096, "保留行参数不丢");
-	assert.equal(rows[1].modelId, "n", "新挑选的模型行排在后面");
-});
-
-test("applyPickedModels 自定义：新挑选的模型补出空参数模型行", () => {
-	const p = provider({ id: "c", type: "custom", customModels: [], modelCatalog: ["n"] });
-	const s = state({ providers: [p] });
-	applyPickedModels(s, "c", ["n"]);
-	assert.equal(p.customModels!.length, 1);
-	assert.equal(p.customModels![0].modelId, "n");
-	assert.equal(p.customModels![0].contextLength, undefined);
-});
 
 test("applyPickedModels 停用模型不清「思考开关」：重新添加后原样生效（AC4）", () => {
 	const p = provider({
@@ -344,7 +255,7 @@ test("applyPickedModels 停用模型不清「思考开关」：重新添加后�
 	assert.deepEqual(p.customModels, [], "已停用");
 	assert.deepEqual(p.thinkingByModel, { m: "on" }, "「思考开关」保留");
 	applyPickedModels(s, "c", ["m"]);
-	assert.deepEqual(modelsOf(p), ["m"]);
+	assert.deepEqual(enabledModels(p), ["m"]);
 	assert.equal(thinkingFor(p, "m").setting, "on", "重新添加后原样生效");
 });
 
@@ -371,34 +282,7 @@ test("isModelProtected 当前模型受保护，其余模型可移除", () => {
 	assert.equal(isModelProtected(s, "other", "m"), false);
 });
 
-// ===== 已失效（AC6） =====
-
-test("isModelStale 已启用但不在模型清单 → 已失效（上游消失）", () => {
-	const p = provider({ id: "p", type: "preset", models: ["a", "gone"], modelCatalog: ["a", "b"] });
-	assert.equal(isModelStale(p, "gone"), true);
-	assert.equal(isModelStale(p, "a"), false, "仍在清单内不失效");
-});
-
-test("isModelStale 从未拉取（清单缺失）不标失效；未启用的模型不谈失效", () => {
-	const p = provider({ id: "c", type: "custom", customModels: [{ id: "1", modelId: "hand" }] });
-	assert.equal(isModelStale(p, "hand"), false, "从未拉取过清单，手填模型不失效");
-	const q = provider({ id: "p", type: "preset", models: ["a"], modelCatalog: ["a"] });
-	assert.equal(isModelStale(q, "b"), false, "未启用的模型不谈失效");
-});
-
-test("isModelStale 拉取到空清单（#92）：启用模型照实标「已失效」", () => {
-	const p = provider({ id: "p", type: "preset", models: ["a", "b"], modelCatalog: [] });
-	assert.equal(isModelStale(p, "a"), true);
-	assert.equal(isModelStale(p, "b"), true);
-});
-
-test("addModel 追加一个空模型配置", () => {
-	const p = provider({ id: "c", type: "custom", customModels: [] });
-	const s = state({ providers: [p] });
-	addModel(s, "c");
-	assert.equal(p.customModels!.length, 1);
-	assert.equal(p.customModels![0].modelId, "");
-});
+// ===== 行编辑命令（保护与键迁移在命令层；存储原语见 test/providerModels.test.ts） =====
 
 test("renameModel 改当前模型 id：清空当前模型", () => {
 	const p = provider({ id: "c", type: "custom", customModels: [{ id: "mc1", modelId: "old" }] });
@@ -417,15 +301,6 @@ test("renameModel 改非当前模型 id：当前模型不变", () => {
 	const s = state({ providers: [p], activeProviderId: "c", activeModel: "keep" });
 	renameModel(s, "c", "mc1", "new");
 	assert.equal(s.activeModel, "keep");
-});
-
-test("setModelParams 写入上下文长度与输出上限", () => {
-	const p = provider({ id: "c", type: "custom", customModels: [{ id: "mc1", modelId: "m" }] });
-	const s = state({ providers: [p] });
-	setModelParams(s, "c", "mc1", { contextLength: 131072 });
-	setModelParams(s, "c", "mc1", { maxTokens: 4096 });
-	assert.equal(p.customModels![0].contextLength, 131072);
-	assert.equal(p.customModels![0].maxTokens, 4096);
 });
 
 test("removeModel 移除当前模型被拒：需先切换模型（AC3）", () => {

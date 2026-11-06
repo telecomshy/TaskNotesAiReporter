@@ -2,13 +2,15 @@
  * 挑选对话框（#87，ADR-0026）：「获取模型列表」拉取成功后弹出，呈现「模型清单」供勾选。
  * 默认仅挑选「启用模型」；提供全选 / 全不选；确认才生效（取消不改动启用集）。
  * 「当前模型」受保护：试图取消勾选时提示先切换模型（真正移除需先切换，见 ADR-0026）。
- * 预设与自定义供应商共用同一对话框；启停语义在 providerSettings 命令里，本模块只做呈现与收集。
+ * 预设与自定义供应商共用同一对话框；启用集 / 清单 / 呈现序读面在 providerModels，
+ * 启停语义在 providerSettings 命令里，本模块只做呈现与勾选收集。
  */
 
 import { Modal, Notice, type App } from "obsidian";
 import type { ModelProvider } from "../types";
 import type { Translator } from "../i18n";
-import { catalogOf, isModelStale, modelsOf, type ProviderSettings } from "./providerSettings";
+import { enabledModels, isModelStale, pickerRows } from "./providerModels";
+import type { ProviderSettings } from "./providerSettings";
 
 /** 挑选对话框的依赖面：供应商命令 + 弹窗所需的 app。 */
 export interface ModelPickerContext {
@@ -21,13 +23,6 @@ export interface ModelPickerContext {
 /** 打开挑选对话框（调用方先完成拉取与「模型清单」刷新）。 */
 export function openModelPicker(ctx: ModelPickerContext, provider: ModelProvider): void {
 	new ModelPickerModal(ctx, provider).open();
-}
-
-/** 呈现顺序：模型清单序在前；清单外的启用模型（＝已失效，保留可移除）追加在后。 */
-function pickerRows(provider: ModelProvider): string[] {
-	const catalog = catalogOf(provider);
-	const rows = [...catalog, ...modelsOf(provider).filter((m) => !catalog.includes(m))];
-	return [...new Set(rows)];
 }
 
 class ModelPickerModal extends Modal {
@@ -52,7 +47,7 @@ class ModelPickerModal extends Modal {
 			cls: "setting-item-description",
 		});
 
-		for (const model of modelsOf(this.provider)) this.checked.add(model);
+		for (const model of enabledModels(this.provider)) this.checked.add(model);
 
 		const actions = this.contentEl.createDiv({ cls: "tah-model-picker-actions" });
 		const selectAllBtn = actions.createEl("button", { text: t("model.pickerSelectAll") });

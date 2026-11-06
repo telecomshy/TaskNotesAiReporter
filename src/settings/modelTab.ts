@@ -4,18 +4,17 @@
  */
 
 import { Notice, SecretComponent, type App } from "obsidian";
-import type { LearnedCapability, ModelConfig, ModelProvider } from "../types";
+import type { LearnedCapability, ModelProvider } from "../types";
 import { thinkingDisplayCopy, type Translator } from "../i18n";
 import { testConnection } from "../ai/client";
 import { describeAIError } from "../ai/errorMessage";
 import { THINKING_OFF_CANDIDATES, type ThinkingDisplayState } from "../core/thinking";
 import { runAndAnnounceThinkingTest } from "../ui/thinkingTestAction";
+import { enabledModels, isModelStale, modelRows, type ModelRowView } from "./providerModels";
 import {
-	modelsOf,
 	isConfigured,
 	isSelectable,
 	isActiveModel,
-	isModelStale,
 	type ActiveModelInfo,
 	type ProviderSettings,
 } from "./providerSettings";
@@ -96,7 +95,7 @@ function renderActiveModelSection(container: HTMLElement, ctx: ModelTabContext):
 	for (const provider of selectable) {
 		const optgroup = selectEl.createEl("optgroup");
 		optgroup.label = provider.name;
-		for (const model of modelsOf(provider)) {
+		for (const model of enabledModels(provider)) {
 			const option = optgroup.createEl("option");
 			option.value = `${provider.id}::${model}`;
 			option.text = isModelStale(provider, model)
@@ -273,7 +272,7 @@ function renderPresetProviderCard(
 	const modelsRow = body.createDiv({ cls: "tah-provider-models" });
 
 	const showEnabled = () => {
-		const enabled = modelsOf(provider);
+		const enabled = enabledModels(provider);
 		modelsRow.empty();
 		modelsLabel.toggleClass("tah-hidden", enabled.length === 0);
 		if (enabled.length > 0) renderModelTags(modelsRow, enabled, provider, ctx);
@@ -499,13 +498,12 @@ async function fetchModels(provider: ModelProvider, ctx: ModelTabContext): Promi
 	void exhaustive;
 }
 
-/** 更新卡片上的模型数量标签（模型数由 provider module 统一读取） */
+/** 更新卡片上的模型数量标签（模型数由 providerModels 读面统一读取） */
 function updateModelCount(card: HTMLElement, provider: ModelProvider, t: Translator): void {
 	const countEl = card.querySelector(".tah-provider-count");
 	if (!countEl) return;
-	const count = modelsOf(provider).length;
-	const show = count > 0 && (provider.type === "custom" || isConfigured(provider));
-	countEl.textContent = show ? t("model.modelCount", { count }) : "";
+	const count = enabledModels(provider).length;
+	countEl.textContent = count > 0 ? t("model.modelCount", { count }) : "";
 }
 
 /** 同步卡片「已配置 / 未配置」状态。 */
@@ -642,8 +640,8 @@ function renderCustomProviderCard(
 	const renderModelRows = () => {
 		modelsList.empty();
 		updateModelCount(card, provider, t);
-		for (const mc of provider.customModels ?? []) {
-			renderCustomModelRow(modelsList, provider, mc, card, ctx, renderModelRows);
+		for (const row of modelRows(provider)) {
+			renderCustomModelRow(modelsList, provider, row, card, ctx, renderModelRows);
 		}
 		// 列表尾「手动添加」追加行：手动配置＝给列表添一行草稿，与列表编辑同属一体
 		const appendBtn = modelsList.createEl("button", {
@@ -663,70 +661,71 @@ function renderCustomProviderCard(
 	wireCollapse(header, body, arrow);
 }
 
-/** 渲染单个模型配置行（模型ID + Context Length + Max Tokens + 测试 + 删除） */
+/** 渲染单个模型配置行（模型ID + Context Length + Max Tokens + 测试 + 删除）；行数据来自 providerModels 读面。 */
 function renderCustomModelRow(
 	listEl: HTMLElement,
 	provider: ModelProvider,
-	mc: ModelConfig,
+	row: ModelRowView,
 	card: HTMLElement,
 	ctx: ModelTabContext,
 	/** 删除后重画整张列表（含列表尾的追加行）；由卡片传入 renderModelRows。 */
 	rerender: () => void
 ): void {
 	const t = ctx.t;
-	const row = listEl.createDiv({ cls: "tah-custom-model-row" });
+	const rowEl = listEl.createDiv({ cls: "tah-custom-model-row" });
 	const info = ctx.providers.activeModelInfo();
-	if (mc.modelId !== "" && isActiveModel(info.providerId, info.model, provider.id, mc.modelId)) {
-		row.addClass("tah-custom-model-row-active");
+	if (row.modelId !== "" && isActiveModel(info.providerId, info.model, provider.id, row.modelId)) {
+		rowEl.addClass("tah-custom-model-row-active");
 	}
 
 	// 模型 ID
-	const idGroup = row.createDiv({ cls: "tah-custom-model-group" });
+	const idGroup = rowEl.createDiv({ cls: "tah-custom-model-group" });
 	idGroup.createDiv({ cls: "tah-custom-model-label", text: t("model.modelId") });
 	const idInput = idGroup.createEl("input", { type: "text" });
 	idInput.addClass("tah-provider-input");
-	idInput.value = mc.modelId;
+	idInput.value = row.modelId;
 	idInput.placeholder = t("model.modelIdPlaceholder");
 	idInput.addEventListener("change", () => {
-		ctx.providers.renameModel(provider.id, mc.id, idInput.value);
-		idInput.value = mc.modelId;
+		ctx.providers.renameModel(provider.id, row.rowId, idInput.value);
+		// 存储侧写入的是 trim 后的值；行数据是 modelRows 快照（非活对象），回填取 trim 后的输入。
+		idInput.value = idInput.value.trim();
 		syncCustomModels(provider, card, ctx);
 	});
 	// 上游消失的启用模型标「已失效」，保留可移除（AC6）
-	if (mc.modelId !== "" && isModelStale(provider, mc.modelId)) {
+	if (row.modelId !== "" && isModelStale(provider, row.modelId)) {
 		idGroup.createDiv({ cls: "tah-stale-badge", text: t("model.staleBadge") });
 	}
 
 	// Context Length
-	const ctxGroup = row.createDiv({ cls: "tah-custom-model-group" });
+	const ctxGroup = rowEl.createDiv({ cls: "tah-custom-model-group" });
 	ctxGroup.createDiv({ cls: "tah-custom-model-label", text: t("model.contextLength") });
 	const ctxInput = ctxGroup.createEl("input", { type: "text" });
 	ctxInput.addClass("tah-provider-input");
-	ctxInput.value = mc.contextLength?.toString() ?? "";
+	ctxInput.value = row.params.contextLength?.toString() ?? "";
 	ctxInput.placeholder = "204800";
 	ctxInput.addEventListener("change", () => {
-		ctx.providers.setModelParams(provider.id, mc.id, {
+		ctx.providers.setModelParams(provider.id, row.rowId, {
 			contextLength: parseIntSafe(ctxInput.value),
 		});
 		syncCustomModels(provider, card, ctx);
 	});
 
 	// Max Tokens
-	const maxGroup = row.createDiv({ cls: "tah-custom-model-group" });
+	const maxGroup = rowEl.createDiv({ cls: "tah-custom-model-group" });
 	maxGroup.createDiv({ cls: "tah-custom-model-label", text: t("model.maxTokens") });
 	const maxInput = maxGroup.createEl("input", { type: "text" });
 	maxInput.addClass("tah-provider-input");
-	maxInput.value = mc.maxTokens?.toString() ?? "";
+	maxInput.value = row.params.maxTokens?.toString() ?? "";
 	maxInput.placeholder = "65535";
 	maxInput.addEventListener("change", () => {
-		ctx.providers.setModelParams(provider.id, mc.id, {
+		ctx.providers.setModelParams(provider.id, row.rowId, {
 			maxTokens: parseIntSafe(maxInput.value),
 		});
 		syncCustomModels(provider, card, ctx);
 	});
 
 	// 测试按钮（针对该模型）
-	const actions = row.createDiv({ cls: "tah-custom-model-actions" });
+	const actions = rowEl.createDiv({ cls: "tah-custom-model-actions" });
 	const testBtn = actions.createEl("button", { text: t("model.test") });
 	testBtn.addClass("tah-model-test-btn");
 	testBtn.addEventListener("click", () => {
@@ -763,11 +762,11 @@ function renderCustomModelRow(
 	const delBtn = actions.createEl("button", { text: "✕" });
 	delBtn.addClass("tah-model-del-btn");
 	delBtn.addEventListener("click", () => {
-		if (ctx.providers.isModelProtected(provider.id, mc.modelId.trim())) {
+		if (ctx.providers.isModelProtected(provider.id, row.modelId)) {
 			new Notice(t("model.protectActiveModel"));
 			return;
 		}
-		ctx.providers.removeModel(provider.id, mc.id);
+		ctx.providers.removeModel(provider.id, row.rowId);
 		// 整张列表重画（含列表尾追加行）：单删一行后不再丢「+ 手动添加模型 ID」按钮。
 		rerender();
 		refreshCardState(card, provider, t);

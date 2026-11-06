@@ -5,6 +5,9 @@
  * 绑定门面：由边界（main.ts）注入状态读写与密钥取值，供设置页与主弹窗调用；
  * 视图不再直接改 `settings.providers`、不再各自落盘，也不再直接访问 SecretStorage。
  *
+ * 「启用模型」「模型清单」「模型参数」的存储与行编辑已收进 ./providerModels（#99）；
+ * 本模块保留跨域编排（「当前模型」保护、思考键迁移、悬空清理）与凭据域谓词。
+ *
  * 「当前模型」失效只在变更命令处清理，载入时不校验（见 ADR-0010）。
  */
 
@@ -12,7 +15,6 @@ import type {
 	ActiveModelConfig,
 	ActiveModelResolution,
 	LearnedCapability,
-	ModelConfig,
 	ModelProvider,
 	ThinkingResolution,
 	ThinkingSetting,
@@ -24,6 +26,18 @@ import {
 	type ThinkingDisplay,
 } from "../core/thinking";
 import { resolveSecretValue } from "./secrets";
+import {
+	addDraftRow,
+	enabledModels,
+	modelParams,
+	modelRows,
+	renameRow,
+	removeRow,
+	setEnabledModels,
+	setModelCatalog,
+	setRowParams,
+	type ModelParams,
+} from "./providerModels";
 import { coerceModelIds, makeId } from "./values";
 import type { SettingsOwner } from "./owner";
 
@@ -49,33 +63,6 @@ export interface ProviderStateRead {
 
 // ===== 判定谓词 =====
 
-/** 统一读取供应商的「启用模型」ID：预设取挑选集；自定义由 customModels 派生（去空白）。 */
-export function modelsOf(provider: ModelProvider): string[] {
-	if (provider.type === "custom") {
-		return (provider.customModels ?? [])
-			.map((m) => m.modelId)
-			.filter((id) => id.trim() !== "");
-	}
-	return provider.models;
-}
-
-/** 统一读取「模型清单」（模型全集）；未迁移的旧数据缺失该字段时读作空清单（#87）。 */
-export function catalogOf(provider: ModelProvider): string[] {
-	return provider.modelCatalog ?? [];
-}
-
-/**
- * 「已失效」（#87）：已启用但不在「模型清单」中（上游已消失），保留可移除。
- * 判定区分「从未拉取」（清单缺失＝没有上游信息，不标）与「拉取到空」（#92 定性：
- * 空表是正常状态，照实记账——全部启用模型标「已失效」，可移除，拉回即消）。
- */
-export function isModelStale(provider: ModelProvider, model: string): boolean {
-	const catalog = provider.modelCatalog;
-	return (
-		catalog !== undefined && modelsOf(provider).includes(model) && !catalog.includes(model)
-	);
-}
-
 /**
  * 读取某个模型的「思考」解析结果：该模型的「思考开关」取值（缺省＝关）经能力层映射，
  * 请求参数与置灰标注一并带出（ADR-0024）。设置页与当前模型 解析共用这一个读面。
@@ -94,7 +81,7 @@ export function thinkingFor(provider: ModelProvider, model: string): ThinkingRes
 export function isConfigured(provider: ModelProvider): boolean {
 	return provider.type === "preset"
 		? provider.apiKeySecretId.trim() !== ""
-		: provider.baseUrl.trim() !== "" && modelsOf(provider).length > 0;
+		: provider.baseUrl.trim() !== "" && enabledModels(provider).length > 0;
 }
 
 /**
@@ -109,7 +96,7 @@ export function requiresSecret(provider: ModelProvider): boolean {
 /** 能否作为「当前模型」来源：有地址、有模型，且认证满足（无认证不要求密钥）。 */
 export function isSelectable(provider: ModelProvider): boolean {
 	const credentialed = !requiresSecret(provider) || provider.apiKeySecretId.trim() !== "";
-	return provider.baseUrl.trim() !== "" && modelsOf(provider).length > 0 && credentialed;
+	return provider.baseUrl.trim() !== "" && enabledModels(provider).length > 0 && credentialed;
 }
 
 /**
@@ -187,7 +174,7 @@ export function setSecretId(state: ProviderState, providerId: string, secretId: 
 	if (!provider) return state;
 	provider.apiKeySecretId = secretId.trim();
 	if (needsSecretForModels(provider) && provider.apiKeySecretId === "") {
-		provider.models = [];
+		setEnabledModels(provider, []);
 		clearActiveIfModelGone(state);
 	}
 	return state;
@@ -202,8 +189,8 @@ export function clearUnconfiguredPresetModels(state: ProviderState): boolean {
 	let changed = false;
 	for (const provider of state.providers) {
 		if (!needsSecretForModels(provider) || provider.apiKeySecretId.trim() !== "") continue;
-		if (modelsOf(provider).length === 0) continue;
-		provider.models = [];
+		if (enabledModels(provider).length === 0) continue;
+		setEnabledModels(provider, []);
 		changed = true;
 	}
 	return changed;
@@ -231,7 +218,7 @@ export function setAuthType(
  * 挑选确认（#87）：挑选集成为「启用模型」，取消挑选即移出。
  * 「当前模型」受保护：挑选集不含它也强制保留（真正移除需先切换模型）。
  * 移出只动启用集本身——该模型的「思考开关」与习得能力一并保留（重新添加后原样生效）。
- * 自定义供应商的模型行同步是另一摊事，见 `syncCustomModelRows`。
+ * 启用集的写入是另一摊事，委托 ./providerModels 的 `setEnabledModels`。
  */
 export function applyPickedModels(
 	state: ProviderState,
@@ -249,36 +236,8 @@ export function applyPickedModels(
 	) {
 		wanted.push(active);
 	}
-	if (provider.type === "custom") {
-		syncCustomModelRows(provider, wanted);
-	} else {
-		provider.models = wanted;
-	}
+	setEnabledModels(provider, wanted);
 	return state;
-}
-
-/**
- * 自定义供应商的模型行同步（挑选确认的行级副作用）：保留行（id 与上下文长度 /
- * 最大输出参数）不换行，新挑选的补出空参数行，空白行（编辑中的草稿）不动。
- */
-function syncCustomModelRows(provider: ModelProvider, wanted: string[]): void {
-	const kept: ModelConfig[] = [];
-	const seen = new Set<string>();
-	for (const row of provider.customModels ?? []) {
-		const id = row.modelId.trim();
-		if (id === "") {
-			kept.push(row);
-			continue;
-		}
-		if (wanted.includes(id) && !seen.has(id)) {
-			seen.add(id);
-			kept.push(row);
-		}
-	}
-	for (const id of wanted) {
-		if (!seen.has(id)) kept.push({ id: makeId("mc"), modelId: id });
-	}
-	provider.customModels = kept;
 }
 
 /**
@@ -293,19 +252,15 @@ export function refreshModelCatalog(
 ): ProviderState {
 	const provider = findProvider(state, providerId);
 	if (!provider) return state;
-	provider.modelCatalog = coerceModelIds(models);
+	setModelCatalog(provider, models);
 	return state;
 }
 
-/** 为自定义供应商追加一个空模型配置。 */
+/** 为自定义供应商追加一个空模型配置（草稿行写入委托 ./providerModels）。 */
 export function addModel(state: ProviderState, providerId: string): ProviderState {
 	const provider = findProvider(state, providerId);
 	if (!provider) return state;
-	if (!provider.customModels) provider.customModels = [];
-	provider.customModels.push({
-		id: makeId("mc"),
-		modelId: "",
-	});
+	addDraftRow(provider);
 	return state;
 }
 
@@ -313,7 +268,8 @@ export function addModel(state: ProviderState, providerId: string): ProviderStat
  * 改写某个模型配置的模型 ID；若改的是当前模型，则清空当前模型。
  * 重命名改变模型身份，走 ADR-0010 的变更命令清理；与 removeModel 的
  * 「受保护、先切换后移除」（ADR-0026）不对称是刻意的——删除可逆，改名不可逆。
- * 「思考开关」随模型改名迁移。
+ * 行编辑委托 ./providerModels 的 `renameRow`（返回 trim 后新旧 id），本命令层
+ * 拿它迁移「思考开关」与习得能力条目（「跟模型走」，#89），残键不留。
  */
 export function renameModel(
 	state: ProviderState,
@@ -321,45 +277,44 @@ export function renameModel(
 	modelConfigId: string,
 	newModelId: string
 ): ProviderState {
-	const model = findModel(state, providerId, modelConfigId);
-	if (!model) return state;
-	const oldModelId = model.modelId;
-	model.modelId = newModelId.trim();
 	const provider = findProvider(state, providerId);
-	if (provider) {
-		// 「思考开关」与习得能力都「跟模型走」（#89）：改名迁移条目，残键不留。
-		migrateModelKey(provider.thinkingByModel, oldModelId, model.modelId);
-		migrateModelKey(provider.learnedByModel, oldModelId, model.modelId);
-	}
+	if (!provider) return state;
+	const renamed = renameRow(provider, modelConfigId, newModelId);
+	if (!renamed) return state;
+	migrateModelKey(provider.thinkingByModel, renamed.from, renamed.to);
+	migrateModelKey(provider.learnedByModel, renamed.from, renamed.to);
 	clearActiveIfModelGone(state);
 	return state;
 }
 
-/** 改写某个模型配置的参数（只覆盖传入的键）。 */
+/** 改写某个模型配置的参数（只覆盖传入的键）；行编辑委托 ./providerModels。 */
 export function setModelParams(
 	state: ProviderState,
 	providerId: string,
 	modelConfigId: string,
-	params: Pick<ModelConfig, "contextLength" | "maxTokens">
+	params: ModelParams
 ): ProviderState {
-	const model = findModel(state, providerId, modelConfigId);
-	if (!model) return state;
-	if ("contextLength" in params) model.contextLength = params.contextLength;
-	if ("maxTokens" in params) model.maxTokens = params.maxTokens;
+	const provider = findProvider(state, providerId);
+	if (!provider) return state;
+	setRowParams(provider, modelConfigId, params);
 	return state;
 }
 
-/** 删除某个模型配置；「当前模型」受保护（需先切换模型）；移除不清「思考开关」（#87）。 */
+/**
+ * 删除某个模型配置；「当前模型」受保护（需先切换模型，ADR-0026）；移除不清
+ * 「思考开关」（#87）。行按 `modelRows` 读面寻址（编辑面按行、读面按模型），
+ * 删行委托 ./providerModels 的 `removeRow`。
+ */
 export function removeModel(
 	state: ProviderState,
 	providerId: string,
 	modelConfigId: string
 ): ProviderState {
 	const provider = findProvider(state, providerId);
-	if (!provider || !provider.customModels) return state;
-	const target = provider.customModels.find((m) => m.id === modelConfigId);
-	if (!target || isModelProtected(state, providerId, target.modelId.trim())) return state;
-	provider.customModels = provider.customModels.filter((m) => m.id !== modelConfigId);
+	if (!provider) return state;
+	const row = modelRows(provider).find((r) => r.rowId === modelConfigId);
+	if (!row || isModelProtected(state, providerId, row.modelId)) return state;
+	removeRow(provider, modelConfigId);
 	return state;
 }
 
@@ -451,13 +406,10 @@ export function resolveActive(
 		// 自定义供应商与预设同路：能力表未命中即未知（ADR-0026）。
 		thinking: thinkingFor(provider, state.activeModel),
 	};
-	if (provider.type === "custom" && Array.isArray(provider.customModels)) {
-		const model = provider.customModels.find((m) => m.modelId === state.activeModel);
-		if (model) {
-			config.maxTokens = model.maxTokens;
-			config.contextLength = model.contextLength;
-		}
-	}
+	// 模型参数经 providerModels 读面取（预设恒空；自定义带出该行参数）。
+	const params = modelParams(provider, state.activeModel);
+	if (params.contextLength !== undefined) config.contextLength = params.contextLength;
+	if (params.maxTokens !== undefined) config.maxTokens = params.maxTokens;
 	return { ok: true, providerId: state.activeProviderId, config };
 }
 
@@ -522,19 +474,11 @@ function migrateModelKey<T>(map: Record<string, T> | undefined, oldKey: string, 
 
 /** 模型 ID 是否非空且在该供应商的模型列表中。 */
 function modelExists(provider: ModelProvider, model: string): boolean {
-	return model !== "" && modelsOf(provider).includes(model);
+	return model !== "" && enabledModels(provider).includes(model);
 }
 
 function findProvider(state: ProviderStateRead, providerId: string): ModelProvider | undefined {
 	return state.providers.find((p) => p.id === providerId);
-}
-
-function findModel(
-	state: ProviderState,
-	providerId: string,
-	modelConfigId: string
-): ModelConfig | undefined {
-	return findProvider(state, providerId)?.customModels?.find((m) => m.id === modelConfigId);
 }
 
 // ===== 绑定门面 =====
@@ -560,11 +504,7 @@ export interface ProviderSettings {
 	isModelProtected(providerId: string, model: string): boolean;
 	addModel(providerId: string): void;
 	renameModel(providerId: string, modelConfigId: string, newModelId: string): void;
-	setModelParams(
-		providerId: string,
-		modelConfigId: string,
-		params: Pick<ModelConfig, "contextLength" | "maxTokens">
-	): void;
+	setModelParams(providerId: string, modelConfigId: string, params: ModelParams): void;
 	removeModel(providerId: string, modelConfigId: string): void;
 	setModelThinking(providerId: string, model: string, setting: ThinkingSetting): void;
 	/** 落「习得能力」条目（#89）：思考测试结论按（供应商, 模型）持久化，盖过内置能力表。 */

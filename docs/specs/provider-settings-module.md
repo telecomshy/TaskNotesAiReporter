@@ -16,6 +16,9 @@
 
 > 接口清单随 #87 / #88 / #89 / #90 / #92 演进（2026-11-04 对齐现状）：`applyFetchedModels` 废除于 #87
 > （拉取不再整体替换启用集，改为「刷新清单 + 挑选确认」），#90 再废除静默拉取；思考类命令随 #88 / #89 补入。
+> #99（2026-11-06）把「启用模型」「模型清单」「模型参数」的存储读面与行编辑原语收进新模块
+> `src/settings/providerModels.ts`（`modelsOf` / `catalogOf` / `isModelStale` 分别由 `enabledModels` /
+> `modelCatalog` / `isModelStale` 接替），本模块保留跨域编排（「当前模型」保护、键迁移、清空联动）与门面。
 
 命令：
 
@@ -40,7 +43,7 @@
 
 - `resolveActive()` → `{ ok: true, providerId, config } | { ok: false, reason: 'no-provider' | 'no-model' | 'missing-credentials' }`（（供应商, 模型）键以解析结果为单一来源）
 - 密钥可用性：`secretValue(secretId)`、`isSecretMissing(secretId)`
-- 判定谓词（纯函数，视图直接导入）：`modelsOf` / `catalogOf` / `isConfigured` / `isSelectable` / `isActiveModel` / `isModelStale` / `requiresSecret` / `thinkingFor`
+- 判定谓词（纯函数，视图直接导入）：`isConfigured` / `isSelectable` / `isActiveModel` / `requiresSecret` / `thinkingFor`（`modelsOf` / `catalogOf` / `isModelStale` 已随 #99 迁往 `providerModels`）
 
 > 设计时商定的命令是 8 条；实现时补齐了 `setProviderName` / `setProviderBaseUrl` / `addModel` / `setModelParams`，使视图不再有任何直接写 `settings.providers` 的路径。`setSecret` 定名为 `setSecretId`，对齐 `CONTEXT.md` 的「密钥名（Secret id）」。
 
@@ -51,7 +54,7 @@
 - 切换认证方式为 `none` → 清空 `apiKeySecretId`。
 - 清空预设供应商的密钥名 → 清空其 `models`（并因之清空 `activeModel`）；载入迁移只清存量启用集，悬空 `activeModel` 依 ADR-0010「载入不校验」留给解析层报 `no-model`（#90）。
 - 「模型清单」只由 `refreshModelCatalog` 整体替换；「已失效」＝已启用 ∧ 清单已拉取 ∧ 不在清单——空清单是正常状态（#92），与「从未拉取」（清单缺失）区分对待。
-- `resolveActive()`：模型不在 `modelsOf` 中 → `no-model`；`authType: "none"` 不要求密钥；需要却缺失 → `missing-credentials`；`baseUrl` 为空归入 `missing-credentials`。
+- `resolveActive()`：模型不在启用集中（#99 起经 providerModels `enabledModels` 读取）→ `no-model`；`authType: "none"` 不要求密钥；需要却缺失 → `missing-credentials`；`baseUrl` 为空归入 `missing-credentials`。
 - **载入时不校验 `activeModel`**，`normalizeSettings` 维持只保证 `activeProviderId` 存在（见 ADR-0010）。
 - 密钥访问只经注入的 `getSecret`；不再直接访问 `app.secretStorage`。
 

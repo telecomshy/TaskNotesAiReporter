@@ -16,13 +16,16 @@ import {
 import type { PendingSecret } from "./secrets";
 import { normalizeThinkingSetting } from "../core/thinking";
 import {
-	coerceModelIds,
+	adoptLegacyCustomModels,
+	initializeModelCatalog,
+	setEnabledModels,
+} from "./providerModels";
+import {
 	coerceReportLanguage,
 	coerceSelectedTemplateId,
 	coerceTemplates,
 	coerceUiLanguage,
 	coerceWeekStartsOnMonday,
-	makeId,
 } from "./values";
 
 export type { TaskNotesAIHelperSettings } from "../types";
@@ -127,17 +130,15 @@ export function normalizeSettings(raw: unknown): NormalizedSettings {
 					pendingSecrets.push({ providerId: provider.id, plaintext: legacy });
 				}
 				// 迁移：旧版自定义供应商用 models 字符串数组（供应商级 contextLength/maxTokens 也已废弃），
-				// 转为 customModels 每模型配置，保持常规配置下拉与卡片模型行可用。
-				if (type === "custom" && !Array.isArray(provider.customModels)) {
+				// 转为 customModels 每模型配置（写入即 trim，见 providerModels），保持常规配置下拉与卡片模型行可用。
+				// 「已是数组则不重复迁移」的守卫读**原始记录**（同 #14 的 catalogRaw 口径），不摸构造出的 provider。
+				if (type === "custom" && !Array.isArray(providerRaw.customModels)) {
 					const legacyModels = Array.isArray(providerRaw.models) ? (providerRaw.models as string[]) : [];
-					provider.customModels = legacyModels.map((modelId) => ({
-						id: makeId("mc"),
-						modelId,
-					}));
+					adoptLegacyCustomModels(provider, legacyModels);
 				}
 				// #87 迁移（幂等）：模型清单缺失时初值＝启用集（存量模型并入清单）；
 				// 已有清单只做非法值清洗，不并入启用集（否则「已失效」跨载入存活不了）。
-				migrateModelCatalog(provider, providerRaw.modelCatalog);
+				initializeModelCatalog(provider, providerRaw.modelCatalog);
 				return provider;
 			});
 	} else {
@@ -160,13 +161,15 @@ export function normalizeSettings(raw: unknown): NormalizedSettings {
 
 			if (matched) {
 				if (data.apiKey) pendingSecrets.push({ providerId: matched.id, plaintext: data.apiKey });
+				// 旧版单模型启用集经 providerModels 写回（coerce 即 trim）；
+				// 「当前模型」与启用集同源取值，一并 trim 对齐，避免载入后悬空。
 				if (data.model) {
-					matched.models = [data.model];
+					setEnabledModels(matched, [data.model]);
 				}
 				settings.activeProviderId = matched.id;
-				settings.activeModel = data.model ?? "";
+				settings.activeModel = (data.model ?? "").trim();
 			} else {
-				// 不匹配预设，创建新的自定义供应商
+				// 不匹配预设，创建新的自定义供应商；模型行铸造委托 providerModels（写入即 trim）
 				const customId = `custom_${Date.now().toString(36)}`;
 				const legacyProvider: ModelProvider = {
 					id: customId,
@@ -174,18 +177,19 @@ export function normalizeSettings(raw: unknown): NormalizedSettings {
 					type: "custom",
 					baseUrl: data.baseUrl ?? "",
 					apiKeySecretId: "",
-					models: data.model ? [data.model] : [],
+					models: data.model ? [data.model.trim()] : [],
 					authType: "bearer",
-					customModels: data.model ? [{ id: makeId("mc"), modelId: data.model }] : [],
+					customModels: [],
 				};
+				if (data.model) adoptLegacyCustomModels(legacyProvider, [data.model]);
 				if (data.apiKey) pendingSecrets.push({ providerId: customId, plaintext: data.apiKey });
 				settings.providers.push(legacyProvider);
 				settings.activeProviderId = customId;
-				settings.activeModel = data.model ?? "";
+				settings.activeModel = (data.model ?? "").trim();
 			}
 		}
 		// #87 迁移：旧版单模型路径无「模型清单」可考，清单初值＝启用集（存量模型并入清单）。
-		for (const p of settings.providers) migrateModelCatalog(p, undefined);
+		for (const p of settings.providers) initializeModelCatalog(p, undefined);
 	}
 
 	// 选用的供应商与模型
@@ -193,7 +197,9 @@ export function normalizeSettings(raw: unknown): NormalizedSettings {
 		settings.activeProviderId = data.activeProviderId;
 	}
 	if (typeof data.activeModel === "string") {
-		settings.activeModel = data.activeModel;
+		// activeModel 与「启用模型」同域：读面统一按 trim 后的模型 id（#99）。
+		// 存量数据里带空白的当前模型若不在此对齐，载入后会因读侧 trim 而悬空（no-model）。
+		settings.activeModel = data.activeModel.trim();
 	}
 
 	// 保证 activeProviderId 存在于 providers
@@ -212,23 +218,6 @@ function readApiKeySecretId(
 		apiKeySecretId:
 			typeof providerRaw.apiKeySecretId === "string" ? providerRaw.apiKeySecretId : "",
 	};
-}
-
-/**
- * #87 模型清单迁移（幂等）：`catalogRaw` 非数组（缺失或非法，按缺失对待）时
- * 清单初值＝启用集（存量模型并入清单）；已有清单只做非法值清洗、不并入启用集——
- * 并入会把「已启用但上游消失」的模型洗进清单，下次载入「已失效」标记就没了。
- */
-function migrateModelCatalog(provider: ModelProvider, catalogRaw: unknown): void {
-	if (Array.isArray(catalogRaw)) {
-		provider.modelCatalog = coerceModelIds(catalogRaw);
-		return;
-	}
-	const enabled =
-		provider.type === "custom"
-			? (provider.customModels ?? []).map((m) => m.modelId)
-			: provider.models;
-	provider.modelCatalog = coerceModelIds(enabled);
 }
 
 /**
