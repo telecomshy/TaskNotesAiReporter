@@ -62,6 +62,8 @@ Open **Settings → Community plugins → TaskNotes AI Reporter**:
 3. Optionally pick a template and fill in extra requirements.
 4. Click **Generate report**; it is saved as a new note in the report folder.
 
+> **Cancelled statuses** — statuses marked as skipped (`isSkipped`) in TaskNotes' status settings are classified as Cancelled and excluded from the report's unfinished subset. If your own cancelled-type statuses aren't recognized after upgrading, open TaskNotes' status settings and tick the **skipped** flag on them; unmarked statuses still count as To do.
+
 ## Network use
 
 This plugin talks only to the OpenAI-compatible endpoint(s) **you configure** (built-in presets such as DeepSeek, Qwen, Kimi, MiniMax, or a custom base URL). It sends the selected task data and the generated prompt to that endpoint to produce the report, and fetches the model list from it. No data is sent anywhere else, and the plugin collects **no telemetry**.
@@ -101,6 +103,8 @@ Pure logic (date ranges, task filtering, filenames, prompts) lives in `src/core/
 - **密钥**保存在 Obsidian 的 SecretStorage 中（设置里只存密钥名），不在插件数据文件中明文保存。
 - 每份报告写入新笔记，**不覆盖**已有笔记。
 - 界面语言与报告语言相互独立，另有「周一为一周起点」开关。
+
+> **已取消**：在 TaskNotes 状态设置里勾选了跳过（isSkipped）标志的状态归为「已取消」，不再计入报告的未完成子集。升级后若自建的取消类状态没被认出，去 TaskNotes 的状态设置给它勾上「跳过」标志；未勾选的仍按「待办」处理。
 
 **网络用途**：插件只会访问你自己配置的 OpenAI 兼容端点（内置 DeepSeek、通义千问、Kimi、MiniMax 预设，或自定义 Base URL），把所选任务数据与提示词发送过去以生成报告，并从该端点拉取模型列表；不会发送到其它地方，也不收集任何遥测。
 

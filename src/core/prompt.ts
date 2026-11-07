@@ -72,7 +72,7 @@ export interface BuildPromptOptions {
 	extraRequirements?: string;
 	/** 生成时刻，用于 {{today}}；缺省用当前时间。 */
 	now?: Date;
-	/** 状态目录，用于把任务归类为已完成 / 进行中 / 未完成；缺省视为空。 */
+	/** 状态目录，用于把任务归类为已完成 / 进行中 / 已取消 / 未完成；缺省视为空。 */
 	statuses?: readonly StatusDefinition[];
 }
 
@@ -102,9 +102,11 @@ export const PLACEHOLDER_NAMES = [
 	"completedtasks",
 	"inprogresstasks",
 	"opentasks",
+	"cancelledtasks",
 	"completedcount",
 	"inprogresscount",
 	"opencount",
+	"cancelledcount",
 ] as const;
 
 /** 占位符名字（小写形式）。 */
@@ -126,6 +128,7 @@ function buildPlaceholderValues(
 	const completed = filterTasksBySubset(tasks, "completed", statuses);
 	const inProgress = filterTasksBySubset(tasks, "in-progress", statuses);
 	const open = filterTasksBySubset(tasks, "open", statuses);
+	const cancelled = filterTasksBySubset(tasks, "cancelled", statuses);
 	const renderTasks = (list: readonly TaskInfo[]) => list.map(formatTaskLine).join("\n");
 
 	return {
@@ -140,9 +143,11 @@ function buildPlaceholderValues(
 		completedtasks: renderTasks(completed),
 		inprogresstasks: renderTasks(inProgress),
 		opentasks: renderTasks(open),
+		cancelledtasks: renderTasks(cancelled),
 		completedcount: String(completed.length),
 		inprogresscount: String(inProgress.length),
 		opencount: String(open.length),
+		cancelledcount: String(cancelled.length),
 	};
 }
 

@@ -32,8 +32,8 @@
 
 - `StatusConfig` 只有 `isCompleted` 与 `isSkipped` 两个语义标志（`src/types.ts:735-748`），**没有**「进行中」标志。
 - 「进行中」只是某个状态值；要识别它，只能拿 `task.status` 去匹配 `api.catalog.statuses()` 的 `value`（默认 `in-progress`）。用户可自定义 / 改名状态。
-- StatusManager 提供 `getCompletedStatuses()` / `getOpenStatuses()`（`src/services/StatusManager.ts:113-137`）。
-- `api.catalog.statuses()` 原样返回配置数组（浅拷贝），每项含 `id/value/label/color/isCompleted/isSkipped?/order/...`（`src/api/TaskNotesAPI.ts:731-733,1030-1032`）。
+- StatusManager 提供 `getCompletedStatuses()` / `getOpenStatuses()`（`src/services/StatusManager.ts:113-137`）。**2026-11-07（#76 / ADR-0027）在固定 commit `9f59d23` 上核实**：`getOpenStatuses()` 只过滤 `!s.isCompleted`、**不排除 `isSkipped`**（`getNonCompletionStatuses()` 同）——上游把 skipped 也算 open；本插件「已取消不进 open 子集」是自己的口径，不以该函数为准。
+- `api.catalog.statuses()` 原样返回配置数组（浅拷贝），每项含 `id/value/label/color/isCompleted/isSkipped?/order/...`（`src/api/TaskNotesAPI.ts:731-733,1030-1032`）。`isSkipped?: boolean`（「是否算跳过」）已在 `src/types.ts` 的 `StatusConfig` 定义核实（同 commit）。
 
 ## 3. 运行时公开 API
 

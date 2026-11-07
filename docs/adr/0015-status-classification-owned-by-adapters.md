@@ -3,6 +3,7 @@
 任务 状态归类（待办 / 进行中 / 已结束 / 未知）由各 adapter 在实现内判定，缝外只出归一取值；`StatusDefinition.type`（Tasks 的 StatusType 口径）从统一模型移除，退回 Tasks adapter 内部。同理，Tasks 行的 emoji 日期映射留在其行解析内部，不进「日期口径」的共享表。理由：今天 `status.ts` 硬编码两套来源侧字符串（`"in-progress"` 与 `"IN_PROGRESS"`）靠手工对齐，TaskNotes adapter 还丢弃 `type` 回退到状态值名判定。
 
 > **状态**：本文收编 [ADR-0009](./0009-report-template-placeholders.md) 结尾的后果——判定规则归各 adapter，Tasks 侧用其 `status.type`（在其 adapter 内部）。但该后果记录的限制**仍然成立**：TaskNotes 的状态目录只暴露 value / 显示名 / `isCompleted`，没有状态类型字段，「进行中」在 TaskNotes 侧只能按状态值名（默认 `in-progress`）判定，用户自定义状态名后会失效。ADR-0009 其余决定不变。
+> **2026-11-07（#76 / [ADR-0027](0027-cancelled-fifth-status-class.md)）**：TaskNotes 上游状态目录另暴露 `isSkipped` 语义标志，「已取消」进缝为第五档——本文的「四档」清单与 TaskNotes 侧判定由 ADR-0027 扩充；判定归 adapter、来源词汇不出缝的根决定不变。
 
 ## Considered Options
 

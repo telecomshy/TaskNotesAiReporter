@@ -519,3 +519,72 @@ test("状态目录为空：全不选照常浏览；判定不回落到裸状态�
 	assert.equal(f.counts.unknownHidden, 4);
 	assertFrameConsistent(f);
 });
+
+// ===== 第四 chip「已取消」（#76 / ADR-0027） =====
+
+const cancelledTask = makeTask({
+	id: "t5",
+	title: "Cancelled task",
+	status: "cancelled",
+	due: "2024-03-25",
+	tags: ["work"],
+});
+const cancelledStatusTasks = [...statusTasks, cancelledTask];
+const cancelledCatalog: StatusDefinition[] = [
+	...statusCatalog,
+	{ value: "cancelled", statusClass: "cancelled" },
+];
+
+test("状态筛选：取消项不再混进「待办」；单选「已取消」恰命中取消项，点掉还原", () => {
+	let session = switchTab(
+		createSelectionSession(cancelledStatusTasks, dateFields, cancelledCatalog),
+		"title"
+	);
+	// 「待办」不再吞下取消项（本票要修的口径失真）
+	session = toggleStatusClass(session, "todo");
+	assert.deepEqual(rowIds(frame(session)), ["t1"]);
+
+	session = toggleStatusClass(session, "todo");
+	session = toggleStatusClass(session, "cancelled");
+	const f = frame(session);
+	assert.deepEqual(f.filter.statusClasses, ["cancelled"]);
+	assert.deepEqual(rowIds(f), ["t5"]);
+	assert.equal(f.counts.unknownHidden, 1);
+	assertFrameConsistent(f);
+
+	// 再点一次 = 取消选中，回到全量
+	session = toggleStatusClass(session, "cancelled");
+	assert.deepEqual(rowIds(frame(session)), ["t1", "t2", "t3", "t4", "t5"]);
+});
+
+test("状态筛选：待办＋已取消组合；计数与「加入全部」跟随筛选，右栏不受影响", () => {
+	let session = switchTab(
+		createSelectionSession(cancelledStatusTasks, dateFields, cancelledCatalog),
+		"title"
+	);
+	session = toggleStatusClass(session, "todo");
+	session = toggleStatusClass(session, "cancelled");
+	let f = frame(session);
+	assert.deepEqual(f.filter.statusClasses, ["todo", "cancelled"]);
+	assert.deepEqual(rowIds(f), ["t1", "t5"]);
+	assert.equal(f.counts.matching, 2);
+	assert.equal(f.counts.addable, 2);
+
+	session = addAllAddable(session);
+	f = frame(session);
+	assert.deepEqual(joinedIds(f), ["t1", "t5"]);
+	assert.equal(f.counts.addable, 0);
+
+	// 点掉一档后其余任务只是重新可见，报告集合不因此扩员
+	session = toggleStatusClass(session, "cancelled");
+	f = frame(session);
+	assert.deepEqual(joinedIds(f), ["t1", "t5"]);
+	assert.deepEqual(addableIds(f), []); // 只剩「待办」在选，t1 已加入
+
+	// 全不选 = 不过滤：五条全部可见，已加入的仍只在右栏
+	session = toggleStatusClass(session, "todo");
+	f = frame(session);
+	assert.deepEqual(rowIds(f), ["t1", "t2", "t3", "t4", "t5"]);
+	assert.deepEqual(addableIds(f), ["t2", "t3", "t4"]);
+	assertFrameConsistent(f);
+});

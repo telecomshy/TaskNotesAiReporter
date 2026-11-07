@@ -193,6 +193,49 @@ test("占位符：{{openTasks}} 含进行中与未开始", () => {
 	assert.ok(prompt.includes("标题：c"));
 });
 
+test("占位符：{{cancelledTasks}} / {{cancelledCount}} 注入取消项；{{openTasks}} 不再含取消项（ADR-0027）", () => {
+	const withCancelled: StatusDefinition[] = [
+		...statuses,
+		{ value: "cancelled", statusClass: "cancelled" },
+	];
+	const tasks = [
+		makeTask({ id: "a", status: "done" }),
+		makeTask({ id: "b", status: "in-progress" }),
+		makeTask({ id: "c", status: "open" }),
+		makeTask({ id: "d", status: "cancelled" }),
+	];
+	const options = { range, language: "中文", statuses: withCancelled } as const;
+
+	// open 口径重述：未完成且未取消——取消项不再混进未完成子集
+	const openPrompt = buildReportPrompt(tasks, { ...options, templateContent: "{{openTasks}}" });
+	assert.ok(openPrompt.includes("标题：b"));
+	assert.ok(openPrompt.includes("标题：c"));
+	assert.ok(!openPrompt.includes("标题：d"));
+
+	// 取消子集：恰为取消项
+	const cancelledPrompt = buildReportPrompt(tasks, {
+		...options,
+		templateContent: "{{cancelledTasks}}",
+	});
+	assert.ok(cancelledPrompt.includes("标题：d"));
+	assert.ok(!cancelledPrompt.includes("标题：a"));
+	assert.ok(!cancelledPrompt.includes("标题：b"));
+	assert.ok(!cancelledPrompt.includes("标题：c"));
+
+	// 计数：总 4、取消 1
+	const countPrompt = buildReportPrompt(tasks, {
+		...options,
+		templateContent: "总 {{count}}，取消 {{cancelledCount}}",
+	});
+	assert.ok(countPrompt.includes("总 4"));
+	assert.ok(countPrompt.includes("取消 1"));
+
+	// {{tasks}} 全量仍含取消项（ADR-0027：只有子集口径变了，全量不排）
+	const allPrompt = buildReportPrompt(tasks, { ...options, templateContent: "{{tasks}}" });
+	assert.ok(allPrompt.includes("标题：a"));
+	assert.ok(allPrompt.includes("标题：d"));
+});
+
 test("占位符：{{totalTrackedTime}} 汇总耗时", () => {
 	const tasks = [makeTask({ id: "a", totalTrackedTime: 90 }), makeTask({ id: "b", totalTrackedTime: 30 })];
 	const prompt = buildReportPrompt(tasks, {

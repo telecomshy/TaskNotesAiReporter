@@ -107,12 +107,15 @@ export const en = {
 		statusFilterTodo: "To do",
 		statusFilterInProgress: "In progress",
 		statusFilterCompleted: "Completed",
+		statusFilterCancelled: "Cancelled",
 		statusFilterTodoHint:
-			"To do = tasks that aren't completed and whose status value isn't in-progress",
+			"To do = tasks not marked completed (isCompleted) or skipped (isSkipped), and whose status value isn't in-progress",
 		statusFilterInProgressHint:
 			"In progress = tasks whose status value is in-progress (TaskNotes limitation: renaming the value defeats this)",
 		statusFilterCompletedHint:
 			"Completed = tasks whose status is marked completed (isCompleted)",
+		statusFilterCancelledHint:
+			"Cancelled = tasks whose status is marked skipped (isSkipped)",
 		statusFilterDisabled: "Status catalog unavailable; filtering by status is disabled",
 		unknownHidden: "{{count}} more tasks with unknown status are hidden",
 	},
@@ -238,7 +241,7 @@ export const en = {
 		modalNamePlaceholder: "e.g. Weekly, Monthly, Year-end summary",
 		modalContentHeading: "Template content",
 		modalContentHint:
-			"Placeholders: {{tasks}} (all tasks), {{completedTasks}} / {{inProgressTasks}} / {{openTasks}} (status subsets), {{count}} / {{completedCount}} / {{inProgressCount}} / {{openCount}} (counts), {{totalTrackedTime}} (tracked time), {{range}} / {{range.start}} / {{range.end}} (date range), {{today}} (generation date); unrecognized placeholders are kept as-is.",
+			"Placeholders: {{tasks}} (all tasks), {{completedTasks}} / {{inProgressTasks}} / {{openTasks}} / {{cancelledTasks}} (status subsets), {{count}} / {{completedCount}} / {{inProgressCount}} / {{openCount}} / {{cancelledCount}} (counts), {{totalTrackedTime}} (tracked time), {{range}} / {{range.start}} / {{range.end}} (date range), {{today}} (generation date); unrecognized placeholders are kept as-is.",
 		modalContentPlaceholder: "Generate a report from the following tasks…\n\n{{tasks}}",
 		save: "Save",
 		cancel: "Cancel",

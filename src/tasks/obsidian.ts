@@ -55,7 +55,7 @@ export function obsidianTaskRepository(app: App): TaskRepository | null {
 			try {
 				return probe.catalog.statuses().map((status) => ({
 					value: status.value,
-					statusClass: taskNotesStatusClass(status.value, status.isCompleted),
+					statusClass: taskNotesStatusClass(status.value, status.isCompleted, status.isSkipped),
 				}));
 			} catch {
 				return null;

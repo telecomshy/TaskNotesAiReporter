@@ -72,7 +72,7 @@ export interface SelectionFrame {
 		/** 日历初值：仅 custom 来源回填；快捷区间从不预选日历。 */
 		calendarSeed: DateRange | null;
 		/**
-		 * 状态筛选的选中档（状态归类的三档投影，ADR-0021）：chips 的按下态回显。
+		 * 状态筛选的选中档（状态归类的四档投影，ADR-0021 / ADR-0027）：chips 的按下态回显。
 		 * 多选、档间 OR；全不选＝不过滤。
 		 */
 		statusClasses: readonly StatusFilterClass[];

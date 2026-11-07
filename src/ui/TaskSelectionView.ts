@@ -53,7 +53,7 @@ export class TaskSelectionView {
 	private readonly titleTabBtn: HTMLButtonElement;
 	private readonly filterEl: HTMLElement;
 	private readonly statusRowEl: HTMLElement;
-	/** 状态筛选 chips（三档固定，跨页签恒定）：按下态经帧回显刷新。 */
+	/** 状态筛选 chips（四档固定，跨页签恒定）：按下态经帧回显刷新。 */
 	private readonly statusChips: Array<{
 		el: HTMLButtonElement;
 		statusClass: StatusFilterClass;
@@ -118,7 +118,7 @@ export class TaskSelectionView {
 		this.titleTabBtn.addEventListener("click", () => this.changeTab("title"));
 
 		// 状态筛选 chips 行：页签栏之下、各页专属筛选控件之上，跨页签恒定、切换不重建
-		// （ADR-0021：位置本身表达「共享维度」的语义）。档位与折叠规则见 ADR-0015。
+		// （ADR-0021：位置本身表达「共享维度」的语义）。档位与折叠规则见 ADR-0015 / ADR-0027。
 		this.statusRowEl = this.leftEl.createDiv({
 			cls: "tah-status-row",
 			attr: { role: "group", "aria-label": t("taskSelection.statusFilterGroup") },
@@ -142,6 +142,11 @@ export class TaskSelectionView {
 				statusClass: "completed",
 				labelKey: "taskSelection.statusFilterCompleted",
 				hintKey: "taskSelection.statusFilterCompletedHint",
+			},
+			{
+				statusClass: "cancelled",
+				labelKey: "taskSelection.statusFilterCancelled",
+				hintKey: "taskSelection.statusFilterCancelledHint",
 			},
 		];
 		this.statusChips = chipSpecs.map((spec) => {
@@ -265,7 +270,7 @@ export class TaskSelectionView {
 
 	/**
 	 * 状态筛选 chips：按下态来自帧回显（aria-pressed 与选中态一致），
-	 * 禁用态来自状态目录（目录为空 → 三档禁用不隐藏，防布局跳动，ADR-0021）。
+	 * 禁用态来自状态目录（目录为空 → 四档禁用不隐藏，防布局跳动，ADR-0021）。
 	 */
 	private renderStatusChips(f: SelectionFrame): void {
 		const disabled = this.options.statuses.length === 0;

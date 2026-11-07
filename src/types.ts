@@ -42,12 +42,12 @@ export interface TimeEntry {
 }
 
 /**
- * 「状态归类」四档（见 CONTEXT.md「状态归类」）：待办 / 进行中 / 已结束 / 未知。
+ * 「状态归类」五档（见 CONTEXT.md「状态归类」）：待办 / 进行中 / 已结束 / 已取消 / 未知。
  */
-export type StatusClass = "todo" | "in-progress" | "completed" | "unknown";
+export type StatusClass = "todo" | "in-progress" | "completed" | "cancelled" | "unknown";
 
 /**
- * 任务状态定义：状态值名 + 状态归类四档。
+ * 任务状态定义：状态值名 + 状态归类五档。
  * 来源词汇（TaskNotes 的 isCompleted、Tasks 的 StatusType）不出缝，见 ADR-0015 / #47。
  */
 export interface StatusDefinition {
@@ -61,7 +61,14 @@ export interface TaskNotesPublicApi {
 		list(query?: unknown): Promise<TaskInfo[]>;
 	};
 	catalog?: {
-		statuses(): Array<{ value: string; label: string; isCompleted?: boolean; color?: string }>;
+		statuses(): Array<{
+			value: string;
+			label: string;
+			isCompleted?: boolean;
+			/** 上游「跳过」语义标志（isSkipped）：「已取消」档的判定锚（ADR-0027）。 */
+			isSkipped?: boolean;
+			color?: string;
+		}>;
 		priorities(): Array<{ value: string; label: string; color?: string }>;
 	};
 }
