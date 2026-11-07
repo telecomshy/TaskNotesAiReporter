@@ -2,15 +2,15 @@
  * 设置页「模型配置」Tab：内置供应商（仅 api key + 动态拉取模型）与自定义供应商。
  * 本模块只导出 renderModelTab 入口，内部辅助函数均为本模块私有。
  * 领域规则（count 显隐 / stale / active / 孤儿判定）在 ./modelTabModel 投影，
+ * 「思考行」的控件组合（开关 / 徽标 / 备注 / 测试入口）在 ./thinkingCardModel 投影（#102），
  * 卡壳与标签折叠控件在 ./providerCard；本模块只剩渲染接线（#100）。
  */
 
 import { Notice, SecretComponent, type App } from "obsidian";
-import type { LearnedCapability, ModelProvider } from "../types";
-import { thinkingDisplayCopy, type Translator } from "../i18n";
+import type { ModelProvider } from "../types";
+import type { Translator } from "../i18n";
 import { testConnection } from "../ai/client";
 import { describeAIError } from "../ai/errorMessage";
-import { THINKING_OFF_CANDIDATES, type ThinkingDisplayState } from "../core/thinking";
 import { runAndAnnounceThinkingTest } from "../ui/thinkingTestAction";
 import {
 	activeModelCardModel,
@@ -20,6 +20,7 @@ import {
 	type PresetCardModel,
 	type ProviderCardModel,
 } from "./modelTabModel";
+import { thinkingCardModel, hasActiveModel } from "./thinkingCardModel";
 import {
 	createProviderCard,
 	renderModelTagList,
@@ -149,75 +150,55 @@ function renderActiveModelSection(
 	renderThinkingRow(card, model.info, ctx);
 }
 
-/** 习得徽标「实测 {{date}}」的日期（测试时间戳的日期部分）。 */
-function learnedDate(learned: LearnedCapability): string {
-	return learned.testedAt.slice(0, 10);
-}
-
-/** 备注文案：「未能关闭」带实测字段数，其余按行状态直取（测试时间戳只在徽标出现一处）。 */
-function footnoteText(
-	state: ThinkingDisplayState,
-	learned: LearnedCapability | null,
-	t: Translator
-): string {
-	if (state === "learned-not-switchable") {
-		return t(thinkingDisplayCopy[state].footnote, {
-			count: learned?.triedFields ?? THINKING_OFF_CANDIDATES.length,
-		});
-	}
-	return t(thinkingDisplayCopy[state].footnote);
-}
-
 /**
  * 「思考开关」两档滑动开关（#88）：作用于当前模型，取值按模型持久化。
- * 呈现数据（开关可用性 / 徽标 / 备注 / 测试入口 / 习得条目）全部取自 `ActiveModelInfo`，
- * 本函数只做呈现（文案键在 UI 映射，ADR-0005）。
+ * 状态 → 控件组合（开关 / 徽标 / 备注 / 测试入口）由 thinkingCardModel 投影（#102），
+ * 本函数只按规格建元素（文案键在 i18n，ADR-0005）。
  * 测试入口（#89）：未知＝「测试思考能力」按钮；习得档＝「重新测试」文字入口（清习得并重跑）；
- * 已知（内置）＝置灰「已知，无需测试」。
+ * 已知（内置）＝置灰「已知，无需测试」。运行中态（「测试中…」文案、异步期禁用）是瞬态
+ * view 状态，留在 startTest。
  */
 function renderThinkingRow(card: HTMLElement, info: ActiveModelInfo, ctx: ModelTabContext): void {
 	const t = ctx.t;
-	const { thinking, display } = info;
-	const hasModel = info.providerId !== "" && info.model !== "";
+	const view = thinkingCardModel(info);
 
 	const row = cardRow(card, t("model.thinking"), t("model.thinkingDesc"));
 
-	const on = thinking.setting === "on";
 	const sw = row.createEl("button", {
 		cls: "tah-thinking-switch",
 		attr: {
 			role: "switch",
-			"aria-checked": String(on),
+			"aria-checked": String(view.toggle.checked),
 			"aria-label": t("model.thinking"),
-			title: on ? t("model.thinkingOn") : t("model.thinkingOff"),
+			title: t(view.toggle.titleKey),
 		},
 	});
-	sw.disabled = !display.toggleEnabled;
+	sw.disabled = !view.toggle.enabled;
 	sw.addEventListener("click", () => {
-		if (!hasModel || !display.toggleEnabled) return;
-		ctx.providers.setModelThinking(info.providerId, info.model, on ? "off" : "on");
+		if (!view.toggle.enabled) return;
+		ctx.providers.setModelThinking(
+			info.providerId,
+			info.model,
+			view.toggle.checked ? "off" : "on"
+		);
 		ctx.refresh();
 	});
 
 	// 卡脚注：能力徽标 ＋ 备注 ＋ 右对齐测试入口位
 	const foot = card.createDiv({ cls: "tah-thinking-foot" });
-	const badge = foot.createSpan({ cls: `tah-thinking-badge tah-thinking-badge-${display.badge}` });
+	const badge = foot.createSpan({ cls: `tah-thinking-badge tah-thinking-badge-${view.badge.tone}` });
 	badge.createSpan({ cls: "tah-thinking-badge-dot" });
-	badge.createSpan({
-		text: thinking.learned
-			? t(thinkingDisplayCopy[display.state].badge, { date: learnedDate(thinking.learned) })
-			: t(thinkingDisplayCopy[display.state].badge),
-	});
+	badge.createSpan({ text: t(view.badge.key, view.badge.vars) });
 	foot.createSpan({
-		cls: display.footnoteWarn
+		cls: view.footnote.warn
 			? "tah-thinking-footnote tah-thinking-footnote-warn"
 			: "tah-thinking-footnote",
-		text: footnoteText(display.state, thinking.learned, t),
+		text: t(view.footnote.key, view.footnote.vars),
 	});
 	foot.createSpan({ cls: "tah-thinking-foot-spacer" });
 
 	const startTest = (btn: HTMLElement, retest: boolean) => {
-		if (!hasModel) return;
+		if (!hasActiveModel(info)) return;
 		btn.setAttribute("disabled", "true");
 		btn.setText(t("model.thinkingTestRunning"));
 		void runAndAnnounceThinkingTest(
@@ -231,27 +212,34 @@ function renderThinkingRow(card: HTMLElement, info: ActiveModelInfo, ctx: ModelT
 		);
 	};
 
-	if (display.testEntry === "available") {
-		const testBtn = foot.createEl("button", {
-			cls: "tah-thinking-test-btn",
-			text: t("model.thinkingTestRun"),
-		});
-		testBtn.disabled = !hasModel;
-		testBtn.addEventListener("click", () => startTest(testBtn, false));
-	} else if (display.testEntry === "retest") {
-		// 「重新测试」文字入口（#89）：清习得并重跑；假关告警内另有同款动作
-		const retestBtn = foot.createEl("button", {
-			cls: "tah-thinking-test-link",
-			text: t("model.thinkingTestRetest"),
-		});
-		retestBtn.addEventListener("click", () => startTest(retestBtn, true));
-	} else {
-		// 显示矩阵「测试入口置灰」：位在，已知无需测试
-		const doneBtn = foot.createEl("button", {
-			cls: "tah-thinking-test-done",
-			text: t("model.thinkingTestDone"),
-		});
-		doneBtn.disabled = true;
+	switch (view.test.kind) {
+		case "run": {
+			const testBtn = foot.createEl("button", {
+				cls: "tah-thinking-test-btn",
+				text: t(view.test.labelKey),
+			});
+			testBtn.disabled = view.test.disabled;
+			testBtn.addEventListener("click", () => startTest(testBtn, false));
+			break;
+		}
+		case "retest": {
+			// 「重新测试」文字入口（#89）：清习得并重跑；假关告警内另有同款动作
+			const retestBtn = foot.createEl("button", {
+				cls: "tah-thinking-test-link",
+				text: t(view.test.labelKey),
+			});
+			retestBtn.addEventListener("click", () => startTest(retestBtn, true));
+			break;
+		}
+		case "done": {
+			// 显示矩阵「测试入口置灰」：位在，已知无需测试（置灰决策由 model 给出）
+			const doneBtn = foot.createEl("button", {
+				cls: "tah-thinking-test-done",
+				text: t(view.test.labelKey),
+			});
+			doneBtn.disabled = view.test.disabled;
+			break;
+		}
 	}
 }
 
