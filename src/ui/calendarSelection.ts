@@ -1,11 +1,13 @@
 /**
- * 日历的区间选择：状态值 + 具名转移 + 选择器。
+ * 日历的区间选择：状态值 + 具名转移 + 选择器；另有「pick → 日历处置」的
+ * 映射 `calendarEffect`（视图指令，ADR-0023）。
  *
  * 纯模块——无 DOM、无 obsidian、无 Date，日期一律为 YYYY-MM-DD 字符串，
  * 可在 Node 单元测试。`CalendarWidget` 只负责渲染与把点击翻译成日字符串。
  */
 
 import type { DateRange } from "../types";
+import type { RangePick } from "./selectionSession";
 
 export interface CalendarSelection {
 	start: string | null;
@@ -67,4 +69,24 @@ export function isEdgeDay(selection: CalendarSelection, day: string): boolean {
 /** 把两个日字符串归一为升序区间（YYYY-MM-DD 的字典序即时间序）。 */
 function normalize(start: string, end: string): DateRange {
 	return start <= end ? { start, end } : { start: end, end: start };
+}
+
+/** pick → 日历处置：rebuild（重建＋收起）/ clear（清选择）/ keep（不动，complete 时收起）。 */
+export type CalendarEffect = "rebuild" | "clear" | "keep";
+
+/**
+ * pick → 日历处置：「怎么调日历」的知识（ADR-0023）：快捷周期与清空把区间整个换掉，重建并收起；
+ * 打开自定义时 preset 来源的区间让位，清掉日历上已点的选择；日历内点击不能重建——
+ * 两次点击的起点由组件自己保留，重建会丢。
+ */
+export function calendarEffect(pick: RangePick): CalendarEffect {
+	switch (pick.kind) {
+		case "preset":
+		case "clear":
+			return "rebuild";
+		case "open-custom":
+			return "clear";
+		case "custom":
+			return "keep";
+	}
 }

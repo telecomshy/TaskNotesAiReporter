@@ -6,6 +6,7 @@
  */
 
 import { CalendarWidget } from "./Calendar";
+import { calendarEffect } from "./calendarSelection";
 import { renderTaskMeta } from "./taskMeta";
 import {
 	addAllAddable,
@@ -238,8 +239,8 @@ export class TaskSelectionView {
 	/**
 	 * 唯一的重绘规则：切页签重建筛选区；时间页仅区间变化时更新区间控件；
 	 * 标题页仅查询变化时更新解析提示；状态 chips、动作区、未知提示条与两栏每帧刷新。
-	 * 日历的**重置**不在此处——那是交互来源的知识（快捷/清空要重置，日历内选择不能重置，
-	 * 否则两次点击的起点会丢），见 applyRangePick 与日历回调。
+	 * 日历的**重置**不在此处——那是交互来源的知识，现由 `calendarEffect` 承载、
+	 * 经 `applyRangePick` 一处执行（ADR-0023）。
 	 */
 	private render(f: SelectionFrame, prev: SelectionFrame | null): void {
 		if (!prev || prev.filter.tab !== f.filter.tab) {
@@ -468,12 +469,9 @@ export class TaskSelectionView {
 		this.calendarToggleBtn.setAttr("aria-controls", "tah-calendar-panel");
 		this.calendarToggleBtn.addEventListener("click", () => {
 			const open = !this.calendarOpen;
-			if (open && this.session) {
-				// 打开自定义：周期快捷来源的区间不再占用任务列表，日历与列表一起清空；
-				// 自定义来源的区间保留，避免重复挑选。
-				const f = this.apply(chooseRange(this.session, { kind: "open-custom" }));
-				if (f) this.calendar?.clearRange();
-			}
+			// 「只在开的方向」留在调用点：开关面板是控件的事，关的方向不碰 session；
+			// 开的方向清 / 留的处置由 calendarEffect 决定。
+			if (open) this.applyRangePick({ kind: "open-custom" });
 			this.setCalendarOpen(open);
 		});
 
@@ -496,15 +494,27 @@ export class TaskSelectionView {
 	}
 
 	/**
-	 * 应用一次区间选择（快捷 / 清空）：重绘由 `apply` 派生，日历恢复到当前区间并收起。
-	 * 快捷周期与清空都不预选自定义日历。
+	 * 所有区间动作的唯一入口（ADR-0023）：推进 session 后按 `calendarEffect` 处置日历。
+	 * 无操作转移不动日历（既有契约：`apply` 返回 null 即跳过）。
+	 * `complete` 是日历控件的交互完成态（两次点击选完区间才收起；单击可能还在选起点），
+	 * 只对 keep 有意义，不进 `RangePick`。
 	 */
-	private applyRangePick(pick: RangePick): void {
+	private applyRangePick(pick: RangePick, complete = false): void {
 		if (!this.session) return;
 		const f = this.apply(chooseRange(this.session, pick));
 		if (!f) return;
-		this.renderCalendar(f.filter.calendarSeed);
-		this.setCalendarOpen(false);
+		switch (calendarEffect(pick)) {
+			case "rebuild":
+				this.renderCalendar(f.filter.calendarSeed);
+				this.setCalendarOpen(false);
+				break;
+			case "clear":
+				this.calendar?.clearRange();
+				break;
+			case "keep":
+				if (complete) this.setCalendarOpen(false);
+				break;
+		}
 	}
 
 	/** 按区间来源高亮当前选中的快捷按钮；展开态由 setCalendarOpen 单独处理。 */
@@ -560,12 +570,9 @@ export class TaskSelectionView {
 			this.options.lang,
 			initialRange,
 			(range, complete) => {
-				if (!range || !this.session) return;
-				const f = this.apply(chooseRange(this.session, { kind: "custom", range }));
-				if (!f) return;
-				// 不重置日历：两次点击的起点由组件自己保留，重建会丢。
-				// 两次点击选完区间才收起；单击只是单日区间，可能还在选起点。
-				if (complete) this.setCalendarOpen(false);
+				if (!range) return;
+				// 日历内点击走 keep：不重建、选完区间才收起——处置知识见 calendarEffect。
+				this.applyRangePick({ kind: "custom", range }, complete);
 			}
 		);
 		this.calendar.render();

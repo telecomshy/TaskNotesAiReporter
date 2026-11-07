@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+	calendarEffect,
 	clearRange,
 	clickDay,
 	containsDay,
@@ -9,7 +10,9 @@ import {
 	isRangeComplete,
 	rangeOf,
 	selectionFromRange,
+	type CalendarEffect,
 } from "../src/ui/calendarSelection";
+import type { RangePick } from "../src/ui/selectionSession";
 import type { DateRange } from "../src/types";
 
 const march: DateRange = { start: "2024-03-05", end: "2024-03-10" };
@@ -94,4 +97,16 @@ test("转移不改动原值", () => {
 	const next = clickDay(original, "2024-03-10");
 	assert.deepEqual(rangeOf(original), { start: "2024-03-05", end: "2024-03-05" });
 	assert.deepEqual(rangeOf(next), march);
+});
+
+test("calendarEffect：pick → 日历处置（preset→rebuild · custom→keep · open-custom→clear · clear→rebuild）", () => {
+	const cases: Array<{ pick: RangePick; effect: CalendarEffect }> = [
+		{ pick: { kind: "preset", range: march }, effect: "rebuild" },
+		{ pick: { kind: "custom", range: march }, effect: "keep" },
+		{ pick: { kind: "open-custom" }, effect: "clear" },
+		{ pick: { kind: "clear" }, effect: "rebuild" },
+	];
+	for (const { pick, effect } of cases) {
+		assert.equal(calendarEffect(pick), effect);
+	}
 });

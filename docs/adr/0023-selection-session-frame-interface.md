@@ -15,3 +15,4 @@
 - **无操作转移返回同一引用**成为契约（view 以 `next === session` 跳过重绘）；`switchTab` / `setQuery` 从"总是新建对象"改为此行为。
 - 「状态筛选」（ADR-0021）落地时启用 `counts.unknownHidden`、在 filter 块加字段、新增转移，帧的既有形状不变。
 - 与 ADR-0011 / 0019 / 0020 兼容：可加入由 session 派生、筛选只改呈现、「已加入」留在筛选结果原位。「帧 / frame」属架构词汇，不进 `CONTEXT.md`。
+- **2026-11-06（#103）**：`open-custom`/`clear` 的**视图指令**经 `calendarEffect`（calendarSelection 模块）收敛为 `applyRangePick` 单一入口；状态内化归 session、控件处置归日历侧，「全部内化」的边界以此划清。
