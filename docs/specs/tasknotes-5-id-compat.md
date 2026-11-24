@@ -1,6 +1,6 @@
 # 规格：TaskNotes 5 兼容——任务标识以笔记路径归一
 
-> **状态：已实现（2026-11-24，0.9.1）。** 权威出处：GitHub issue [#104](https://github.com/telecomshy/TaskNotesAiReporter/issues/104)。本文件是仓库内可被 `/code-review` 直接发现的副本。
+> **状态：已实现（2026-11-24，0.10.1）。** 权威出处：GitHub issue [#104](https://github.com/telecomshy/TaskNotesAiReporter/issues/104)。本文件是仓库内可被 `/code-review` 直接发现的副本。
 >
 > 决策背景：ADR-0001（只经 TaskNotes 运行时公开 API 读取）；跨版本事实见 `docs/research/tasknotes-plugin-fields-statuses-api.md` §7。
 
@@ -30,7 +30,7 @@ TaskNotes 5.0 起，运行时 API 返回的任务记录不再保证 `id` 恒为�
 3. **两者皆缺**：跳过，不合成假标识（与修复前过滤 `task.id` 的行为一致）；空白串 `trim` 后视为缺失。仅 `id`（UUID）而 `path` 缺失的记录仍进入集合，但「详情」为空——4.x / 5.x 实际不会出现该形状，回退只为不丢任务。
 4. **类型**：新增 `TaskNotesTaskRecord`（`id?` / `path?`）描述 API 的原始返回；`TaskInfo.id` 仍是归一后的不透明标识，缝外不解释。
 5. **记录**：不新增 ADR；跨版本事实写入 `docs/research/tasknotes-plugin-fields-statuses-api.md` §7。
-6. **发布**：0.9.1 补丁版（版本号 + 发布说明 + 部署本地 vault）。
+6. **发布**：0.10.1 补丁版（版本号 + 发布说明 + 部署本地 vault）。
 
 ## Acceptance
 
