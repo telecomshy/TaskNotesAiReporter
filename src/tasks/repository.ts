@@ -54,24 +54,21 @@ export async function collectDetails(
 }
 
 /**
- * 原始记录的标识归一（TaskNotes 4.x / 5.x 兼容，见 ADR-0001 与 docs/research/tasknotes-plugin-fields-statuses-api.md）：
- * 优先取笔记路径（「详情」要按它读笔记），路径缺失才回退 `id`；两者都没有 → null（不算任务）。
- * 之所以不信任 `id`：TaskNotes 5 只为新任务 / 已迁移任务写 frontmatter `id`（UUID），
- * 存量任务的 `id` 缺失，直接用它会让整库任务消失。
- * 4.x 尚会写 `id: path`，3.x 及更早没有运行时 `api`：两条路径都经此归一，行为不变。
+ * 原始记录的标识归一（TaskNotes 4.x / 5.x 兼容，见 ADR-0001 与研究 §7）：
+ * 优先取笔记路径（「详情」按路径读取），路径缺失才回退 `id`；两者都没有 → null（不算任务）。
+ * 不信任 `id` 的理由：5.x 只为新任务 / 已迁移任务写 UUID，存量任务的 `id` 缺失。
  */
-export function taskIdentityOf(record: TaskNotesTaskRecord): string | null {
+function taskIdentityOf(record: TaskNotesTaskRecord): string | null {
 	const path = typeof record.path === "string" ? record.path.trim() : "";
 	if (path) return path;
 	const id = typeof record.id === "string" ? record.id.trim() : "";
 	return id ? id : null;
 }
 
-/** 把一条原始记录归一为 `TaskInfo`：标识恒为笔记路径（无路径则保留原 `id`）。 */
+/** 把一条原始记录归一为 `TaskInfo`：标识恒为归一后的笔记路径（无路径则回退 `id`）。 */
 function normalizeTaskRecord(record: TaskNotesTaskRecord): TaskInfo | null {
 	const id = taskIdentityOf(record);
-	if (!id) return null;
-	return record.id === id ? (record as TaskInfo) : { ...record, id };
+	return id ? { ...record, id } : null;
 }
 
 /** 由底层来源构造 TaskRepository。 */
@@ -82,6 +79,7 @@ export function createTaskRepository(deps: TaskRepositoryDeps): TaskRepository {
 			if (records === null) return null;
 			const tasks: TaskInfo[] = [];
 			for (const record of records) {
+				// 上游数组未类型化：运行时兜底 null / 非对象项（不算任务）。
 				if (!record || record.archived) continue;
 				const task = normalizeTaskRecord(record);
 				if (task) tasks.push(task);

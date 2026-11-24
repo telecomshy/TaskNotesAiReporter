@@ -5,7 +5,6 @@ import {
 	stripFrontmatter,
 	applyDetails,
 	hydrateTasks,
-	taskIdentityOf,
 } from "../src/tasks/repository";
 import { fakeTaskRepository } from "./fakes/taskRepository";
 import { makeTask } from "./fakes/task";
@@ -72,11 +71,12 @@ test("createTaskRepository.list 兼容 TaskNotes 4.x（id 与 path 同为笔记�
 	assert.equal(result?.[0]?.id, "TaskNotes/Tasks/旧任务.md");
 });
 
-test("taskIdentityOf 路径优先、缺路径回退 id、两者皆无返回 null", () => {
-	assert.equal(taskIdentityOf(makeRecord({ path: "a.md", id: "uuid" })), "a.md");
-	assert.equal(taskIdentityOf({ ...baseTask }), "2026/09.md");
-	assert.equal(taskIdentityOf(makeRecord({ path: "  ", id: "uuid" })), "uuid");
-	assert.equal(taskIdentityOf(makeRecord({ path: "  " }) as TaskNotesTaskRecord), null);
+test("createTaskRepository.list 忽略空白路径：回退 id，两者皆无则跳过", async () => {
+	const repo = createTaskRepository({
+		listTasks: async () => [makeRecord({ path: "  ", id: "uuid" }), makeRecord({ path: "  " })],
+		readNote: async () => null,
+	});
+	assert.deepEqual((await repo.list())?.map((t) => t.id), ["uuid"]);
 });
 
 test("createTaskRepository.list 在底层不可用时返回 null", async () => {

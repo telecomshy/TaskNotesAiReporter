@@ -15,6 +15,7 @@ import {
 	type SelectionSession,
 } from "../src/ui/selectionSession";
 import { makeTask } from "./fakes/task";
+import { createTaskRepository } from "../src/tasks/repository";
 import type { DateField, DateRange, StatusDefinition } from "../src/types";
 
 const dateFields: DateField[] = ["due"];
@@ -587,4 +588,23 @@ test("状态筛选：待办＋已取消组合；计数与「加入全部」跟�
 	assert.deepEqual(rowIds(f), ["t1", "t2", "t3", "t4", "t5"]);
 	assert.deepEqual(addableIds(f), ["t2", "t3", "t4"]);
 	assertFrameConsistent(f);
+});
+
+test("TaskNotes 5 归一后的任务进入标题页（兼容验收链）", async () => {
+	// v5 形状：path 有、id 缺。归一后必须能在选择会话的标题页命中。
+	const repo = createTaskRepository({
+		listTasks: async () => [
+			{
+				path: "TaskNotes/Tasks/写周报.md",
+				title: "写周报",
+				status: "open",
+				priority: "normal",
+				archived: false,
+			},
+		],
+		readNote: async () => null,
+	});
+	const loaded = (await repo.list()) ?? [];
+	const session = switchTab(createSelectionSession(loaded, dateFields, statusCatalog), "title");
+	assert.equal(frame(session).left.rows[0]?.task.title, "写周报");
 });

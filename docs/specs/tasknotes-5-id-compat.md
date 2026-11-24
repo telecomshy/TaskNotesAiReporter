@@ -21,13 +21,13 @@ TaskNotes 5.0 起，运行时 API 返回的任务记录不再保证 `id` 恒为�
 
 ## Solution
 
-在 `TaskRepository` seam 内归一任务标识：**`path` 优先**（「详情」按路径读正文），缺失时回退 `id`，两者皆无则跳过该记录。不做运行时版本判断；同一形状规则同时覆盖 4.8+ 与 5.x。
+在 `TaskRepository` seam 内归一任务标识：**`path` 优先**（「详情」按路径读取），缺失时回退 `id`，两者皆无则跳过该记录。不做运行时版本判断；同一形状规则同时覆盖 4.8+ 与 5.x。
 
 ## Implementation Decisions
 
 1. **兼容下限**：TaskNotes 4.8+（公开运行时 API 起点，`api.tasks.list()` 存在）与 5.x。不读 `apiVersion` / `specVersion` 做分支——版本判断会把插件与上游版本号绑死。
-2. **标识优先级**：`path` > `id`。5.x 的 UUID 不能用于按文件读正文。
-3. **两者皆缺**：跳过，不合成假标识（与修复前过滤 `task.id` 的行为一致）。
+2. **标识优先级**：`path` > `id`。5.x 的 UUID 不能用于按路径读取详情。
+3. **两者皆缺**：跳过，不合成假标识（与修复前过滤 `task.id` 的行为一致）；空白串 `trim` 后视为缺失。仅 `id`（UUID）而 `path` 缺失的记录仍进入集合，但「详情」为空——4.x / 5.x 实际不会出现该形状，回退只为不丢任务。
 4. **类型**：新增 `TaskNotesTaskRecord`（`id?` / `path?`）描述 API 的原始返回；`TaskInfo.id` 仍是归一后的不透明标识，缝外不解释。
 5. **记录**：不新增 ADR；跨版本事实写入 `docs/research/tasknotes-plugin-fields-statuses-api.md` §7。
 6. **发布**：0.9.1 补丁版（版本号 + 发布说明 + 部署本地 vault）。
@@ -35,9 +35,10 @@ TaskNotes 5.0 起，运行时 API 返回的任务记录不再保证 `id` 恒为�
 ## Acceptance
 
 - v5 形状（`path` 有、`id` 缺）：任务出现在选择列表与标题搜索中，标识为笔记路径。
-- v5 形状（`path` 有、`id` 为 UUID）：标识仍为路径；「详情」能读到正文。
+- v5 形状（`path` 有、`id` 为 UUID）：标识仍为路径；「详情」不为空。
 - v4 形状（`id` 与 `path` 同为路径）：行为与修复前一致（回归安全）。
 - 两者皆缺：该记录不进入任务集合。
+- 仅 UUID、无 `path`：仍进入集合；「详情」为空，不报错。
 - `npm test` / `npm run lint` / `npm run typecheck` 全绿；对应回归测试落在 `TaskRepository` seam（不测 adapter 内部）。
 
 ## Out of Scope

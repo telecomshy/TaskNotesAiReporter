@@ -84,7 +84,7 @@
   因此存量任务的 `api.tasks.list()` 记录 **`id === undefined`，`path` 仍在**。
 - 后果：本插件旧的 `list()` 过滤 `task.id` 会把整库存量任务全部丢掉（选择列表 / 标题搜索全空）。
 - 修法（已实现于 `src/tasks/repository.ts`）：缝内以 `path` 归一遍标识，`id` 缺省回退；
-  归一后 `id === path`，「详情」按路径读正文（`api.tasks.getByPath()` 与 `getById()` 是 5.x 新增的显式查询）。
+  归一后 `id === path`，「详情」按路径读取（`api.tasks.getByPath()` 与 `getById()` 是 5.x 新增的显式查询）。
 - 其余字段未变：`status/priority/tags/contexts/projects/due/scheduled/dateCreated/dateModified/completedDate/archived`
   仍为顶层字段；`archived` 由标签推导（`mapFromFrontmatter` 中 `tags.includes(archiveTag)`）。
 - `api.catalog.statuses()` 仍返回配置数组（含 `isCompleted`）；`api.apiVersion === 1`、能力开关不变。
