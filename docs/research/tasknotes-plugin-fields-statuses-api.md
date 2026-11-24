@@ -72,3 +72,19 @@
 
 - 仓库：<https://github.com/callumalpass/tasknotes>
 - JavaScript API 文档：`docs/javascript-api.md`（`api.catalog.statuses()`、`api.tasks.*`）
+
+## 7. TaskNotes 5.x：`id` 不再恒为路径（2026-11-24 复核，插件 5.0.3）
+
+> 复核对象：本机 `D:\study\我的笔记\.obsidian\plugins\tasknotes\main.js`（manifest 5.0.3）。
+> 上游源码对应 `src/utils/taskInfoAssembly.ts` / `src/models/fieldMapping`（`mapFromFrontmatter`）。
+
+- **4.x**：`buildTaskInfoFromMappedTask` 显式写 `id: path`，`TaskInfo.id` 恒为笔记路径（本插件原依赖此点）。
+- **5.x**：该赋值被删除。`id` 只在 frontmatter 写了 `id` 属性时才有值（`mapFromFrontmatter` 读出），
+  且只由**新任务 / 已迁移任务**写入 UUID（迁移文档「Stable task IDs」）；存量任务不补该属性。
+  因此存量任务的 `api.tasks.list()` 记录 **`id === undefined`，`path` 仍在**。
+- 后果：本插件旧的 `list()` 过滤 `task.id` 会把整库存量任务全部丢掉（选择列表 / 标题搜索全空）。
+- 修法（已实现于 `src/tasks/repository.ts`）：缝内以 `path` 归一遍标识，`id` 缺省回退；
+  归一后 `id === path`，「详情」按路径读正文（`api.tasks.getByPath()` 与 `getById()` 是 5.x 新增的显式查询）。
+- 其余字段未变：`status/priority/tags/contexts/projects/due/scheduled/dateCreated/dateModified/completedDate/archived`
+  仍为顶层字段；`archived` 由标签推导（`mapFromFrontmatter` 中 `tags.includes(archiveTag)`）。
+- `api.catalog.statuses()` 仍返回配置数组（含 `isCompleted`）；`api.apiVersion === 1`、能力开关不变。

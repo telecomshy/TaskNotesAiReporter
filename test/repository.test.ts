@@ -5,10 +5,11 @@ import {
 	stripFrontmatter,
 	applyDetails,
 	hydrateTasks,
+	taskIdentityOf,
 } from "../src/tasks/repository";
 import { fakeTaskRepository } from "./fakes/taskRepository";
 import { makeTask } from "./fakes/task";
-import type { TaskInfo } from "../src/types";
+import type { TaskInfo, TaskNotesTaskRecord } from "../src/types";
 
 const baseTask: TaskInfo = {
 	title: "写周报",
@@ -17,6 +18,17 @@ const baseTask: TaskInfo = {
 	id: "2026/09.md",
 	archived: false,
 };
+
+/** 构造 TaskNotes 5 的原始记录：`path` 恒有，`id` 只在 frontmatter 写了才有。 */
+function makeRecord(over: Partial<TaskNotesTaskRecord> & { path: string }): TaskNotesTaskRecord {
+	return {
+		title: over.path,
+		status: "open",
+		priority: "normal",
+		archived: false,
+		...over,
+	};
+}
 
 // ===== createTaskRepository（底层来源策略） =====
 
@@ -27,6 +39,44 @@ test("createTaskRepository.list 过滤归档与无标识任务", async () => {
 	});
 	const result = await repo.list();
 	assert.deepEqual(result?.map((t) => t.id), ["a"]);
+});
+
+test("createTaskRepository.list 以笔记路径归一 TaskNotes 5 无 id 的存量任务", async () => {
+	const repo = createTaskRepository({
+		listTasks: async () => [makeRecord({ path: "TaskNotes/Tasks/存量任务.md" })],
+		readNote: async () => null,
+	});
+	const result = await repo.list();
+	assert.deepEqual(result?.map((t) => t.id), ["TaskNotes/Tasks/存量任务.md"]);
+});
+
+test("createTaskRepository.list 有 UUID id 时仍以路径为标识（详情按路径读笔记）", async () => {
+	const repo = createTaskRepository({
+		listTasks: async () => [
+			makeRecord({ path: "TaskNotes/Tasks/新任务.md", id: "1f2e3d4c-uuid" }),
+		],
+		readNote: async () => null,
+	});
+	const result = await repo.list();
+	assert.equal(result?.length, 1);
+	assert.equal(result?.[0]?.id, "TaskNotes/Tasks/新任务.md");
+});
+
+test("createTaskRepository.list 兼容 TaskNotes 4.x（id 与 path 同为笔记路径）", async () => {
+	const repo = createTaskRepository({
+		listTasks: async () => [makeRecord({ path: "TaskNotes/Tasks/旧任务.md", id: "TaskNotes/Tasks/旧任务.md" })],
+		readNote: async () => null,
+	});
+	const result = await repo.list();
+	assert.equal(result?.length, 1);
+	assert.equal(result?.[0]?.id, "TaskNotes/Tasks/旧任务.md");
+});
+
+test("taskIdentityOf 路径优先、缺路径回退 id、两者皆无返回 null", () => {
+	assert.equal(taskIdentityOf(makeRecord({ path: "a.md", id: "uuid" })), "a.md");
+	assert.equal(taskIdentityOf({ ...baseTask }), "2026/09.md");
+	assert.equal(taskIdentityOf(makeRecord({ path: "  ", id: "uuid" })), "uuid");
+	assert.equal(taskIdentityOf(makeRecord({ path: "  " }) as TaskNotesTaskRecord), null);
 });
 
 test("createTaskRepository.list 在底层不可用时返回 null", async () => {

@@ -7,7 +7,7 @@
  * 遵守 ADR-0001：仅通过 TaskNotes 运行时公开 API 读取任务，不改其源码。
  */
 
-import type { StatusDefinition, TaskInfo } from "../types";
+import type { StatusDefinition, TaskInfo, TaskNotesTaskRecord } from "../types";
 
 /**
  * 任务数据访问接口（#48：「详情」一批补 + 一种缺失约定）。
@@ -28,8 +28,8 @@ export interface TaskRepository {
 
 /** 底层数据来源（由 adapter 提供；测试中可注入 fake）。 */
 export interface TaskRepositoryDeps {
-	/** 列出任务；不可用返回 null。 */
-	listTasks(): Promise<TaskInfo[] | null>;
+	/** 列出任务（未归一的原始记录）；不可用返回 null。 */
+	listTasks(): Promise<TaskNotesTaskRecord[] | null>;
 	/** 按笔记路径读取笔记原始内容；文件不存在返回 null。注意形参是笔记路径，不是任务标识。 */
 	readNote(path: string): Promise<string | null>;
 	/** 列出状态目录；不可用返回 null（缺省视为空目录）。 */
@@ -53,13 +53,40 @@ export async function collectDetails(
 	return out;
 }
 
+/**
+ * 原始记录的标识归一（TaskNotes 4.x / 5.x 兼容，见 ADR-0001 与 docs/research/tasknotes-plugin-fields-statuses-api.md）：
+ * 优先取笔记路径（「详情」要按它读笔记），路径缺失才回退 `id`；两者都没有 → null（不算任务）。
+ * 之所以不信任 `id`：TaskNotes 5 只为新任务 / 已迁移任务写 frontmatter `id`（UUID），
+ * 存量任务的 `id` 缺失，直接用它会让整库任务消失。
+ * 4.x 尚会写 `id: path`，3.x 及更早没有运行时 `api`：两条路径都经此归一，行为不变。
+ */
+export function taskIdentityOf(record: TaskNotesTaskRecord): string | null {
+	const path = typeof record.path === "string" ? record.path.trim() : "";
+	if (path) return path;
+	const id = typeof record.id === "string" ? record.id.trim() : "";
+	return id ? id : null;
+}
+
+/** 把一条原始记录归一为 `TaskInfo`：标识恒为笔记路径（无路径则保留原 `id`）。 */
+function normalizeTaskRecord(record: TaskNotesTaskRecord): TaskInfo | null {
+	const id = taskIdentityOf(record);
+	if (!id) return null;
+	return record.id === id ? (record as TaskInfo) : { ...record, id };
+}
+
 /** 由底层来源构造 TaskRepository。 */
 export function createTaskRepository(deps: TaskRepositoryDeps): TaskRepository {
 	return {
 		async list(): Promise<TaskInfo[] | null> {
-			const tasks = await deps.listTasks();
-			if (tasks === null) return null;
-			return tasks.filter((task) => task && task.id && !task.archived);
+			const records = await deps.listTasks();
+			if (records === null) return null;
+			const tasks: TaskInfo[] = [];
+			for (const record of records) {
+				if (!record || record.archived) continue;
+				const task = normalizeTaskRecord(record);
+				if (task) tasks.push(task);
+			}
+			return tasks;
 		},
 		async details(ids: readonly string[]): Promise<Record<string, string>> {
 			// 本包装假定「任务标识即笔记路径」（TaskNotes 形状）。

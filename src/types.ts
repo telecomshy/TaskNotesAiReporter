@@ -34,6 +34,18 @@ export interface TaskInfo {
 	customProperties?: Record<string, unknown>;
 }
 
+/**
+ * TaskNotes 运行时 API 返回的任务记录（未归一的原始形状，见 ADR-0001）。
+ *
+ * TaskNotes 5 起 `id` 只在 frontmatter 写了 `id` 属性时才有值（新任务 / 已迁移任务是 UUID），
+ * 存量任务没有该属性 → `id` 缺失；`path` 自 4.x 起恒有。本插件的标识契约是笔记路径
+ * （「详情」按它读正文），故 `createTaskRepository` 在缝内用 `path` 归一（见 src/tasks/repository.ts）。
+ */
+export type TaskNotesTaskRecord = Omit<TaskInfo, "id"> & {
+	id?: string;
+	path?: string;
+};
+
 export interface TimeEntry {
 	startTime: string;
 	endTime?: string;
@@ -58,7 +70,7 @@ export interface StatusDefinition {
 /** TaskNotes 插件实例对外暴露的公开 API（通过 app.plugins.plugins["tasknotes"].api 访问） */
 export interface TaskNotesPublicApi {
 	tasks: {
-		list(query?: unknown): Promise<TaskInfo[]>;
+		list(query?: unknown): Promise<TaskNotesTaskRecord[]>;
 	};
 	catalog?: {
 		statuses(): Array<{
