@@ -1,6 +1,6 @@
 # 规格：TaskNotes 5 兼容——任务标识以笔记路径归一
 
-> **状态：已实现（2026-11-24）。** 按仓库约定本规格应落 GitHub issue；本机到 `api.github.com` 网络不可达（curl / gh 均连接超时），先以本文件作为规格副本，恢复网络后补建 issue 并回填编号。
+> **状态：已实现（2026-11-24，0.9.1）。** 权威出处：GitHub issue [#104](https://github.com/telecomshy/TaskNotesAiReporter/issues/104)。本文件是仓库内可被 `/code-review` 直接发现的副本。
 >
 > 决策背景：ADR-0001（只经 TaskNotes 运行时公开 API 读取）；跨版本事实见 `docs/research/tasknotes-plugin-fields-statuses-api.md` §7。
 
