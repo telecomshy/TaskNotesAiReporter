@@ -1,6 +1,6 @@
 # TaskNotes AI Reporter
 
-Turn a set of tasks into an AI-written report note. Pick tasks from [TaskNotes](https://github.com/callumalpass/tasknotes), choose a template, and let any OpenAI-compatible model write the report into a new note in your vault.
+Turn a set of tasks into an AI-written report note. Pick tasks from [TaskNotes](https://github.com/callumalpass/tasknotes), choose a template, and let any OpenAI- or Anthropic-compatible model write the report into a new note in your vault.
 
 Weekly, monthly, and yearly are just ways to *filter* tasks. The plugin's job is to shape whatever set you pick into a report — the period is one input, not a label on the product.
 
@@ -14,7 +14,7 @@ Weekly, monthly, and yearly are just ways to *filter* tasks. The plugin's job is
   - **Manually** — add or remove tasks in the report list.
 - **Reusable templates** with placeholders (`{{tasks}}`, `{{completedTasks}}`, `{{count}}`, `{{range}}`, `{{today}}`, …), or no template at all.
 - **Extra requirements** — one-off instructions for a single report; not saved.
-- **Any OpenAI-compatible model** — built-in presets for DeepSeek, Qwen, Kimi, and MiniMax, or a custom base URL.
+- **Any OpenAI-compatible or Anthropic-compatible model** — built-in presets for DeepSeek, Qwen, Kimi, MiniMax, and Anthropic, or a custom base URL with a selectable **API dialect**.
 - **Secrets stay out of plugin data** — API keys live in Obsidian's SecretStorage; the plugin stores only the secret's name.
 - **Never overwrites** — every report is a new note.
 - **Bilingual UI** (English / Chinese) with the report language set independently.
@@ -48,7 +48,7 @@ Weekly, monthly, and yearly are just ways to *filter* tasks. The plugin's job is
 
 Open **Settings → Community plugins → TaskNotes AI Reporter**:
 
-1. **Model provider** — pick a preset (DeepSeek, Qwen, Kimi, MiniMax) or add a custom OpenAI-compatible provider with its base URL. For the API key, select an existing **secret** or create a new one; keys are kept in Obsidian's SecretStorage, not in the plugin's data.
+1. **Model provider** — pick a preset (DeepSeek, Qwen, Kimi, MiniMax, Anthropic) or add a custom provider with its base URL and **API dialect** (OpenAI-compatible, or Anthropic-compatible whose address must include `/v1`). For the API key, select an existing **secret** or create a new one; keys are kept in Obsidian's SecretStorage, not in the plugin's data.
 2. **Current model** — choose the model used to generate reports.
 3. **Report output folder** — where reports are written (default `TaskNotes/Reports`).
 4. **Date fields** — which date fields participate in auto-filtering: completed, due, scheduled, created.
@@ -66,7 +66,7 @@ Open **Settings → Community plugins → TaskNotes AI Reporter**:
 
 ## Network use
 
-This plugin talks only to the OpenAI-compatible endpoint(s) **you configure** (built-in presets such as DeepSeek, Qwen, Kimi, MiniMax, or a custom base URL). It sends the selected task data and the generated prompt to that endpoint to produce the report, and fetches the model list from it. No data is sent anywhere else, and the plugin collects **no telemetry**.
+This plugin talks only to the OpenAI-compatible or Anthropic-compatible endpoint(s) **you configure** (built-in presets such as DeepSeek, Qwen, Kimi, MiniMax, or Anthropic, or a custom base URL). It sends the selected task data and the generated prompt to that endpoint to produce the report, and fetches the model list from it. No data is sent anywhere else, and the plugin collects **no telemetry**.
 
 API keys are stored in Obsidian's **SecretStorage**; the plugin's own `data.json` stores only the secret's name.
 
@@ -88,7 +88,7 @@ Pure logic (date ranges, task filtering, filenames, prompts) lives in `src/core/
 
 ## 中文说明
 
-把选中的任务变成一份 AI 报告笔记：任务来自 [TaskNotes](https://github.com/callumalpass/tasknotes)，选好任务与模板，用任意 OpenAI 兼容模型生成报告并写入 vault 新笔记。
+把选中的任务变成一份 AI 报告笔记：任务来自 [TaskNotes](https://github.com/callumalpass/tasknotes)，选好任务与模板，用任意 OpenAI 兼容或 Anthropic 兼容模型生成报告并写入 vault 新笔记。
 
 周报 / 月报 / 年报只是**筛选任务**的方式之一——插件的核心动作是把选中的任务集合塑造成一份报告，周期只是一个输入，不是产物的标签。
 
@@ -106,6 +106,6 @@ Pure logic (date ranges, task filtering, filenames, prompts) lives in `src/core/
 
 > **已取消**：在 TaskNotes 状态设置里勾选了跳过（isSkipped）标志的状态归为「已取消」，不再计入报告的未完成子集。升级后若自建的取消类状态没被认出，去 TaskNotes 的状态设置给它勾上「跳过」标志；未勾选的仍按「待办」处理。
 
-**网络用途**：插件只会访问你自己配置的 OpenAI 兼容端点（内置 DeepSeek、通义千问、Kimi、MiniMax 预设，或自定义 Base URL），把所选任务数据与提示词发送过去以生成报告，并从该端点拉取模型列表；不会发送到其它地方，也不收集任何遥测。
+**网络用途**：插件只会访问你自己配置的 OpenAI 兼容或 Anthropic 兼容端点（内置 DeepSeek、通义千问、Kimi、MiniMax、Anthropic 预设，或自定义 Base URL），把所选任务数据与提示词发送过去以生成报告，并从该端点拉取模型列表；不会发送到其它地方，也不收集任何遥测。
 
 **安装**：在「设置 → 第三方插件 → 浏览」中搜索 **TaskNotes AI Reporter** 安装并启用，并启用 **TaskNotes** 插件。

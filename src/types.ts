@@ -115,14 +115,30 @@ export interface ReportTemplate {
 	content: string; // 模板内容，支持占位符（见模板编辑提示）
 }
 
+/**
+ * 「接口方言」（#105，见 CONTEXT.md）：供应商与模型交互所用的请求协议。
+ * OpenAI 兼容＝`chat/completions`；Anthropic 兼容＝原生 Messages（`/messages`）。
+ * 它决定对话与模型列表的地址、认证头、请求体参数与响应读取方式。
+ */
+export type ApiStyle = "openai" | "anthropic";
+
 /** 单个模型供应商配置 */
 export interface ModelProvider {
 	id: string; // 唯一标识
 	name: string; // 显示名称
 	type: "preset" | "custom"; // 内置 or 自定义
-	baseUrl: string; // OpenAI 兼容 base URL（内置的固定；自定义的手动填）
+	baseUrl: string; // 供应商 base URL（预设固定；自定义手动填；Anthropic 方言须含 /v1）
 	apiKeySecretId: string; // SecretStorage 中的密钥名（不存密钥值本身）
+	/**
+	 * 「接口方言」（#105）：预设内置固定，自定义可选；**缺省（含存量数据）读作 OpenAI 兼容**。
+	 * 载入不发明缺省值——只有用户主动切换方言才写入（存量零变更）。
+	 */
+	apiStyle?: ApiStyle;
 	models: string[]; // 「启用模型」（预设）：用户从模型清单挑选的子集，「选择模型」的唯一来源；读写一律经 settings/providerModels（勿直接依赖）
+	/**
+	 * 认证方式：「无认证」或「密钥」。`bearer` 是存量取值（语义＝用密钥认证）；
+	 * 实际请求头由「接口方言」决定（OpenAI 兼容 `Authorization: Bearer`、Anthropic 兼容 `x-api-key`）。
+	 */
 	authType: "none" | "bearer"; // 认证方式（自定义供应商使用）
 	/**
 	 * 「模型清单」（#87）：「获取模型列表」从供应商接口取回的模型全集，供挑选对话框呈现；
@@ -211,6 +227,8 @@ export interface ThinkingResolution {
 
 /** 当前生效的模型配置（由设置解析而来）：供应商接口 + 选中模型 + 该模型参数。 */
 export interface ActiveModelConfig {
+	/** 「接口方言」（#105）：生成 / 测试 / 拉取清单全部按它分派，调用方不各自判断供应商类型。 */
+	apiStyle: ApiStyle;
 	baseUrl: string;
 	apiKey: string;
 	model: string;
@@ -260,6 +278,15 @@ export const PRESET_PROVIDERS: Omit<ModelProvider, "apiKeySecretId" | "authType"
 		name: "MiniMax",
 		type: "preset",
 		baseUrl: "https://api.minimax.chat/v1",
+		models: [],
+	},
+	// Anthropic 官方预设（#105）：原生 Messages 协议，地址须含 /v1（预设已预填）。
+	{
+		id: "anthropic",
+		name: "Anthropic (Claude)",
+		type: "preset",
+		baseUrl: "https://api.anthropic.com/v1",
+		apiStyle: "anthropic",
 		models: [],
 	},
 ];

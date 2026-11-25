@@ -15,6 +15,7 @@ import {
 } from "../types";
 import type { PendingSecret } from "./secrets";
 import { normalizeThinkingSetting } from "../core/thinking";
+import { coerceApiStyle } from "../core/apiStyle";
 import {
 	adoptLegacyCustomModels,
 	initializeModelCatalog,
@@ -115,6 +116,11 @@ export function normalizeSettings(raw: unknown): NormalizedSettings {
 					type,
 					authType,
 				} as unknown as ModelProvider & { apiKey?: string };
+				// 「接口方言」（#105）：合法值原样保留；缺失 / 非法**不发明缺省**（读取侧回落
+				// OpenAI 兼容）——载入不改写用户既有数据（#44）。
+				const apiStyle = coerceApiStyle(providerRaw.apiStyle);
+				if (apiStyle) provider.apiStyle = apiStyle;
+				else delete provider.apiStyle;
 				// 「思考」两档（#88）：每值经 core/thinking 归一（存量 auto→on）、非法值剔除；
 				// 无合法条目即整块不发明（读取侧缺省＝关，见 ADR-0024 / ADR-0026）。
 				const thinkingByModel = normalizeThinkingByModel(providerRaw.thinkingByModel);
@@ -141,6 +147,8 @@ export function normalizeSettings(raw: unknown): NormalizedSettings {
 				initializeModelCatalog(provider, providerRaw.modelCatalog);
 				return provider;
 			});
+		// 内置预设补齐（#105）：老用户升级后自动看到新预设卡，既有配置与当前模型不受影响。
+		backfillPresetProviders(settings.providers);
 	} else {
 		settings.providers = PRESET_PROVIDERS.map((p) => ({
 			...p,
@@ -208,6 +216,18 @@ export function normalizeSettings(raw: unknown): NormalizedSettings {
 	}
 
 	return { settings, pendingSecrets };
+}
+
+/**
+ * 内置预设补齐（#105）：按 id 追加**缺失**的内置预设——只追加、不覆盖既有项、不移动既有顺序
+ * （追加到列表末尾）。幂等；**不因补齐触发落盘**（载入本身的写入只由密钥迁移与清理决定）。
+ * 全新安装直接由 `DEFAULT_SETTINGS` 获得同一组预设，故两条路径的预设集一致。
+ */
+function backfillPresetProviders(providers: ModelProvider[]): void {
+	for (const preset of PRESET_PROVIDERS) {
+		if (providers.some((p) => p.id === preset.id)) continue;
+		providers.push({ ...preset, apiKeySecretId: "", authType: "bearer" });
+	}
 }
 
 /** 从原始供应商读取密钥名（新结构）；旧版明文由 normalizeSettings 收集进 pendingSecrets。 */

@@ -9,7 +9,7 @@
  */
 
 import type { ModelProvider } from "../types";
-import type { Translator } from "../i18n";
+import { PRESET_NAME_KEYS, type Translator } from "../i18n";
 import { enabledModels, isModelStale, modelRows, type ModelParams } from "./providerModels";
 import {
 	isActiveModel,
@@ -65,10 +65,12 @@ export type ProviderCardModel = PresetCardModel | CustomCardModel;
 /** 单张供应商卡的投影：头部三件套 ＋ 按卡型的内容行。 */
 export function providerCardModel(
 	provider: ModelProvider,
-	active: ActiveModelInfo
+	active: ActiveModelInfo,
+	t: Translator
 ): ProviderCardModel {
 	const head = {
-		name: provider.name,
+		// 预设显示名可双语登记（#105：Anthropic 预设名）；未登记沿用持久化名称。
+		name: displayName(provider, t),
 		configured: isConfigured(provider),
 		count: countOf(provider),
 	};
@@ -99,6 +101,13 @@ export function providerCardModel(
 			draft: row.modelId === "",
 		})),
 	};
+}
+
+/** 供应商显示名：登记过双语的预设按界面语言呈现，其余（含自定义）沿用持久化 `name`。 */
+function displayName(provider: ModelProvider, t: Translator): string {
+	if (provider.type !== "preset") return provider.name;
+	const key = PRESET_NAME_KEYS[provider.id];
+	return key ? t(key) : provider.name;
 }
 
 /** count 显隐规则（唯一出处）：有启用模型，且自定义恒可显示、预设须已配置。 */

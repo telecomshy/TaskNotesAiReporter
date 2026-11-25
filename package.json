@@ -1,7 +1,7 @@
 {
 	"name": "tasknotes-aireporter",
 	"version": "0.10.1",
-	"description": "Standalone helper plugin that generates reports from TaskNotes tasks using custom templates and any OpenAI-compatible model.",
+	"description": "Standalone helper plugin that generates reports from TaskNotes tasks using custom templates and any OpenAI-compatible or Anthropic-compatible model.",
 	"main": "main.js",
 	"scripts": {
 		"build": "npm run typecheck && node esbuild.config.mjs production",

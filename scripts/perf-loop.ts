@@ -139,6 +139,7 @@ async function main(): Promise<void> {
 			ok: true,
 			providerId,
 			config: {
+				apiStyle: "openai",
 				baseUrl,
 				apiKey: "",
 				model,

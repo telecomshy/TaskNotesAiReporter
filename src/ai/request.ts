@@ -27,14 +27,24 @@ export interface RequestParams {
 /** 可注入的请求函数，便于测试 mock；默认走 obsidian requestUrl（见 transport.ts） */
 export type RequestFn = (params: RequestParams) => Promise<HttpResponse>;
 
+/**
+ * 认证头方言（#105）：OpenAI 兼容＝`Authorization: Bearer`；Anthropic 兼容＝`x-api-key`。
+ * 只决定「把密钥放进哪个请求头」，其余 HTTP 机制（内容类型 / 超时 / 错误映射）共享。
+ */
+export type ApiAuthHeader = "bearer" | "x-api-key";
+
 /** 一次 JSON 请求的描述。 */
 export interface JsonRequest {
 	/** 操作种类，用于派生错误码（`models.*` / `chat.*`）。 */
 	op: "models" | "chat";
 	url: string;
 	method: "GET" | "POST";
-	/** 空串表示无认证，不附带 Authorization。 */
+	/** 空串表示无认证，不附带认证头。 */
 	apiKey: string;
+	/** 认证头方言；缺省 Bearer（OpenAI 兼容，存量行为零变更）。 */
+	authHeader?: ApiAuthHeader;
+	/** 方言固定请求头（如 Anthropic 的版本头）；认证头后合并，认证头优先。 */
+	extraHeaders?: Record<string, string>;
 	/** 有请求体时补 `Content-Type: application/json`。 */
 	body?: string;
 	timeoutSeconds: number;
@@ -58,9 +68,12 @@ export async function requestJson<T>(
 	parse: (json: unknown) => T,
 	request: RequestFn
 ): Promise<T> {
-	const headers: Record<string, string> = {};
+	const headers: Record<string, string> = { ...(req.extraHeaders ?? {}) };
 	if (req.body !== undefined) headers["Content-Type"] = "application/json";
-	if (req.apiKey.trim() !== "") headers.Authorization = `Bearer ${req.apiKey}`;
+	if (req.apiKey.trim() !== "") {
+		if (req.authHeader === "x-api-key") headers["x-api-key"] = req.apiKey;
+		else headers.Authorization = `Bearer ${req.apiKey}`;
+	}
 
 	let response: HttpResponse;
 	try {

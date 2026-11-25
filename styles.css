@@ -377,6 +377,18 @@ button.tah-auth-btn.tah-auth-active {
 	font-weight: 500;
 }
 
+/* 上面重置了 box-shadow，焦点环由这里显式补回（键盘焦点必须可见，#105 起方言单选也走该类） */
+button.tah-auth-btn.tah-auth-btn:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 2px;
+}
+
+/* 「接口方言」的地址提示（#105）：纵向节奏由卡内 flex gap 决定，不叠加自身 margin */
+.tah-provider-style-hint {
+	margin: 0;
+	font-size: 0.8rem;
+}
+
 /* ===== 「选择模型」卡（#88，P1 同卡第二行）：第一行选择模型，分隔线下「思考」两档开关，卡脚注徽标行 ===== */
 
 .tah-model-card {

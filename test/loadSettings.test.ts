@@ -174,6 +174,143 @@ test("loadSettings 自定义供应商密钥名为空：模型行保留（手工�
 	assert.deepEqual(fake.events, ["loadRaw"]);
 });
 
+// ===== 接口方言与内置预设补齐（#105） =====
+
+test("loadSettings 存量供应商缺 apiStyle：读作 OpenAI 兼容，不发明缺省值、不落盘", async () => {
+	const fake = fakeIO({
+		providers: [
+			{
+				id: "custom_x",
+				name: "自定义",
+				type: "custom",
+				baseUrl: "http://localhost:3000/v1",
+				apiKeySecretId: "tnar-x",
+				authType: "bearer",
+				customModels: [{ id: "mc1", modelId: "m" }],
+			},
+		],
+		activeProviderId: "custom_x",
+		activeModel: "m",
+	});
+	const settings = await loadSettings(fake.io);
+	const custom = settings.providers.find((p) => p.id === "custom_x");
+	assert.ok(custom);
+	assert.equal("apiStyle" in custom, false, "载入不补缺省值（升级不改写 data.json）");
+	assert.deepEqual(fake.events, ["loadRaw"], "无迁移即不落盘");
+});
+
+test("loadSettings 合法 apiStyle 原样保留；非法值剔除", async () => {
+	const fake = fakeIO({
+		providers: [
+			{
+				id: "custom_a",
+				name: "Anthropic 网关",
+				type: "custom",
+				baseUrl: "https://gateway.example.com/v1",
+				apiKeySecretId: "tnar-a",
+				apiStyle: "anthropic",
+				authType: "bearer",
+				customModels: [{ id: "mc1", modelId: "claude-sonnet-4-6" }],
+			},
+			{
+				id: "custom_b",
+				name: "坏值",
+				type: "custom",
+				baseUrl: "https://gateway.example.com/v1",
+				apiKeySecretId: "tnar-b",
+				apiStyle: "gemini",
+				authType: "bearer",
+				customModels: [{ id: "mc2", modelId: "m" }],
+			},
+		],
+		activeProviderId: "custom_a",
+		activeModel: "",
+	});
+	const settings = await loadSettings(fake.io);
+	assert.equal(settings.providers.find((p) => p.id === "custom_a")?.apiStyle, "anthropic");
+	assert.equal(
+		"apiStyle" in (settings.providers.find((p) => p.id === "custom_b") ?? {}),
+		false,
+		"非法值剔除（读取侧回落 OpenAI 兼容）"
+	);
+	assert.deepEqual(fake.events, ["loadRaw"]);
+});
+
+test("loadSettings 内置预设补齐（#105）：追加到末尾、不覆盖既有项、幂等、不因补齐落盘", async () => {
+	const raw = {
+		providers: [
+			{
+				id: "kimi",
+				name: "Kimi",
+				type: "preset",
+				baseUrl: "https://api.moonshot.cn/v1",
+				apiKeySecretId: "tnar-kimi",
+				models: ["kimi-latest"],
+				authType: "bearer",
+			},
+			{
+				id: "custom_z",
+				name: "自定义",
+				type: "custom",
+				baseUrl: "http://localhost:3000/v1",
+				apiKeySecretId: "",
+				authType: "bearer",
+				customModels: [],
+			},
+		],
+		activeProviderId: "kimi",
+		activeModel: "kimi-latest",
+	};
+	const fake = fakeIO(raw);
+	const settings = await loadSettings(fake.io);
+	const ids = settings.providers.map((p) => p.id);
+	assert.equal(ids[0], "kimi", "既有顺序不变");
+	assert.equal(ids[1], "custom_z");
+	assert.deepEqual(
+		ids.slice(2),
+		["deepseek", "qwen", "minimax", "anthropic"],
+		"缺失的内置预设按定义顺序追加到末尾"
+	);
+	const anthropic = settings.providers.find((p) => p.id === "anthropic");
+	assert.equal(anthropic?.baseUrl, "https://api.anthropic.com/v1");
+	assert.equal(anthropic?.apiStyle, "anthropic");
+	assert.equal(anthropic?.apiKeySecretId, "");
+	assert.equal(anthropic?.authType, "bearer");
+	assert.deepEqual(
+		settings.providers.find((p) => p.id === "kimi")?.models,
+		["kimi-latest"],
+		"既有供应商的启用集不被覆盖"
+	);
+	assert.deepEqual(fake.events, ["loadRaw"], "补齐不强制落盘（升级本身不改设置文件）");
+
+	// 幂等：再载入一次，顺序与数量都不变
+	const again = await loadSettings(fakeIO({ ...raw, providers: settings.providers.map((p) => ({ ...p })) }).io);
+	assert.deepEqual(again.providers.map((p) => p.id), ids, "补齐幂等");
+});
+
+test("loadSettings Anthropic 预设进入「未配置 ⇒ 无启用模型」清理路径（规则对预设通用）", async () => {
+	const fake = fakeIO({
+		providers: [
+			{
+				id: "anthropic",
+				name: "Anthropic (Claude)",
+				type: "preset",
+				baseUrl: "https://api.anthropic.com/v1",
+				apiStyle: "anthropic",
+				apiKeySecretId: "",
+				models: ["claude-sonnet-4-6"],
+				modelCatalog: ["claude-sonnet-4-6"],
+				authType: "bearer",
+			},
+		],
+		activeProviderId: "anthropic",
+		activeModel: "",
+	});
+	const settings = await loadSettings(fake.io);
+	assert.deepEqual(settings.providers.find((p) => p.id === "anthropic")?.models, []);
+	assert.deepEqual(fake.saved, [settings], "清理存量残留落盘一次");
+});
+
 test("loadSettings 保留用户既有设置（非默认值不被覆盖）", async () => {
 	const fake = fakeIO({
 		reportFolder: "我的/报告",

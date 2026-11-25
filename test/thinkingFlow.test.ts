@@ -8,7 +8,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { runThinkingTestFlow, type ThinkingTestStateSlice } from "../src/ai/thinkingTest";
-import type { HttpResponse, RequestFn } from "../src/ai/request";
+import type { HttpResponse, RequestFn, RequestParams } from "../src/ai/request";
 import type { ActiveModelResolution, LearnedCapability } from "../src/types";
 import { runAndAnnounceThinkingTest } from "../src/ui/thinkingTestAction";
 import { BUNDLES, createTranslator } from "../src/i18n";
@@ -66,6 +66,7 @@ function activeResolution(): ActiveModelResolution {
 		ok: true,
 		providerId: "prov-x",
 		config: {
+			apiStyle: "openai",
 			baseUrl: "https://api.example.com",
 			apiKey: "sk",
 			model: "model-y",
@@ -106,6 +107,64 @@ test("解析失败不动习得数据：不清也不跑", async () => {
 	assert.deepEqual(slice.cleared, [], "解析失败不清习得");
 	assert.deepEqual(slice.recorded, [], "解析失败不落习得");
 	assert.equal(calls.length, 0, "解析失败不发探测请求");
+});
+
+// ===== 接口方言（#105）：探测请求按方言构造 =====
+
+function anthropicResolution(): ActiveModelResolution {
+	return {
+		ok: true,
+		providerId: "anthropic",
+		config: {
+			apiStyle: "anthropic",
+			baseUrl: "https://api.anthropic.com/v1",
+			apiKey: "sk-ant",
+			model: "claude-sonnet-4-6",
+			thinking: {
+				setting: "off",
+				param: { name: "thinking", value: { type: "disabled" } },
+				note: null,
+				learned: null,
+			},
+		},
+	};
+}
+
+test("Anthropic 方言（#105）：探测走 /messages + x-api-key，基线不复用生成期关参数、候选只试 thinking", async () => {
+	const calls: RequestParams[] = [];
+	let index = 0;
+	const responses: HttpResponse[] = [
+		{
+			status: 200,
+			json: { content: [{ type: "thinking", thinking: "想想" }, { type: "text", text: "2" }] },
+			text: "",
+		},
+		{ status: 200, json: { content: [{ type: "text", text: "2" }] }, text: "" },
+	];
+	const request: RequestFn = async (params) => {
+		calls.push(params);
+		return responses[Math.min(index++, responses.length - 1)];
+	};
+
+	const slice = fakeSlice(anthropicResolution());
+	const result = await runThinkingTestFlow(slice, 5, false, request);
+
+	assert.ok(result);
+	assert.equal(result.verdict, "switchable", "Claude 上基线有思考 + disabled 候选消失 → 可关");
+	assert.equal(calls.length, 2, "基线 + 单字段候选（不试 OpenAI 字段）");
+	assert.equal(calls[0].url, "https://api.anthropic.com/v1/messages");
+	assert.equal(calls[0].headers["x-api-key"], "sk-ant");
+	assert.equal(calls[0].headers["anthropic-version"], "2026-10-21");
+	assert.equal(calls[0].headers.Authorization, undefined, "不发 Bearer");
+	const baseline = JSON.parse(calls[0].body!);
+	const probe = JSON.parse(calls[1].body!);
+	assert.equal("temperature" in baseline, false, "Anthropic 方言不发温度");
+	assert.equal("temperature" in probe, false);
+	assert.equal("thinking" in baseline, false, "基线不发思考参数");
+	assert.deepEqual(probe.thinking, { type: "disabled" });
+	assert.equal(probe.max_tokens, 256);
+	assert.deepEqual(slice.recorded[0].slice(0, 2), ["anthropic", "claude-sonnet-4-6"]);
+	assert.deepEqual(slice.recorded[0][2].off, { name: "thinking", value: { type: "disabled" } });
 });
 
 // ===== 共享界面动作（#97）：跑 + 报 + 回调 =====

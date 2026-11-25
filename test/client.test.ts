@@ -1,6 +1,6 @@
 import { test, before, mock } from "node:test";
 import assert from "node:assert/strict";
-import { buildChatCompletionsUrl, buildModelsUrl } from "../src/core/aiUrl";
+import { buildChatCompletionsUrl, buildMessagesUrl, buildModelsUrl } from "../src/core/aiUrl";
 
 // ===== URL 拼接（纯函数，原有用例保留） =====
 
@@ -29,6 +29,21 @@ test("buildModelsUrl 拼接端点", () => {
 		buildModelsUrl("https://api.deepseek.com/models"),
 		"https://api.deepseek.com/models"
 	);
+});
+
+test("buildMessagesUrl 拼接 Anthropic Messages 端点：不自动补 /v1（哑函数）", () => {
+	assert.equal(buildMessagesUrl("https://api.anthropic.com/v1"), "https://api.anthropic.com/v1/messages");
+	assert.equal(
+		buildMessagesUrl("https://api.anthropic.com/v1/"),
+		"https://api.anthropic.com/v1/messages"
+	);
+	// 已以 /messages 结尾：原样使用（不重复拼接）
+	assert.equal(
+		buildMessagesUrl("https://api.anthropic.com/v1/messages"),
+		"https://api.anthropic.com/v1/messages"
+	);
+	// 裸域名不自动插 /v1（地址由用户负责，见 #105 裁决 5）
+	assert.equal(buildMessagesUrl("https://gateway.example.com"), "https://gateway.example.com/messages");
 });
 
 // ===== chatCompletion / listModels（通过 mock transport） =====
@@ -91,7 +106,7 @@ function assertErrorCode(code: string) {
 test("listModels 正常返回模型 ID 列表", async () => {
 	await capture();
 	respond = () => ({ status: 200, json: { data: [{ id: "a" }, { id: "b" }, { id: "" }] } });
-	const models = await client.listModels("https://x.com", "sk", 30);
+	const models = await client.listModels({ baseUrl: "https://x.com", apiKey: "sk", timeoutSeconds: 30 });
 	assert.deepEqual(models, ["a", "b"]);
 	assert.equal(captured[0].url, "https://x.com/models");
 	assert.equal(captured[0].method, "GET");
@@ -101,21 +116,21 @@ test("listModels 正常返回模型 ID 列表", async () => {
 test("listModels 兼容 models 字段", async () => {
 	await capture();
 	respond = () => ({ status: 200, json: { models: [{ id: "m1" }] } });
-	const models = await client.listModels("https://x.com", "sk", 30);
+	const models = await client.listModels({ baseUrl: "https://x.com", apiKey: "sk", timeoutSeconds: 30 });
 	assert.deepEqual(models, ["m1"]);
 });
 
 test("listModels 无 apiKey 时不带 Authorization 头", async () => {
 	await capture();
 	respond = () => ({ status: 200, json: { data: [{ id: "m1" }] } });
-	await client.listModels("https://x.com", "   ", 30);
+	await client.listModels({ baseUrl: "https://x.com", apiKey: "   ", timeoutSeconds: 30 });
 	assert.equal(captured[0].headers.Authorization, undefined);
 });
 
 test("listModels 非 2xx 抛出 AIClientError 并含服务端错误信息", async () => {
 	await capture();
 	respond = () => ({ status: 401, json: { error: { message: "invalid key" } } });
-	await assert.rejects(() => client.listModels("https://x.com", "sk", 30), (e: unknown) => {
+	await assert.rejects(() => client.listModels({ baseUrl: "https://x.com", apiKey: "sk", timeoutSeconds: 30 }), (e: unknown) => {
 		assert.ok(e instanceof client.AIClientError);
 		assert.ok((e as Error).message.includes("invalid key"));
 		return true;
@@ -125,7 +140,7 @@ test("listModels 非 2xx 抛出 AIClientError 并含服务端错误信息", asyn
 test("listModels 响应无 data/models 时返回空数组", async () => {
 	await capture();
 	respond = () => ({ status: 200, json: { unexpected: [] } });
-	const models = await client.listModels("https://x.com", "sk", 30);
+	const models = await client.listModels({ baseUrl: "https://x.com", apiKey: "sk", timeoutSeconds: 30 });
 	assert.deepEqual(models, []);
 });
 
@@ -245,10 +260,144 @@ test("chatCompletion 带 JSON 内容类型头", async () => {
 	assert.equal(captured[0].headers["Content-Type"], "application/json");
 });
 
+// ===== 接口方言（#105）：Anthropic 原生 Messages =====
+
+const anthropicConfig = {
+	...config,
+	apiStyle: "anthropic" as const,
+	baseUrl: "https://api.anthropic.com/v1",
+	model: "claude-sonnet-4-6",
+};
+
+test("Anthropic 方言：对话走 /messages，x-api-key + 固定版本头，不发 Authorization", async () => {
+	await capture();
+	respond = () => ({ status: 200, json: { content: [{ type: "text", text: "ok" }] } });
+	await client.chatCompletion(anthropicConfig, [{ role: "user", content: "hi" }]);
+	const { url, method, headers } = captured[0];
+	assert.equal(url, "https://api.anthropic.com/v1/messages");
+	assert.equal(method, "POST");
+	assert.equal(headers["x-api-key"], "sk-test");
+	assert.equal(headers["anthropic-version"], "2026-10-21");
+	assert.equal(headers.Authorization, undefined, "Anthropic 方言不发 Bearer");
+});
+
+test("Anthropic 方言：请求体不发温度、max_tokens 必发、system 提升为顶层", async () => {
+	await capture();
+	respond = () => ({ status: 200, json: { content: [{ type: "text", text: "ok" }] } });
+	await client.chatCompletion(anthropicConfig, [
+		{ role: "system", content: "be terse" },
+		{ role: "user", content: "hi" },
+	]);
+	const payload = JSON.parse(captured[0].body!);
+	assert.equal(payload.system, "be terse", "system 消息提升为顶层字段");
+	assert.deepEqual(payload.messages, [{ role: "user", content: "hi" }]);
+	assert.equal("temperature" in payload, false, "temperature 已从 Anthropic API 删除，不发");
+	assert.equal("top_p" in payload, false);
+	assert.equal(payload.max_tokens, 8192);
+	assert.equal(payload.stream, false);
+	assert.equal(payload.model, "claude-sonnet-4-6");
+});
+
+test("Anthropic 方言：无认证时不发 x-api-key（版本头仍在）", async () => {
+	await capture();
+	respond = () => ({ status: 200, json: { content: [{ type: "text", text: "ok" }] } });
+	await client.chatCompletion({ ...anthropicConfig, apiKey: "" }, [{ role: "user", content: "hi" }]);
+	assert.equal(captured[0].headers["x-api-key"], undefined);
+	assert.equal(captured[0].headers["anthropic-version"], "2026-10-21");
+});
+
+test("Anthropic 方言：正文由 content[] 所有 text 块拼成；思考块 → hasReasoning", async () => {
+	await capture();
+	respond = () => ({
+		status: 200,
+		json: {
+			content: [
+				{ type: "thinking", thinking: "想了一堆" },
+				{ type: "text", text: "第一段" },
+				{ type: "text", text: "第二段" },
+			],
+		},
+	});
+	const result = await client.chatCompletion(anthropicConfig, [{ role: "user", content: "hi" }]);
+	assert.equal(result.content, "第一段第二段");
+	assert.equal(result.hasReasoning, true, "非空思考块即推理段读面");
+});
+
+test("Anthropic 方言：thinking_tokens 计量 → hasReasoning；无思考块且无计量 → false", async () => {
+	await capture();
+	respond = () => ({
+		status: 200,
+		json: {
+			content: [{ type: "text", text: "ok" }],
+			usage: { output_tokens_details: { thinking_tokens: 12 } },
+		},
+	});
+	assert.equal(
+		(await client.chatCompletion(anthropicConfig, [{ role: "user", content: "hi" }])).hasReasoning,
+		true
+	);
+	respond = () => ({ status: 200, json: { content: [{ type: "text", text: "ok" }] } });
+	assert.equal(
+		(await client.chatCompletion(anthropicConfig, [{ role: "user", content: "hi" }])).hasReasoning,
+		false
+	);
+});
+
+test("Anthropic 方言：正文为空 → chat.empty（不静默空报告）", async () => {
+	await capture();
+	respond = () => ({ status: 200, json: { content: [{ type: "text", text: "" }] } });
+	await assert.rejects(
+		() => client.chatCompletion(anthropicConfig, [{ role: "user", content: "hi" }]),
+		assertErrorCode("chat.empty")
+	);
+});
+
+test("Anthropic 方言：content 不是数组（非补全形态）→ chat.parse", async () => {
+	await capture();
+	respond = () => ({ status: 200, json: { choices: [{ message: { content: "wrong shape" } }] } });
+	await assert.rejects(
+		() => client.chatCompletion(anthropicConfig, [{ role: "user", content: "hi" }]),
+		assertErrorCode("chat.parse")
+	);
+});
+
+test("Anthropic 方言：服务端错误详情原样带出（错误体与 OpenAI 同形）", async () => {
+	await capture();
+	respond = () => ({ status: 400, json: { error: { message: "invalid x-api-key" } } });
+	await assert.rejects(
+		() => client.chatCompletion(anthropicConfig, [{ role: "user", content: "hi" }]),
+		(e: unknown) => {
+			assert.ok(e instanceof client.AIClientError);
+			assert.equal((e as { code: string }).code, "chat.http");
+			assert.ok((e as Error).message.includes("invalid x-api-key"));
+			return true;
+		}
+	);
+});
+
+test("Anthropic 方言：listModels 带版本头与 limit=100，同一页读 data[].id", async () => {
+	await capture();
+	respond = () => ({
+		status: 200,
+		json: { data: [{ id: "claude-opus-4-7" }, { id: "claude-sonnet-4-6" }], has_more: false, last_id: "x" },
+	});
+	const models = await client.listModels({
+		baseUrl: "https://api.anthropic.com/v1",
+		apiKey: "sk",
+		timeoutSeconds: 30,
+		apiStyle: "anthropic",
+	});
+	assert.deepEqual(models, ["claude-opus-4-7", "claude-sonnet-4-6"]);
+	assert.equal(captured[0].url, "https://api.anthropic.com/v1/models?limit=100");
+	assert.equal(captured[0].headers["x-api-key"], "sk");
+	assert.equal(captured[0].headers["anthropic-version"], "2026-10-21");
+	assert.equal(captured[0].headers.Authorization, undefined);
+});
+
 test("listModels 无请求体不带 Content-Type", async () => {
 	await capture();
 	respond = () => ({ status: 200, json: { data: [] } });
-	await client.listModels("https://x.com", "sk", 30);
+	await client.listModels({ baseUrl: "https://x.com", apiKey: "sk", timeoutSeconds: 30 });
 	assert.equal(captured[0].headers["Content-Type"], undefined);
 });
 
@@ -277,7 +426,7 @@ test("chatCompletion 响应体不是对象 → AIClientError(chat.parse)", async
 test("listModels 响应体不是对象 → AIClientError(models.parse)", async () => {
 	const request = async () => ({ status: 200, json: null, text: "" });
 	await assert.rejects(
-		() => client.listModels("https://x.com", "sk", 30, request),
+		() => client.listModels({ baseUrl: "https://x.com", apiKey: "sk", timeoutSeconds: 30 }, request),
 		assertErrorCode("models.parse")
 	);
 });
@@ -305,7 +454,7 @@ test("listModels 透传 AIClientError，不被网络错误重包", async () => {
 	respond = () => {
 		throw original;
 	};
-	await assert.rejects(() => client.listModels("https://x.com", "sk", 30), (e: unknown) => {
+	await assert.rejects(() => client.listModels({ baseUrl: "https://x.com", apiKey: "sk", timeoutSeconds: 30 }), (e: unknown) => {
 		assert.equal(e, original);
 		return true;
 	});

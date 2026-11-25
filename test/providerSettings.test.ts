@@ -10,6 +10,7 @@ import {
 	setProviderName,
 	setProviderBaseUrl,
 	setSecretId,
+	setProviderApiStyle,
 	setAuthType,
 	refreshModelCatalog,
 	applyPickedModels,
@@ -222,6 +223,67 @@ test("setSecretId 无认证（none）供应商清空密钥名：启用集不动�
 	assert.deepEqual(p.models, ["m"]);
 });
 
+// ===== 接口方言（#105） =====
+
+test("setProviderApiStyle：只写方言，模型行 / 启用集 / 当前模型 / 思考开关全部保留", () => {
+	const p = provider({
+		id: "c",
+		type: "custom",
+		baseUrl: "https://gateway.example.com/v1",
+		apiKeySecretId: "k",
+		customModels: [{ id: "mc1", modelId: "m", maxTokens: 2048 }],
+		modelCatalog: ["m", "n"],
+		thinkingByModel: { m: "on" },
+		learnedByModel: { m: { verdict: "switchable", off: { name: "thinking", value: { type: "disabled" } }, testedAt: "2026-11-25T00:00:00.000Z" } },
+	});
+	const s = state({ providers: [p], activeProviderId: "c", activeModel: "m" });
+	setProviderApiStyle(s, "c", "anthropic");
+	assert.equal(p.apiStyle, "anthropic");
+	assert.deepEqual(p.customModels, [{ id: "mc1", modelId: "m", maxTokens: 2048 }], "模型行保留");
+	assert.deepEqual(p.modelCatalog, ["m", "n"], "模型清单保留");
+	assert.deepEqual(p.thinkingByModel, { m: "on" }, "思考开关保留");
+	assert.deepEqual(
+		p.learnedByModel,
+		{
+			m: {
+				verdict: "switchable",
+				off: { name: "thinking", value: { type: "disabled" } },
+				testedAt: "2026-11-25T00:00:00.000Z",
+			},
+		},
+		"习得能力保留"
+	);
+	assert.equal(s.activeModel, "m", "切换方言不清「当前模型」");
+	assert.equal(s.activeProviderId, "c");
+});
+
+test("setProviderApiStyle：供应商不存在时不动", () => {
+	const s = state({ providers: [provider({ id: "a" })] });
+	setProviderApiStyle(s, "ghost", "anthropic");
+	assert.equal(s.providers[0].apiStyle, undefined);
+});
+
+test("resolveActive 带出方言：存量缺 apiStyle 读作 OpenAI 兼容", () => {
+	const p = provider({ id: "p", type: "preset", apiKeySecretId: "k", models: ["m"] });
+	const s = state({ providers: [p], activeProviderId: "p", activeModel: "m" });
+	const result = resolveActive(s, () => "sk");
+	assert.equal(result.ok && result.config.apiStyle, "openai", "缺 apiStyle 的存量数据读作 OpenAI 兼容");
+});
+
+test("resolveActive 带出方言：Anthropic 供应商解析为 anthropic（调用方不各自判断）", () => {
+	const p = provider({
+		id: "c",
+		type: "custom",
+		baseUrl: "https://gateway.example.com/v1",
+		apiStyle: "anthropic",
+		authType: "none",
+		customModels: [{ id: "mc1", modelId: "claude-sonnet-4-6" }],
+	});
+	const s = state({ providers: [p], activeProviderId: "c", activeModel: "claude-sonnet-4-6" });
+	const result = resolveActive(s, () => null);
+	assert.equal(result.ok && result.config.apiStyle, "anthropic");
+});
+
 test("setAuthType 切到 none：清空密钥名", () => {
 	const p = provider({ id: "c", type: "custom", authType: "bearer", apiKeySecretId: "k" });
 	const s = state({ providers: [p] });
@@ -345,6 +407,7 @@ test("resolveActive 成功：解析出地址与密钥值", () => {
 		ok: true,
 		providerId: "p",
 		config: {
+			apiStyle: "openai",
 			baseUrl: "https://api.example.com",
 			apiKey: "sk",
 			model: "m",

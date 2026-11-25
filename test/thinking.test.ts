@@ -10,6 +10,8 @@ import {
 	thinkingDisplay,
 	THINKING_CAPABILITIES,
 	THINKING_OFF_CANDIDATES,
+	ANTHROPIC_THINKING_OFF_CANDIDATES,
+	thinkingOffCandidates,
 } from "../src/core/thinking";
 
 /** 思考测试状态机测试的固定时钟（习得条目时间戳断言用）。 */
@@ -320,6 +322,59 @@ test("百炼仅思考型号（qwen3.8-2.4t-a95b / kimi-k3）：forced；旧命�
 test("思考测试（#89）：先发基线微型请求（不发思考参数）", () => {
 	const started = startThinkingTest();
 	assert.deepEqual(started.action, { kind: "probe", param: null }, "第一步是基线微型请求");
+});
+
+// ===== 接口方言（#105）：能力表 anthropic 行 + 候选按方言注入 =====
+
+test("Anthropic 能力表（#105）：claude-* 可关可开——关 {type:\"disabled\"}、开 {type:\"adaptive\"}", () => {
+	const off = resolveThinking({ providerId: "anthropic", model: "claude-sonnet-4-6", setting: "off" });
+	assert.deepEqual(off.param, { name: "thinking", value: { type: "disabled" } });
+	const on = resolveThinking({ providerId: "anthropic", model: "claude-opus-4-7", setting: "on" });
+	assert.deepEqual(on.param, { name: "thinking", value: { type: "adaptive" } });
+});
+
+test("Anthropic 能力表（#105）：表外模型 / 自定义 Anthropic 网关 → 未知（靠思考测试学习）", () => {
+	const unknownModel = resolveThinking({ providerId: "anthropic", model: "future-model", setting: "off" });
+	assert.equal(unknownModel.note, "unknown");
+	assert.equal(unknownModel.param, null);
+	const customGateway = resolveThinking({ providerId: "custom_x", model: "claude-sonnet-4-6", setting: "off" });
+	assert.equal(customGateway.note, "unknown", "自定义供应商不在表内，不擅自假定");
+	assert.equal(customGateway.param, null);
+});
+
+test("Anthropic 候选（#105）：单字段 thinking{type:\"disabled\"}，不试 OpenAI 字段", () => {
+	assert.deepEqual(ANTHROPIC_THINKING_OFF_CANDIDATES, [
+		{ name: "thinking", value: { type: "disabled" } },
+	]);
+	assert.deepEqual(thinkingOffCandidates("openai"), THINKING_OFF_CANDIDATES, "OpenAI 候选保持现状三字段");
+	assert.deepEqual(thinkingOffCandidates("anthropic"), ANTHROPIC_THINKING_OFF_CANDIDATES);
+});
+
+test("Anthropic 状态机（#105）：候选注入后语义不变——基线有推理段 → 试 thinking 关字段", () => {
+	const start = startThinkingTest(ANTHROPIC_THINKING_OFF_CANDIDATES);
+	const step = stepThinkingTest(start.state, "reasoning-present", NOW);
+	assert.deepEqual(step.action, {
+		kind: "probe",
+		param: { name: "thinking", value: { type: "disabled" } },
+	});
+});
+
+test("Anthropic 状态机（#105）：候选仅一个字段——400（字段不适用）也直接落「未能关闭」，triedFields=1", () => {
+	const start = startThinkingTest(ANTHROPIC_THINKING_OFF_CANDIDATES);
+	const probe = stepThinkingTest(start.state, "reasoning-present", NOW);
+	const { action } = stepThinkingTest(probe.state, "reasoning-absent", NOW);
+	assert.equal(action.kind, "conclude");
+	assert.equal(action.kind === "conclude" && action.verdict, "switchable");
+	assert.deepEqual(action.kind === "conclude" && action.entry?.off, {
+		name: "thinking",
+		value: { type: "disabled" },
+	});
+
+	const rejectedStart = startThinkingTest(ANTHROPIC_THINKING_OFF_CANDIDATES);
+	const rejectedProbe = stepThinkingTest(rejectedStart.state, "reasoning-present", NOW);
+	const rejected = stepThinkingTest(rejectedProbe.state, "rejected", NOW);
+	assert.equal(rejected.action.kind === "conclude" && rejected.action.verdict, "not-switchable");
+	assert.equal(rejected.action.kind === "conclude" && rejected.action.entry?.triedFields, 1);
 });
 
 test("思考测试（#89）：基线未检出推理段 → 「未检出思考」，落习得条目（含时间戳）", () => {

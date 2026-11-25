@@ -7,6 +7,8 @@
  * 未实测（#89 习得能力）前一律未知。
  */
 
+import type { ApiStyle } from "../types";
+import { resolveApiStyle } from "./apiStyle";
 import type {
 	LearnedCapability,
 	ThinkingParam,
@@ -98,6 +100,9 @@ export const THINKING_CAPABILITIES: readonly ThinkingCapabilityRow[] = [
 	{ providerId: "minimax", modelPattern: "MiniMax-M3.1-Flash", capability: { kind: "forced" } },
 	// M2.x 思考无法关闭（传 disabled 被接收但不生效）。
 	{ providerId: "minimax", modelPattern: "MiniMax-M2*", capability: { kind: "forced" } },
+	// Anthropic 官方预设（#105）：adaptive 时代——开 `{type:"adaptive"}`、关 `{type:"disabled"}`。
+	// 自定义 Anthropic 网关不在表内，初始未知、由思考测试学习（#105 裁决 9）。
+	{ providerId: "anthropic", modelPattern: "claude-*", capability: thinkingTypeSwitch("adaptive") },
 	// 智谱 GLM：5.3 全系强制思考（thinking.type 仅接受 enabled，传 disabled 报错）。
 	{ providerId: "zhipu", modelPattern: "glm-5.3*", capability: { kind: "forced" } },
 	// GLM-4.5 以下不支持 thinking 参数（glm-4-long / 老免费档）。
@@ -274,6 +279,21 @@ export const THINKING_OFF_CANDIDATES: readonly ThinkingParam[] = [
 ];
 
 /**
+ * Anthropic 方言的关字段候选（#105 裁决 10）：单字段 `thinking: {type:"disabled"}`。
+ * 只试该方言自己的关字段——拿 OpenAI 字段去探 Claude 只会白落「未能关闭」。
+ */
+export const ANTHROPIC_THINKING_OFF_CANDIDATES: readonly ThinkingParam[] = [
+	{ name: "thinking", value: { type: "disabled" } },
+];
+
+/** 按「接口方言」（可缺省）取思考测试候选清单；缺省归一路径与供应商属性同一个（core/apiStyle）。 */
+export function thinkingOffCandidates(apiStyle?: ApiStyle): readonly ThinkingParam[] {
+	return resolveApiStyle(apiStyle) === "anthropic"
+		? ANTHROPIC_THINKING_OFF_CANDIDATES
+		: THINKING_OFF_CANDIDATES;
+}
+
+/**
  * 微型请求的读面结果（思考测试状态机输入，#89）：
  * - `reasoning-present` / `reasoning-absent`：2xx，按响应推理段读面判定（唯一证据，不认 HTTP 200）；
  * - `rejected`：400，字段不适用（探测信号），换下一个候选；
@@ -295,16 +315,23 @@ export type ThinkingTestAction =
 	| { kind: "probe"; param: ThinkingParam | null }
 	| { kind: "conclude"; verdict: ThinkingTestVerdict; entry: LearnedCapability | null };
 
-/** 思考测试状态：基线 → 逐字段（待试候选下标）→ 判定。纯状态，无 IO。 */
+/**
+ * 思考测试状态：基线 → 逐字段（待试候选下标）→ 判定。纯状态，无 IO。
+ * 候选清单随状态携带（按方言注入，#105 裁决 10）——状态机的语义与判定规则不因方言分叉。
+ */
 export interface ThinkingTestState {
 	phase: "baseline" | "probe";
 	candidateIndex: number;
+	/** 本次测试的关字段候选（缺省 OpenAI 兼容三字段）。 */
+	candidates: readonly ThinkingParam[];
 }
 
 /** 开始思考测试：第一步是基线微型请求（不发思考参数，先判会不会思考）。 */
-export function startThinkingTest(): { state: ThinkingTestState; action: ThinkingTestAction } {
+export function startThinkingTest(
+	candidates: readonly ThinkingParam[] = THINKING_OFF_CANDIDATES
+): { state: ThinkingTestState; action: ThinkingTestAction } {
 	return {
-		state: { phase: "baseline", candidateIndex: 0 },
+		state: { phase: "baseline", candidateIndex: 0, candidates },
 		action: { kind: "probe", param: null },
 	};
 }
@@ -338,12 +365,12 @@ export function stepThinkingTest(
 			};
 		}
 		return {
-			state: { phase: "probe", candidateIndex: 0 },
-			action: { kind: "probe", param: THINKING_OFF_CANDIDATES[0] },
+			state: { phase: "probe", candidateIndex: 0, candidates: state.candidates },
+			action: { kind: "probe", param: state.candidates[0] },
 		};
 	}
 
-	const current = THINKING_OFF_CANDIDATES[state.candidateIndex];
+	const current = state.candidates[state.candidateIndex];
 	if (outcome === "reasoning-absent") {
 		return {
 			state,
@@ -356,10 +383,10 @@ export function stepThinkingTest(
 	}
 	// rejected（字段不适用）或 reasoning-present（被静默忽略）：换下一个候选。
 	const next = state.candidateIndex + 1;
-	if (next < THINKING_OFF_CANDIDATES.length) {
+	if (next < state.candidates.length) {
 		return {
-			state: { phase: "probe", candidateIndex: next },
-			action: { kind: "probe", param: THINKING_OFF_CANDIDATES[next] },
+			state: { phase: "probe", candidateIndex: next, candidates: state.candidates },
+			action: { kind: "probe", param: state.candidates[next] },
 		};
 	}
 	return {
@@ -369,7 +396,7 @@ export function stepThinkingTest(
 			verdict: "not-switchable",
 			entry: {
 				verdict: "not-switchable",
-				triedFields: THINKING_OFF_CANDIDATES.length,
+				triedFields: state.candidates.length,
 				testedAt: now(),
 			},
 		},

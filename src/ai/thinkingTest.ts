@@ -4,7 +4,7 @@
  * 「中断」时 entry 为 null——调用方据此不留结论、测试入口保持可点。
  */
 
-import { startThinkingTest, stepThinkingTest } from "../core/thinking";
+import { startThinkingTest, stepThinkingTest, thinkingOffCandidates } from "../core/thinking";
 import type {
 	ActiveModelResolution,
 	LearnedCapability,
@@ -23,7 +23,8 @@ export async function runThinkingTest(
 	config: ThinkingProbeConfig,
 	request?: RequestFn
 ): Promise<ThinkingTestResult> {
-	let { state, action } = startThinkingTest();
+	// 候选按「接口方言」取（#105）：Anthropic 只探自己的关字段，不拿 OpenAI 字段去猜。
+	let { state, action } = startThinkingTest(thinkingOffCandidates(config.apiStyle));
 	while (action.kind === "probe") {
 		const outcome = await thinkingProbe(config, action.param, request);
 		({ state, action } = stepThinkingTest(state, outcome));
@@ -61,6 +62,8 @@ export async function runThinkingTestFlow(
 	if (retest) slice.clearLearnedThinking(providerId, model);
 	const result = await runThinkingTest(
 		{
+			// 探测请求同样按方言构造（#105）：地址 / 认证头 / 请求体 / 响应读面随解析结果走。
+			apiStyle: resolved.config.apiStyle,
 			baseUrl: resolved.config.baseUrl,
 			apiKey: resolved.config.apiKey,
 			model,

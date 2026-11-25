@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import {
 	BUNDLES,
+	PRESET_NAME_KEYS,
 	THINKING_VERDICT_NOTICE_KEYS,
 	dateFieldLabelKey,
 	thinkingDisplayCopy,
@@ -124,7 +125,7 @@ test("静态 t(\"…\") 用到的键都在中英两本词典里", () => {
 	assertRegistered(used, "静态调用点");
 });
 
-test("动态键（日期口径 / 显示矩阵 / 思考判定）都已登记", () => {
+test("动态键（日期口径 / 显示矩阵 / 思考判定 / 预设名）都已登记", () => {
 	const entries: UsedKey[] = [
 		...DATE_FIELDS.map((field) => ({
 			key: dateFieldLabelKey(field),
@@ -138,6 +139,9 @@ test("动态键（日期口径 / 显示矩阵 / 思考判定）都已登记", ()
 			key,
 			where: "THINKING_VERDICT_NOTICE_KEYS",
 		})),
+		...Object.values(PRESET_NAME_KEYS)
+			.filter((key): key is NonNullable<typeof key> => key !== undefined)
+			.map((key) => ({ key, where: "PRESET_NAME_KEYS" })),
 	];
 	assertRegistered(entries, "动态键");
 });

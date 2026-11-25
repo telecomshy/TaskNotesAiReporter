@@ -150,6 +150,128 @@ test("成功：请求 URL / 认证头正确，清单刷新为拉取结果，onSt
 	assert.deepEqual(order, ["start", "request"]);
 });
 
+// ===== 接口方言（#105）：Anthropic 清单翻页 =====
+
+/** 按调用次序回放的多页响应（每页消耗一条）。 */
+function pageReplay(pages: HttpResponse[]): { request: RequestFn; calls: RequestParams[] } {
+	const calls: RequestParams[] = [];
+	let index = 0;
+	const request: RequestFn = async (params) => {
+		calls.push(params);
+		return pages[Math.min(index++, pages.length - 1)];
+	};
+	return { request, calls };
+}
+
+function anthropicPage(ids: string[], lastId: string, hasMore: boolean): HttpResponse {
+	return {
+		status: 200,
+		json: { data: ids.map((id) => ({ id })), has_more: hasMore, last_id: lastId },
+		text: "",
+	};
+}
+
+test("Anthropic 方言：清单请求带 x-api-key + 版本头，limit=100，不发 Authorization", async () => {
+	const { slice, catalogs } = fakeSlice({ [SECRET_NAME]: "sk-live" });
+	const { request, calls } = pageReplay([anthropicPage(["m1"], "m1", false)]);
+	const outcome = await runFetchModelsFlow(
+		slice,
+		providerOf({ apiStyle: "anthropic" }),
+		30,
+		request
+	);
+	assert.deepEqual(outcome, { kind: "fetched", models: ["m1"] });
+	assert.equal(calls[0].url, `${BASE_URL}/models?limit=100`);
+	assert.equal(calls[0].headers["x-api-key"], "sk-live");
+	assert.equal(calls[0].headers["anthropic-version"], "2026-10-21");
+	assert.equal(calls[0].headers.Authorization, undefined);
+	assert.deepEqual(catalogs, [{ providerId: "kimi", models: ["m1"] }]);
+});
+
+test("Anthropic 方言：按 after_id 翻页拉全（has_more=false 停止），顺序保持", async () => {
+	const { slice, catalogs } = fakeSlice({ [SECRET_NAME]: "sk-live" });
+	const { request, calls } = pageReplay([
+		anthropicPage(["m1", "m2"], "m2", true),
+		anthropicPage(["m3"], "m3", false),
+	]);
+	const outcome = await runFetchModelsFlow(
+		slice,
+		providerOf({ apiStyle: "anthropic" }),
+		30,
+		request
+	);
+	assert.deepEqual(outcome, { kind: "fetched", models: ["m1", "m2", "m3"] });
+	assert.equal(calls.length, 2, "两页即完");
+	assert.equal(calls[1].url, `${BASE_URL}/models?limit=100&after_id=m2`);
+	assert.deepEqual(catalogs, [{ providerId: "kimi", models: ["m1", "m2", "m3"] }], "整次拉取才写清单");
+});
+
+test("Anthropic 方言：坏网关说「还有下一页」却给不出游标 → 按失败收尾，不写半截清单", async () => {
+	const { slice, catalogs } = fakeSlice({ [SECRET_NAME]: "sk-live" });
+	const { request, calls } = pageReplay([anthropicPage(["m1"], "", true)]);
+	const outcome = await runFetchModelsFlow(
+		slice,
+		providerOf({ apiStyle: "anthropic" }),
+		30,
+		request
+	);
+	assert.ok(outcome.kind === "failed", "无法自证完整 → 失败（US16）");
+	assert.equal(outcome.error instanceof AIClientError && outcome.error.code, "models.parse");
+	assert.equal(calls.length, 1);
+	assert.deepEqual(catalogs, [], "不写半截清单");
+});
+
+test("Anthropic 方言：页数上限 50 兜底（第 50 页仍喊下一页 → 失败、不卡死）", async () => {
+	const { slice, catalogs } = fakeSlice({ [SECRET_NAME]: "sk-live" });
+	const { request, calls } = pageReplay([]);
+	// 永不喊停的网关：每页都给游标
+	const neverEnding: RequestFn = async (params) => {
+		calls.push(params);
+		const n = calls.length;
+		return anthropicPage([`m${n}`], `m${n}`, true);
+	};
+	const outcome = await runFetchModelsFlow(
+		slice,
+		providerOf({ apiStyle: "anthropic" }),
+		30,
+		neverEnding
+	);
+	assert.equal(calls.length, 50, "页数上限兜底：不无限翻页");
+	assert.ok(outcome.kind === "failed", "触顶仍不完整 → 失败（US16）");
+	assert.equal(outcome.error instanceof AIClientError && outcome.error.code, "models.parse");
+	assert.deepEqual(catalogs, [], "不把半截清单当完整快照");
+});
+
+test("Anthropic 方言：中途某页失败 → 整次按失败、不写半截清单", async () => {
+	const { slice, catalogs } = fakeSlice({ [SECRET_NAME]: "sk-live" });
+	const { request } = pageReplay([
+		anthropicPage(["m1", "m2"], "m2", true),
+		{ status: 500, json: { error: { message: "boom" } }, text: "" },
+	]);
+	const outcome = await runFetchModelsFlow(
+		slice,
+		providerOf({ apiStyle: "anthropic" }),
+		30,
+		request
+	);
+	assert.ok(outcome.kind === "failed", "应返回 failed");
+	assert.equal(outcome.error instanceof AIClientError && outcome.error.code, "models.http");
+	assert.deepEqual(catalogs, [], "不写半截清单");
+});
+
+test("Anthropic 方言：首屏空（data:[] 且 has_more=false）→ 空清单（正常状态）", async () => {
+	const { slice, catalogs } = fakeSlice({ [SECRET_NAME]: "sk-live" });
+	const { request } = pageReplay([anthropicPage([], "", false)]);
+	const outcome = await runFetchModelsFlow(
+		slice,
+		providerOf({ apiStyle: "anthropic" }),
+		30,
+		request
+	);
+	assert.deepEqual(outcome, { kind: "empty" });
+	assert.deepEqual(catalogs, [{ providerId: "kimi", models: [] }]);
+});
+
 // ===== 空表 / 失败 =====
 
 test("空表是正常状态：empty 且清单照实刷为空", async () => {

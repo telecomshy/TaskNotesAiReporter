@@ -142,6 +142,8 @@ async function runGeneration(intent: GenerateIntent, deps: GenerateDeps): Promis
 			statuses,
 		});
 		const chatResult = await deps.chat(prompt, {
+			// 「接口方言」随解析结果带出（#105）：生成走该供应商的协议，调用方不另判供应商类型。
+			apiStyle: config.apiStyle,
 			baseUrl: config.baseUrl,
 			apiKey: config.apiKey,
 			model: config.model,

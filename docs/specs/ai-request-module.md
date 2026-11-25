@@ -68,3 +68,6 @@ _来源：`/improve-codebase-architecture` 巡览的候选 ②，经 `/grill-wit
 - **Constraint**: the request module stays free of Obsidian so it remains testable in Node — the same purity rule ADR-0002 established for the client.
 - **Behavior-preserving except one visible delta**: error-detail truncation length is unified to 300 (the two call sites used 200 and 300), so a model-list error can now carry up to 300 characters of server detail instead of 200. No other user-visible path changes.
 - **Related**: ADR-0002 (AI HTTP transport decoupled from Obsidian).
+- **2026-11-25 演进（#105）**：请求描述增加可选的「认证头方言」（`bearer` / `x-api-key`）与「方言固定头」
+  （Anthropic 的 `anthropic-version`）。共享机制不变——内容类型、超时、非 2xx 映射、错误详情仍是同一处；
+  方言只决定认证头与固定头，见 ADR-0028。

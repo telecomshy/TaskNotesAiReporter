@@ -7,6 +7,7 @@
  */
 
 import { listModels, type RequestFn } from "../ai/client";
+import { apiStyleOf } from "../core/apiStyle";
 import type { ModelProvider } from "../types";
 import { requiresSecret } from "./providerSettings";
 
@@ -58,7 +59,16 @@ export async function runFetchModelsFlow(
 
 	let models: string[];
 	try {
-		models = await listModels(provider.baseUrl, apiKey, timeoutSeconds, request);
+		models = await listModels(
+			{
+				baseUrl: provider.baseUrl,
+				apiKey,
+				timeoutSeconds,
+				// 「接口方言」透传（#105）：清单地址 / 认证头 / 翻页全由它决定。
+				apiStyle: apiStyleOf(provider),
+			},
+			request
+		);
 	} catch (error) {
 		return { kind: "failed", error };
 	}

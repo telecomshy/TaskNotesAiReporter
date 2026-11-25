@@ -102,6 +102,7 @@ function resolveOk(): ActiveModelResolution {
 		ok: true,
 		providerId: "p",
 		config: {
+			apiStyle: "openai",
 			baseUrl: "https://api.example.com",
 			apiKey: "sk",
 			model: "m",

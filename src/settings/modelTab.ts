@@ -8,6 +8,7 @@
 
 import { Notice, SecretComponent, type App } from "obsidian";
 import type { ModelProvider } from "../types";
+import { apiStyleOf } from "../core/apiStyle";
 import type { Translator } from "../i18n";
 import { testConnection } from "../ai/client";
 import { describeAIError } from "../ai/errorMessage";
@@ -59,7 +60,7 @@ export function renderModelTab(container: HTMLElement, ctx: ModelTabContext): vo
 
 	const list = container.createDiv({ cls: "tah-provider-list" });
 	for (const provider of ctx.settings.providers) {
-		const model = providerCardModel(provider, info);
+		const model = providerCardModel(provider, info, t);
 		if (model.kind === "preset") {
 			renderPresetProviderCard(list, model, provider, ctx);
 		} else {
@@ -298,7 +299,7 @@ function renderPresetProviderCard(
 	// 卡内重画是它自己的帧：重算一次投影，头部与标签列一起同步（密钥变更入口）。
 	// 本卡由预设供应商渲染，投影恒为 preset 型——kind 判别只为对齐视图分支。
 	const redraw = (): void => {
-		const fresh = providerCardModel(provider, ctx.providers.activeModelInfo());
+		const fresh = providerCardModel(provider, ctx.providers.activeModelInfo(), ctx.t);
 		applyCardHead(card, fresh);
 		if (fresh.kind === "preset") renderTags(fresh.entries);
 	};
@@ -457,6 +458,16 @@ function renderCustomProviderCard(
 		card.setName(provider.name);
 	});
 
+	// 「接口方言」（#105）：紧挨 API 地址——它决定这个地址该按哪套规矩填
+	// （地址 / 认证头 / 请求体）。切换只写方言，模型行 / 启用集 / 当前模型全部保留。
+	const styleRow = body.createDiv({ cls: "tah-provider-field" });
+	styleRow.createSpan({ cls: "tah-provider-field-label", text: t("model.apiStyle") });
+	const styleGroup = styleRow.createDiv({ cls: "tah-auth-group" });
+	const openaiStyleBtn = styleGroup.createEl("button", { text: t("model.apiStyleOpenai") });
+	const anthropicStyleBtn = styleGroup.createEl("button", { text: t("model.apiStyleAnthropic") });
+	openaiStyleBtn.addClass("tah-auth-btn");
+	anthropicStyleBtn.addClass("tah-auth-btn");
+
 	// API 地址
 	const urlRow = body.createDiv({ cls: "tah-provider-field" });
 	urlRow.createSpan({ cls: "tah-provider-field-label", text: t("model.apiUrl") });
@@ -470,7 +481,13 @@ function renderCustomProviderCard(
 		syncHead();
 	});
 
-	// 认证方式（按钮单选）+ API 密钥（Bearer 时显示）
+	// Anthropic 方言的地址提示（#105）：少了 /v1 会得到莫名其妙的 404。
+	const styleHint = body.createDiv({
+		cls: "setting-item-description tah-provider-style-hint",
+		text: t("model.apiStyleHint"),
+	});
+
+	// 认证方式（按钮单选）+ API 密钥（Bearer / x-api-key 时显示）
 	const authRow = body.createDiv({ cls: "tah-provider-field" });
 	authRow.createSpan({ cls: "tah-provider-field-label", text: t("model.authType") });
 	const authGroup = authRow.createDiv({ cls: "tah-auth-group" });
@@ -492,6 +509,23 @@ function renderCustomProviderCard(
 		noneBtn.toggleClass("tah-auth-active", provider.authType === "none");
 		keyRow.toggleClass("tah-hidden", provider.authType !== "bearer");
 	};
+
+	/** 方言单选：高亮当前值；认证头文案随方言（`Bearer Token` / `x-api-key`）；地址提示按需显示。 */
+	const updateStyle = () => {
+		const anthropicStyle = apiStyleOf(provider) === "anthropic";
+		openaiStyleBtn.toggleClass("tah-auth-active", !anthropicStyle);
+		anthropicStyleBtn.toggleClass("tah-auth-active", anthropicStyle);
+		bearerBtn.setText(t(anthropicStyle ? "model.authApiKeyHeader" : "model.authBearer"));
+		styleHint.toggleClass("tah-hidden", !anthropicStyle);
+	};
+	openaiStyleBtn.addEventListener("click", () => {
+		ctx.providers.setProviderApiStyle(provider.id, "openai");
+		updateStyle();
+	});
+	anthropicStyleBtn.addEventListener("click", () => {
+		ctx.providers.setProviderApiStyle(provider.id, "anthropic");
+		updateStyle();
+	});
 	bearerBtn.addEventListener("click", () => {
 		ctx.providers.setAuthType(provider.id, "bearer");
 		updateAuth();
@@ -504,6 +538,7 @@ function renderCustomProviderCard(
 		syncHead();
 	});
 	updateAuth();
+	updateStyle();
 
 	// ---- 模型列表区 ----
 	// 「启用模型」标签行：标签居左，「获取模型列表」居右——本区的半自动入口
@@ -517,7 +552,7 @@ function renderCustomProviderCard(
 
 	/** 头部同步（地址 / 密钥 / 认证方式 / 行参数变更后）：计数与状态跟随，不重画列表。 */
 	const syncHead = (): void => {
-		applyCardHead(card, providerCardModel(provider, ctx.providers.activeModelInfo()));
+		applyCardHead(card, providerCardModel(provider, ctx.providers.activeModelInfo(), ctx.t));
 	};
 
 	const renderModelRows = (rows: CustomModelRowModel[]): void => {
@@ -539,7 +574,7 @@ function renderCustomProviderCard(
 	// 卡内重画是它自己的帧：重算一次投影，头部与模型行一起同步（删除行 / 追加行入口）。
 	// 本卡由自定义供应商渲染，投影恒为 custom 型——kind 判别只为对齐视图分支。
 	const redraw = (): void => {
-		const fresh = providerCardModel(provider, ctx.providers.activeModelInfo());
+		const fresh = providerCardModel(provider, ctx.providers.activeModelInfo(), ctx.t);
 		applyCardHead(card, fresh);
 		if (fresh.kind === "custom") renderModelRows(fresh.rows);
 	};
@@ -628,6 +663,8 @@ function renderCustomModelRow(
 		}
 		new Notice(t("model.testing"));
 		void testConnection({
+			// 「测试」按当前方言发请求（#105）：测试通过即真实生成路径可用。
+			apiStyle: apiStyleOf(provider),
 			baseUrl: provider.baseUrl.trim(),
 			apiKey:
 				provider.authType === "bearer"

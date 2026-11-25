@@ -79,6 +79,19 @@ _调研日期：2026-10-24。上游版本锚点：Claude API `anthropic-version:
 - **模型列表**：OpenAI 需要按 id 过滤；Anthropic 需要加版本头。
 - **推理预算**：维持全局 8192 会踩「只推理、无正文」；需要在提示或默认值上给出办法。
 
+## 2026-11-25 事实更正（#105 实装校对）
+
+- **思考是请求级 opt-in，不是默认开启。** 原文若读作「Claude 默认思考」应更正为：`thinking` 是每次请求的参数——
+  `{type:"adaptive"}` 开、`{type:"disabled"}` 关；旧 `{type:"enabled", budget_tokens}` 已废弃，4.7+ 直接 400。
+  基线微型请求（不带 `thinking`）在 Claude 上通常是「未检出思考」，这不是缺陷而是协议语义。
+- **`anthropic-workspace-id` 只对多 workspace 凭据必需。** 单 workspace 凭据（绑定单一 workspace 的 key）
+  可省略；插件仍不设该字段，多 workspace 用户须改用绑定单一 workspace 的密钥（#105 范围外）。
+- **清单默认每页 20 条，需翻页。** `/v1/models` 的 `limit` 范围 1–1000（默认 20），游标 `after_id` / `before_id`，
+  响应带 `has_more` 与 `last_id`，默认只返回 active / deprecated 模型；只读一页会把「已启用但不在首页」的模型
+  误标「已失效」。实装按 `limit=100` + `after_id` 拉全，页数上限 50 兜底。
+- **认证头：插件发 `x-api-key`。** 官方兼容文档也列 `Authorization: Bearer`，但原生 Messages 的通行做法是
+  `x-api-key` + 固定 `anthropic-version`；本插件 Anthropic 方言取后者，且不发 `Authorization`（#105 裁决 6）。
+
 ## 来源
 
 - OpenAI: Chat Completions overview — https://developers.openai.com/api/reference/chat-completions/overview

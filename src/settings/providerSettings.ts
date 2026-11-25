@@ -14,11 +14,13 @@
 import type {
 	ActiveModelConfig,
 	ActiveModelResolution,
+	ApiStyle,
 	LearnedCapability,
 	ModelProvider,
 	ThinkingResolution,
 	ThinkingSetting,
 } from "../types";
+import { apiStyleOf } from "../core/apiStyle";
 import {
 	resolveThinking,
 	thinkingDisplay,
@@ -199,6 +201,21 @@ export function clearUnconfiguredPresetModels(state: ProviderState): boolean {
 /** 「未配置 ⇒ 无启用模型」的适用对象：要求密钥的预设供应商（无认证供应商不要求密钥名）。 */
 function needsSecretForModels(provider: ModelProvider): boolean {
 	return provider.type === "preset" && requiresSecret(provider);
+}
+
+/**
+ * 设置「接口方言」（#105）：只写方言，不动模型行、启用集、当前模型与思考开关——
+ * 误点切换是常见来源，配置一律保留。
+ */
+export function setProviderApiStyle(
+	state: ProviderState,
+	providerId: string,
+	apiStyle: ApiStyle
+): ProviderState {
+	const provider = findProvider(state, providerId);
+	if (!provider) return state;
+	provider.apiStyle = apiStyle;
+	return state;
 }
 
 /** 设置认证方式；切到「无」时清空密钥名。 */
@@ -399,6 +416,8 @@ export function resolveActive(
 	}
 
 	const config: ActiveModelConfig = {
+		// 「接口方言」（#105）：生成 / 测试 / 拉取清单全部按解析结果分派。
+		apiStyle: apiStyleOf(provider),
 		baseUrl: provider.baseUrl,
 		apiKey,
 		model: state.activeModel,
@@ -495,6 +514,8 @@ export interface ProviderSettings {
 	setProviderName(providerId: string, name: string): void;
 	setProviderBaseUrl(providerId: string, baseUrl: string): void;
 	setSecretId(providerId: string, secretId: string): void;
+	/** 设置「接口方言」（#105）：只写方言，配置一律保留。 */
+	setProviderApiStyle(providerId: string, apiStyle: ApiStyle): void;
 	setAuthType(providerId: string, authType: ModelProvider["authType"]): void;
 	/** 刷新「模型清单」（不动启用集；空表照实记账，#87 / #92）。 */
 	refreshModelCatalog(providerId: string, models: string[]): void;
@@ -534,6 +555,8 @@ export function createProviderSettings(deps: ProviderSettingsDeps): ProviderSett
 		setProviderBaseUrl: (providerId, baseUrl) =>
 			run((s) => setProviderBaseUrl(s, providerId, baseUrl)),
 		setSecretId: (providerId, secretId) => run((s) => setSecretId(s, providerId, secretId)),
+		setProviderApiStyle: (providerId, apiStyle) =>
+			run((s) => setProviderApiStyle(s, providerId, apiStyle)),
 		setAuthType: (providerId, authType) => run((s) => setAuthType(s, providerId, authType)),
 		refreshModelCatalog: (providerId, models) => run((s) => refreshModelCatalog(s, providerId, models)),
 		applyPickedModels: (providerId, picked) => run((s) => applyPickedModels(s, providerId, picked)),

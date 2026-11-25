@@ -57,6 +57,7 @@ function setup(
 			ok: true,
 			providerId: "p",
 			config: {
+				apiStyle: "openai",
 				baseUrl: "https://api.example.com",
 				apiKey: "sk",
 				model: "m",
@@ -159,6 +160,7 @@ test("模型参数回退：该模型自带上限优先", async () => {
 			ok: true,
 			providerId: "p",
 			config: {
+				apiStyle: "openai",
 				baseUrl: "https://x",
 				apiKey: "k",
 				model: "m",
@@ -293,6 +295,7 @@ test("思考参数透传：当前模型的思考参数随 chat 配置交出（�
 			ok: true,
 			providerId: "p",
 			config: {
+				apiStyle: "openai",
 				baseUrl: "https://api.example.com",
 				apiKey: "sk",
 				model: "m",
@@ -309,7 +312,7 @@ test("假关告警：设关发参而响应仍带推理段 → 成功结果带 fa
 		resolveModel: () => ({
 			ok: true,
 			providerId: "p",
-			config: { baseUrl: "https://api.example.com", apiKey: "sk", model: "m", thinking: thinkingOffParam },
+			config: { apiStyle: "openai", baseUrl: "https://api.example.com", apiKey: "sk", model: "m", thinking: thinkingOffParam },
 		}),
 		chat: async () => ({ content: "生成的报告正文", hasReasoning: true }),
 	});
@@ -324,6 +327,7 @@ test("假关不误报：未发参数（强制思考）或响应无推理段 → 
 			ok: true,
 			providerId: "p",
 			config: {
+				apiStyle: "openai",
 				baseUrl: "https://api.example.com",
 				apiKey: "sk",
 				model: "m",
@@ -339,7 +343,7 @@ test("假关不误报：未发参数（强制思考）或响应无推理段 → 
 		resolveModel: () => ({
 			ok: true,
 			providerId: "p",
-			config: { baseUrl: "https://api.example.com", apiKey: "sk", model: "m", thinking: thinkingOffParam },
+			config: { apiStyle: "openai", baseUrl: "https://api.example.com", apiKey: "sk", model: "m", thinking: thinkingOffParam },
 		}),
 		chat: async () => ({ content: "正文", hasReasoning: false }),
 	});
@@ -358,4 +362,24 @@ test("400 拒收归 ai-error 上浮、不降级重试：chat 恰好调用一次"
 	const result = failure(await createGeneration(deps)(baseIntent()));
 	assert.equal(result.reason, "ai-error");
 	assert.equal(calls, 1);
+});
+
+test("生成请求带出「接口方言」（#105）：解析为 anthropic 时下传 apiStyle", async () => {
+	const { deps, captured } = setup({
+		resolveModel: () => ({
+			ok: true,
+			providerId: "anthropic",
+			config: {
+				apiStyle: "anthropic",
+				baseUrl: "https://api.anthropic.com/v1",
+				apiKey: "sk-ant",
+				model: "claude-sonnet-4-6",
+				thinking: { setting: "off", param: null, note: null, learned: null },
+			},
+		}),
+	});
+	const result = await createGeneration(deps)(baseIntent());
+	assert.equal(result.ok, true);
+	assert.equal(captured.chatConfig?.apiStyle, "anthropic");
+	assert.equal(captured.chatConfig?.baseUrl, "https://api.anthropic.com/v1");
 });

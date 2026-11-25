@@ -63,6 +63,14 @@ export function calendarLabels(language: UiLanguage): Strings["calendar"] {
 }
 
 /**
+ * 预设显示名的双语登记（#105）：登记过的预设按界面语言呈现，其余沿用持久化名称
+ * （存量预设名是用户可见数据，不擅自改写）。键值受 `TranslationKey` 约束：拼错 = 编译失败。
+ */
+export const PRESET_NAME_KEYS: Partial<Record<string, TranslationKey>> = {
+	anthropic: "model.presetAnthropicName",
+};
+
+/**
  * 「日期口径」文案键的命名约定（#81）：`settings.dateField` + 字段名去 `date` 前缀后首字母大写
  * （如 `completedDate → settings.dateFieldCompletedDate`、`dateCreated → settings.dateFieldCreated`）。
  * 约定本身不逐字符单测；由文案登记测试在双语 bundle 上间接兜底（漏登记即报红）。

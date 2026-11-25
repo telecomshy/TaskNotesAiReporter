@@ -235,9 +235,29 @@ for (const c of cardCases) {
 			activeProviderId: c.activeProviderId,
 			activeModel: c.activeModel,
 		});
-		assert.deepEqual(providerCardModel(c.provider, info), c.expected);
+		assert.deepEqual(providerCardModel(c.provider, info, t), c.expected);
 	});
 }
+
+test("providerCardModel：Anthropic 预设显示名按界面语言本地化（#105）", () => {
+	// 持久化名保持语言无关；展示名走双语登记（未登记的预设不擅自改写）。
+	const p = preset({
+		id: "anthropic",
+		name: "Anthropic (Claude)",
+		baseUrl: "https://api.anthropic.com/v1",
+		apiStyle: "anthropic",
+		models: ["claude-sonnet-4-6"],
+		modelCatalog: ["claude-sonnet-4-6"],
+	});
+	const state = { providers: [p], activeProviderId: "anthropic", activeModel: "" };
+	const info = activeModelInfo(state);
+	assert.equal(providerCardModel(p, info, t).name, "Anthropic（Claude）", "中文界面");
+	assert.equal(
+		providerCardModel(p, info, createTranslator(BUNDLES.en)).name,
+		"Anthropic (Claude)",
+		"英文界面"
+	);
+});
 
 // ===== 「选择模型」卡投影：分组、孤儿三态、stale 后缀、info 原样携带 =====
 

@@ -27,6 +27,7 @@
 - `setProviderName(providerId, name)`
 - `setProviderBaseUrl(providerId, baseUrl)`
 - `setSecretId(providerId, secretId)`
+- `setProviderApiStyle(providerId, apiStyle)`（#105：只写「接口方言」，模型行 / 启用集 / 当前模型全部保留）
 - `setAuthType(providerId, authType)`
 - `refreshModelCatalog(providerId, models)`（#87：只刷「模型清单」；空表照实记账，#92）
 - `applyPickedModels(providerId, picked)`（#87：挑选确认＝「启用模型」）
@@ -41,7 +42,7 @@
 
 读取：
 
-- `resolveActive()` → `{ ok: true, providerId, config } | { ok: false, reason: 'no-provider' | 'no-model' | 'missing-credentials' }`（（供应商, 模型）键以解析结果为单一来源）
+- `resolveActive()` → `{ ok: true, providerId, config } | { ok: false, reason: 'no-provider' | 'no-model' | 'missing-credentials' }`（（供应商, 模型）键以解析结果为单一来源；#105 起 `config.apiStyle` 一并带出，生成 / 测试 / 拉取清单按它分派）
 - 密钥可用性：`secretValue(secretId)`、`isSecretMissing(secretId)`
 - 判定谓词（纯函数，视图直接导入）：`isConfigured` / `isSelectable` / `isActiveModel` / `requiresSecret` / `thinkingFor`（`modelsOf` / `catalogOf` / `isModelStale` 已随 #99 迁往 `providerModels`）
 
