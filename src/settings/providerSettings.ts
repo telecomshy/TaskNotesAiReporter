@@ -507,8 +507,13 @@ export interface ProviderSettingsDeps {
 	owner: SettingsOwner;
 }
 
+/** 供应商写命令发布的变化类别（#108）：视图按类别决定失效方式（规格见 docs/specs/provider-change-notification.md）。 */
+export type ProviderChangeKind = "selectable" | "layout" | "quiet";
+
 /** 供应商配置门面：视图只与它对话。 */
 export interface ProviderSettings {
+	/** 订阅供应商变更；返回退订函数。每条写命令执行后发布一次自己的类别（含空转）。 */
+	subscribe(listener: (kind: ProviderChangeKind) => void): () => void;
 	addProvider(): void;
 	removeProvider(providerId: string): void;
 	setProviderName(providerId: string, name: string): void;
@@ -540,43 +545,89 @@ export interface ProviderSettings {
 	isSecretMissing(secretId: string): boolean;
 }
 
+/**
+ * 写命令键名：由 `ProviderSettings` 中返回 void 的方法派生（#108）。
+ * 新增写方法而漏登记分类会在 `COMMAND_KINDS` 处编译失败。
+ */
+type ProviderCommandKey = {
+	[K in keyof ProviderSettings]: ReturnType<ProviderSettings[K]> extends void ? K : never;
+}[keyof ProviderSettings];
+
+/** 命令分类表（#108 验收基准）：selectable＝顶卡重绘；layout＝既有调用方整页刷新；quiet＝不影响顶卡。 */
+const COMMAND_KINDS: Record<ProviderCommandKey, ProviderChangeKind> = {
+	addProvider: "layout",
+	removeProvider: "layout",
+	setProviderName: "quiet",
+	setProviderBaseUrl: "selectable",
+	setSecretId: "selectable",
+	setProviderApiStyle: "selectable",
+	setAuthType: "selectable",
+	refreshModelCatalog: "layout",
+	applyPickedModels: "layout",
+	addModel: "selectable",
+	renameModel: "selectable",
+	setModelParams: "quiet",
+	removeModel: "selectable",
+	setModelThinking: "layout",
+	recordThinkingTest: "layout",
+	clearLearnedThinking: "layout",
+	selectActiveModel: "layout",
+};
+
 /** 构造绑定门面。命令落在设置 owner 上，由 owner 自持状态与落盘（接线层不再逐字段搬运）。 */
 export function createProviderSettings(deps: ProviderSettingsDeps): ProviderSettings {
 	const { owner } = deps;
-	const run = (command: (state: ProviderState) => void): void => {
+	const listeners = new Set<(kind: ProviderChangeKind) => void>();
+	const publish = (kind: ProviderChangeKind): void => {
+		for (const listener of listeners) listener(kind);
+	};
+	const run = (key: ProviderCommandKey, command: (state: ProviderState) => void): void => {
 		void owner.apply((state) => {
 			command(state);
 		});
+		// owner.apply 同步改写状态；通知紧随其后发布（落盘异步失败不回滚界面刷新）。
+		publish(COMMAND_KINDS[key]);
 	};
 	return {
-		addProvider: () => run(addProvider),
-		removeProvider: (providerId) => run((s) => removeProvider(s, providerId)),
-		setProviderName: (providerId, name) => run((s) => setProviderName(s, providerId, name)),
+		subscribe: (listener) => {
+			listeners.add(listener);
+			return () => {
+				listeners.delete(listener);
+			};
+		},
+		addProvider: () => run("addProvider", addProvider),
+		removeProvider: (providerId) => run("removeProvider", (s) => removeProvider(s, providerId)),
+		setProviderName: (providerId, name) =>
+			run("setProviderName", (s) => setProviderName(s, providerId, name)),
 		setProviderBaseUrl: (providerId, baseUrl) =>
-			run((s) => setProviderBaseUrl(s, providerId, baseUrl)),
-		setSecretId: (providerId, secretId) => run((s) => setSecretId(s, providerId, secretId)),
+			run("setProviderBaseUrl", (s) => setProviderBaseUrl(s, providerId, baseUrl)),
+		setSecretId: (providerId, secretId) =>
+			run("setSecretId", (s) => setSecretId(s, providerId, secretId)),
 		setProviderApiStyle: (providerId, apiStyle) =>
-			run((s) => setProviderApiStyle(s, providerId, apiStyle)),
-		setAuthType: (providerId, authType) => run((s) => setAuthType(s, providerId, authType)),
-		refreshModelCatalog: (providerId, models) => run((s) => refreshModelCatalog(s, providerId, models)),
-		applyPickedModels: (providerId, picked) => run((s) => applyPickedModels(s, providerId, picked)),
+			run("setProviderApiStyle", (s) => setProviderApiStyle(s, providerId, apiStyle)),
+		setAuthType: (providerId, authType) =>
+			run("setAuthType", (s) => setAuthType(s, providerId, authType)),
+		refreshModelCatalog: (providerId, models) =>
+			run("refreshModelCatalog", (s) => refreshModelCatalog(s, providerId, models)),
+		applyPickedModels: (providerId, picked) =>
+			run("applyPickedModels", (s) => applyPickedModels(s, providerId, picked)),
 		isModelProtected: (providerId, model) =>
 			isModelProtected(owner.get(), providerId, model),
-		addModel: (providerId) => run((s) => addModel(s, providerId)),
+		addModel: (providerId) => run("addModel", (s) => addModel(s, providerId)),
 		renameModel: (providerId, modelConfigId, newModelId) =>
-			run((s) => renameModel(s, providerId, modelConfigId, newModelId)),
+			run("renameModel", (s) => renameModel(s, providerId, modelConfigId, newModelId)),
 		setModelParams: (providerId, modelConfigId, params) =>
-			run((s) => setModelParams(s, providerId, modelConfigId, params)),
+			run("setModelParams", (s) => setModelParams(s, providerId, modelConfigId, params)),
 		removeModel: (providerId, modelConfigId) =>
-			run((s) => removeModel(s, providerId, modelConfigId)),
+			run("removeModel", (s) => removeModel(s, providerId, modelConfigId)),
 		setModelThinking: (providerId, model, setting) =>
-			run((s) => setModelThinking(s, providerId, model, setting)),
+			run("setModelThinking", (s) => setModelThinking(s, providerId, model, setting)),
 		recordThinkingTest: (providerId, model, entry) =>
-			run((s) => recordThinkingTest(s, providerId, model, entry)),
+			run("recordThinkingTest", (s) => recordThinkingTest(s, providerId, model, entry)),
 		clearLearnedThinking: (providerId, model) =>
-			run((s) => clearLearnedThinking(s, providerId, model)),
+			run("clearLearnedThinking", (s) => clearLearnedThinking(s, providerId, model)),
 		selectActiveModel: (providerId, model) =>
-			run((s) => selectActiveModel(s, providerId, model)),
+			run("selectActiveModel", (s) => selectActiveModel(s, providerId, model)),
 		resolveActive: () => resolveActive(owner.get(), (id) => owner.readSecret(id)),
 		activeModelInfo: () => activeModelInfo(owner.get()),
 		secretValue: (secretId) => resolveSecretValue(secretId, (id) => owner.readSecret(id)),

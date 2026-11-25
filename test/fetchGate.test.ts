@@ -8,13 +8,9 @@
 
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import type { App } from "obsidian";
-import { renderModelTab, type ModelTabContext } from "../src/settings/modelTab";
-import { createSettingsOwner } from "../src/settings/owner";
-import { createProviderSettings } from "../src/settings/providerSettings";
-import { BUNDLES, createTranslator } from "../src/i18n";
-import { DEFAULT_SETTINGS, type ModelProvider, type TaskNotesAIHelperSettings } from "../src/types";
+import type { ModelProvider, TaskNotesAIHelperSettings } from "../src/types";
 import { FakeEl } from "./fakes/dom";
+import { renderModelTabHarness } from "./fakes/modelTabHarness";
 import { Modal, SecretComponent, notices, requests, resetRequests } from "./fakes/obsidian-stub";
 
 const PROVIDER_ID = "kimi";
@@ -51,28 +47,8 @@ function makeHarness(scenario: Scenario): Harness {
 		apiKeySecretId: scenario.secretId,
 		modelCatalog: [...MODELS],
 	};
-	const state = structuredClone(DEFAULT_SETTINGS);
-	state.providers = [provider];
-	state.activeProviderId = PROVIDER_ID;
-	state.activeModel = "";
-
-	const secrets = scenario.secrets;
-	const owner = createSettingsOwner(state, {
-		save: async () => {},
-		getSecret: (id) => secrets[id] ?? null,
-	});
-	const ctx: ModelTabContext = {
-		app: {} as App,
-		settings: owner.get(),
-		providers: createProviderSettings({ owner }),
-		t: createTranslator(BUNDLES.zh),
-		refresh: () => {},
-		viewState: { expandedProviders: new Set(), expandedTags: new Set() },
-	};
-
-	const root = new FakeEl("div");
-	renderModelTab(root as unknown as HTMLElement, ctx);
-	return { root, provider, state };
+	const harness = renderModelTabHarness({ provider, secrets: scenario.secrets });
+	return { root: harness.root, provider, state: harness.state };
 }
 
 /** 等可能的异步链走完。 */

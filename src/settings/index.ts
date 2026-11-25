@@ -19,6 +19,8 @@ export class TaskNotesAIHelperSettingTab extends PluginSettingTab {
 	private currentTab: TabName = "model";
 	/** 密钥存储变化订阅（每次 display 重新绑定，见 ADR-0008）。 */
 	private secretRef: EventRef | null = null;
+	/** 「模型配置」Tab 的顶卡重绘退订（#108；重画前 / 收起时调用）。 */
+	private modelTabDispose: (() => void) | null = null;
 
 	constructor(
 		app: App,
@@ -29,6 +31,7 @@ export class TaskNotesAIHelperSettingTab extends PluginSettingTab {
 
 	display(): void {
 		const { containerEl } = this;
+		this.disposeModelTab();
 		containerEl.empty();
 		containerEl.addClass("tah-settings");
 
@@ -55,6 +58,8 @@ export class TaskNotesAIHelperSettingTab extends PluginSettingTab {
 		};
 
 		const refresh = () => {
+			// 先退订旧顶卡（#108），再清空重建：旧宿主的回调不许落到已丢弃的 DOM。
+			this.disposeModelTab();
 			// 语言可能已切换：同步 Tab 文案
 			modelTabBtn.setText(this.plugin.t("settings.tabModel"));
 			templateTabBtn.setText(this.plugin.t("settings.tabTemplate"));
@@ -67,7 +72,7 @@ export class TaskNotesAIHelperSettingTab extends PluginSettingTab {
 			content.empty();
 			// 切片按当前 tab 现场构造（#98）：界面语言切换后 t 是最新的，且每个 tab 只拿到自己的依赖。
 			if (this.currentTab === "model") {
-				renderModelTab(content, {
+				this.modelTabDispose = renderModelTab(content, {
 					app: this.app,
 					settings: this.plugin.settings,
 					providers: this.plugin.providers,
@@ -115,10 +120,17 @@ export class TaskNotesAIHelperSettingTab extends PluginSettingTab {
 	}
 
 	hide(): void {
+		this.disposeModelTab();
 		if (this.secretRef) {
 			this.app.secretStorage.offref(this.secretRef);
 			this.secretRef = null;
 		}
 		super.hide();
+	}
+
+	/** 退订「模型配置」Tab 的顶卡重绘（#108）；重画前 / 收起时各调一次。 */
+	private disposeModelTab(): void {
+		this.modelTabDispose?.();
+		this.modelTabDispose = null;
 	}
 }

@@ -4,24 +4,16 @@
  * 值是什么；「是否发生重绘」不可直接看见，只用元素实例恒等作代理，不引用内部函数名
  * 或模块结构。
  *
- * 用真实 renderModelTab + FakeEl 假 DOM 的渲染 / change 缝（先例 test/fetchGate.test.ts）。
+ * 用真实 renderModelTab + FakeEl 假 DOM 的渲染 / change 缝（先例 test/fetchGate.test.ts），
+ * 环境由 test/fakes/modelTabHarness.ts 共用搭建。
  * 运行：node --import tsx --import ./test/fakes/obsidian-shim.mjs --test test/activeModelRefresh.test.ts
  */
 
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import type { App } from "obsidian";
-import { renderModelTab, type ModelTabContext } from "../src/settings/modelTab";
-import { createSettingsOwner } from "../src/settings/owner";
-import { createProviderSettings } from "../src/settings/providerSettings";
-import { BUNDLES, createTranslator } from "../src/i18n";
-import {
-	DEFAULT_SETTINGS,
-	type ModelConfig,
-	type ModelProvider,
-	type TaskNotesAIHelperSettings,
-} from "../src/types";
+import type { ModelConfig, ModelProvider } from "../src/types";
 import { FakeEl } from "./fakes/dom";
+import { renderModelTabHarness, type ModelTabHarness } from "./fakes/modelTabHarness";
 import { SecretComponent } from "./fakes/obsidian-stub";
 
 const PROVIDER_ID = "custom-1";
@@ -35,13 +27,7 @@ interface Scenario {
 	activeModel?: string;
 }
 
-interface Harness {
-	root: FakeEl;
-	provider: ModelProvider;
-	state: TaskNotesAIHelperSettings;
-}
-
-function makeHarness(scenario: Scenario = {}): Harness {
+function makeHarness(scenario: Scenario = {}): ModelTabHarness {
 	const provider: ModelProvider = {
 		id: PROVIDER_ID,
 		name: "自定义供应商",
@@ -52,28 +38,10 @@ function makeHarness(scenario: Scenario = {}): Harness {
 		authType: "bearer",
 		customModels: scenario.rows ?? [],
 	};
-	const state = structuredClone(DEFAULT_SETTINGS);
-	state.providers = [provider];
-	state.activeProviderId = PROVIDER_ID;
-	state.activeModel = scenario.activeModel ?? "";
-
-	const owner = createSettingsOwner(state, {
-		save: async () => {},
-		// 下拉的「可选」只校验密钥名；密钥值不参与本组用例。
-		getSecret: () => null,
+	return renderModelTabHarness({
+		provider,
+		activeModel: scenario.activeModel ?? "",
 	});
-	const ctx: ModelTabContext = {
-		app: {} as App,
-		settings: owner.get(),
-		providers: createProviderSettings({ owner }),
-		t: createTranslator(BUNDLES.zh),
-		refresh: () => {},
-		viewState: { expandedProviders: new Set(), expandedTags: new Set() },
-	};
-
-	const root = new FakeEl("div");
-	renderModelTab(root as unknown as HTMLElement, ctx);
-	return { root, provider, state };
 }
 
 /** 顶部「选择模型」下拉的全部 option 值（含分组与孤儿占位）。 */
@@ -255,4 +223,25 @@ test("重绘后的「选择模型」下拉仍可正常选中（US13 / 回归网�
 
 	assert.equal(h.state.activeProviderId, PROVIDER_ID);
 	assert.equal(h.state.activeModel, "gw-model");
+});
+
+// ===== 生命周期（#108）：退订后旧顶卡不许再被重绘 =====
+
+test("dispose 后旧顶部卡不再被重绘（生命周期）", () => {
+	const h = makeHarness({ rows: [{ id: "mc-1", modelId: "gw-model" }] });
+	const selectBefore = h.root.querySelector(".tah-model-select");
+	assert.ok(selectBefore);
+
+	h.dispose();
+	h.ctx.providers.renameModel(PROVIDER_ID, "mc-1", "renamed-model");
+
+	assert.equal(
+		h.root.querySelector(".tah-model-select"),
+		selectBefore,
+		"退订后不应重建顶卡（仍是同一元素实例）"
+	);
+	assert.ok(
+		!optionValues(h.root).includes(optionValue("renamed-model")),
+		"旧下拉不应反映退订后的模型改名"
+	);
 });
