@@ -195,6 +195,7 @@ export const zh: Strings = {
 		fetching: "正在获取 {{name}} 的模型列表…",
 		fetchEmpty: "{{name}}：请求成功，但该 API 密钥下当前没有可用模型。",
 		fetchFailed: "获取失败：{{error}}",
+		fetchFailedNoModelList: "该端点未提供模型列表（HTTP 404），请改为手动添加模型 ID。",
 		providerName: "服务商名称",
 		providerNamePlaceholder: "例如：DeepSeek、Ollama 本地",
 		apiStyle: "接口方言",

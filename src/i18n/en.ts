@@ -207,6 +207,8 @@ export const en = {
 		fetching: "Fetching models for {{name}}…",
 		fetchEmpty: "{{name}}: the request succeeded, but this API key currently has no available models.",
 		fetchFailed: "Fetch failed: {{error}}",
+		fetchFailedNoModelList:
+			"This endpoint does not provide a model list (HTTP 404) — add the model ID manually instead.",
 		providerName: "Provider name",
 		providerNamePlaceholder: "e.g. DeepSeek, local Ollama",
 		apiStyle: "API dialect",

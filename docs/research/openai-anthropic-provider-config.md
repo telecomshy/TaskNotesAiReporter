@@ -92,6 +92,21 @@ _调研日期：2026-10-24。上游版本锚点：Claude API `anthropic-version:
 - **认证头：插件发 `x-api-key`。** 官方兼容文档也列 `Authorization: Bearer`，但原生 Messages 的通行做法是
   `x-api-key` + 固定 `anthropic-version`；本插件 Anthropic 方言取后者，且不发 `Authorization`（#105 裁决 6）。
 
+## 三方网关锚点：DeepSeek 的 Anthropic 兼容入口（2026-11-25 实测文档）
+
+- **base_url**：`https://api.deepseek.com/anthropic`；完整对话路径是 `POST /anthropic/v1/messages`
+  （即「base + `/v1` + `/messages`」）。本插件 Anthropic 方言要求地址含 `/v1`，自定义供应商应填
+  `https://api.deepseek.com/anthropic/v1`；只填到 `/anthropic` 会拼成 `.../anthropic/messages` **依然 404**。
+- **没有模型列表端点**：该兼容层未实现 `GET .../models`（只有 `/messages` 与 Files API 等）。
+  「获取模型列表」在此网关上 404 属预期，兜底路径是手动添加模型 ID（#105 US12 / US24）。
+- **鉴权**：`x-api-key` 完全支持，`Authorization: Bearer` 亦可；`anthropic-version` 被忽略。
+- **模型名映射**：`claude-opus*` → `deepseek-v4-pro`；`claude-sonnet*` / `claude-haiku*` → `deepseek-flash`；
+  其它不以 `claude` 开头的未知模型名 → 400。因此手动填 `deepseek-v4-pro` / `deepseek-flash` 即可。
+- **思考**：只认 `thinking: {type:"enabled" | "disabled"}`，`adaptive` 按 enabled 处理；`temperature`
+  在思考模式下固定 1.0（非思考模式可传 0–2）。
+- 本插件的 DeepSeek **官方预设**走 OpenAI 兼容协议（`https://api.deepseek.com`），**有**模型列表；
+  需要 Anthropic 协议时（例如与 Claude 生态共用）才用上面的自定义入口。
+
 ## 来源
 
 - OpenAI: Chat Completions overview — https://developers.openai.com/api/reference/chat-completions/overview

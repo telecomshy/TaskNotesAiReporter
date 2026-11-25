@@ -10,7 +10,7 @@ import { Notice, SecretComponent, type App } from "obsidian";
 import type { ModelProvider } from "../types";
 import { apiStyleOf } from "../core/apiStyle";
 import type { Translator } from "../i18n";
-import { testConnection } from "../ai/client";
+import { AIClientError, testConnection } from "../ai/client";
 import { describeAIError } from "../ai/errorMessage";
 import { runAndAnnounceThinkingTest } from "../ui/thinkingTestAction";
 import {
@@ -395,9 +395,19 @@ async function fetchModels(provider: ModelProvider, ctx: ModelTabContext): Promi
 		case "secret-missing":
 			new Notice(t("model.fetchSecretMissing"));
 			return;
-		case "failed":
-			new Notice(t("model.fetchFailed", { error: describeAIError(outcome.error, t) }));
+		case "failed": {
+			// Anthropic 方言的网关常只实现 `/messages`、不实现 `/v1/models`（#105 US12）：
+			// 404 时把「手动填模型 ID」的兜底路径一并提示，否则用户只看到一句 404。
+			const hint =
+				apiStyleOf(provider) === "anthropic" &&
+				outcome.error instanceof AIClientError &&
+				outcome.error.code === "models.http" &&
+				outcome.error.details.status === 404
+					? `\n${t("model.fetchFailedNoModelList")}`
+					: "";
+			new Notice(`${t("model.fetchFailed", { error: describeAIError(outcome.error, t) })}${hint}`);
 			return;
+		}
 		case "empty":
 			new Notice(t("model.fetchEmpty", { name: provider.name }));
 			ctx.refresh();
