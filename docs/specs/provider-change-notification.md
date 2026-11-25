@@ -4,7 +4,7 @@
 
 ## Problem Statement
 
-#107 让模型行 / 凭据变更后自动重绘顶部「当前模型」卡，但「变更后重绘」的义务以手工调用形式铺在 `src/settings/modelTab.ts` 的 9 个点。新增一条会改变「可选模型集合」的命令时，漏写一次 `refreshActiveModel()` 就会静默回到旧 bug（下拉不更新），而且没有任何编译期或测试期提醒。
+#107 让模型行 / 凭据变更后自动重绘顶部「当前模型」卡，但「变更后重绘」的义务以手工调用形式铺在 `src/settings/modelTab.ts` 的 10 处调用（由 7 条命令覆盖）。新增一条会改变「启用模型」的命令时，漏写一次 `refreshActiveModel()` 就会静默回到旧 bug（下拉不更新），而且没有任何编译期或测试期提醒。
 
 同时暴露出两个相邻的维护性问题：
 
@@ -13,19 +13,19 @@
 
 ## Solution
 
-在供应商门面 `ProviderSettings` 上建立**单一变更通知**：每条写命令在 `run()` 时声明自己的类别，门面执行命令后发布类别；设置页订阅，并只对 `selectable` 类别重绘顶部卡。行为零变化：触发集仍是 #107 的 9 处（由 7 条命令覆盖），既有整页刷新路径不动。
+在供应商门面 `ProviderSettings` 上建立**单一变更通知**：每条写命令在 `run()` 时声明自己的类别，门面执行命令后发布类别；设置页订阅，并只对 `selectable` 类别重绘顶部卡。行为零变化：触发集仍是 #107 的 10 处调用（由 7 条命令覆盖），既有整页刷新路径不动。
 
 ## Implementation Decisions
 
-1. **通知归门面**（不改 owner）：`ProviderSettings` 新增 `subscribe(listener: (kind: ProviderChangeKind) => void): () => void`，返回退订函数。理由：供应商领域才知道「可选模型集合」是什么（`isSelectable` 在同一层）；`SettingsOwner` 只管状态与落盘（ADR-0016），加全设置事件会越界。
+1. **通知归门面**（不改 owner）：`ProviderSettings` 新增 `subscribe(listener: (kind: ProviderChangeKind) => void): () => void`，返回退订函数。理由：供应商领域才知道「启用模型」是什么（`isSelectable` 在同一层）；`SettingsOwner` 只管状态与落盘（ADR-0016），加全设置事件会越界。
 2. **三类通知**，`ProviderChangeKind = "selectable" | "layout" | "quiet"`：
-   - `selectable`：可能改变「可选模型集合」→ 设置页重绘顶部卡；
+   - `selectable`：可能改变「启用模型」→ 设置页重绘顶部卡；
    - `layout`：卡片结构 / 当前模型 / 思考能力变了，但既有调用方本来就走整页刷新 → 订阅忽略，整页刷新路径不变；
    - `quiet`：不影响顶部卡（模型行参数、供应商改名）→ 订阅忽略。
 3. **分类表集中一处且编译期强制**：用映射类型从 `ProviderSettings` 的 void 写方法派生命令键名，`Record<ProviderCommandKey, ProviderChangeKind>` 必须列全；新增写方法而漏分类会编译失败。`run(kind, command)` 用映射里的类别发布。
 4. **每条命令都发布**（含空转：删不存在的 provider / 改名找不到行）：不做变更检测，避免给 17 条命令加返回值或前后快照。
 5. **订阅生命周期**：`renderModelTab` 返回 disposer；`settings/index.ts` 在重画前、`hide()`、`display()` 开头调用并置空（沿用 `secretRef` 的字段模式）。旧顶卡被 `empty()` 丢弃后，不许再收到回调。
-6. **卡内删除 9 处手工重绘**：`renderPresetProviderCard` / `renderCustomProviderCard` / `renderCustomModelRow` 不再接收 `refreshActiveModel`，也不再调用它。
+6. **卡内删除 10 处手工重绘**：`renderPresetProviderCard` / `renderCustomProviderCard` / `renderCustomModelRow` 不再接收 `refreshActiveModel`，也不再调用它。
 7. **行编辑器参数收束**：新增 `CustomCardEnv { provider, ctx, syncHead, redraw }`，`renderCustomModelRow(listEl, row, env)` 由 7 参降为 3 参。
 8. **命名**：`SecretControl.refresh` 改名 `syncSecretState`（同步掩码与「密钥不可用」提示）；`ctx.refresh` 保持原名（跨 Tab 的整页刷新）。
 9. **文档**：新增 `docs/adr/0029-provider-change-notification.md`（门面发布、视图按类别失效；链接 ADR-0012 / 0016）。不改 `CONTEXT.md`（机制不是领域词）。不新增文案键、按钮或用户可见行为。
@@ -55,7 +55,7 @@
 
 ## Acceptance Criteria
 
-1. 9 处手工 `refreshActiveModel()` 调用从 `modelTab.ts` 消失；顶部卡重绘由订阅驱动。
+1. 10 处手工 `refreshActiveModel()` 调用从 `modelTab.ts` 消失；顶部卡重绘由订阅驱动。
 2. 新增一条 `selectable` 写命令时，只需登记分类即可获得顶卡重绘；漏登记会编译失败。
 3. `setModelParams`（上下文长度 / 最大输出）不触发顶卡重绘。
 4. dispose 后旧顶部卡不再被重绘。

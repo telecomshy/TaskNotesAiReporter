@@ -1,5 +1,7 @@
 # 规格：「选择模型」下拉不随模型行 / 凭据变更更新——自动目标化重绘
 
+> **部分取代**：本规格的 Implementation Decisions 1–2（视图层窄回调「重绘当前模型卡」、两张供应商卡接收该回调）已由 [ADR-0029](../adr/0029-provider-change-notification.md) 的「供应商门面发布变更、视图按类别失效」取代。用户可见行为与本文档的 User Stories / 验收标准不变；实现接线以 ADR-0029 为准。
+
 > 权威出处：GitHub issue [#107](https://github.com/telecomshy/TaskNotesAiReporter/issues/107)（`ready-for-agent`）。本文件是仓库内可被 `/code-review` 直接发现的副本，内容与 #107 一致。
 
 ## Problem Statement

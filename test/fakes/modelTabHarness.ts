@@ -8,7 +8,7 @@
 import type { App } from "obsidian";
 import { renderModelTab, type ModelTabContext } from "../../src/settings/modelTab";
 import { createSettingsOwner } from "../../src/settings/owner";
-import { createProviderSettings, type ProviderSettings } from "../../src/settings/providerSettings";
+import { createProviderSettings } from "../../src/settings/providerSettings";
 import { BUNDLES, createTranslator } from "../../src/i18n";
 import { DEFAULT_SETTINGS, type ModelProvider, type TaskNotesAIHelperSettings } from "../../src/types";
 import { FakeEl } from "./dom";
@@ -20,15 +20,12 @@ export interface ModelTabHarnessOptions {
 	activeModel?: string;
 	/** 密钥名 → 密钥值；缺省为空（下拉可选性只校验密钥名，多数用例不需要值）。 */
 	secrets?: Record<string, string>;
-	/** 整页刷新替身；缺省空操作（目标化重绘不经过它）。 */
-	refresh?: () => void;
 }
 
 export interface ModelTabHarness {
 	root: FakeEl;
 	state: TaskNotesAIHelperSettings;
 	provider: ModelProvider;
-	providers: ProviderSettings;
 	ctx: ModelTabContext;
 	/** 退订顶卡重绘（#108 生命周期用例）。 */
 	dispose: () => void;
@@ -53,11 +50,11 @@ export function renderModelTabHarness(options: ModelTabHarnessOptions): ModelTab
 		settings: owner.get(),
 		providers,
 		t: createTranslator(BUNDLES.zh),
-		refresh: options.refresh ?? (() => {}),
+		refresh: () => {},
 		viewState: { expandedProviders: new Set(), expandedTags: new Set() },
 	};
 
 	const root = new FakeEl("div");
 	const dispose = renderModelTab(root as unknown as HTMLElement, ctx);
-	return { root, state, provider, providers, ctx, dispose };
+	return { root, state, provider, ctx, dispose };
 }

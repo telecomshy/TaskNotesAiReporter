@@ -8,9 +8,9 @@
 
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import type { ModelProvider, TaskNotesAIHelperSettings } from "../src/types";
+import type { ModelProvider } from "../src/types";
 import { FakeEl } from "./fakes/dom";
-import { renderModelTabHarness } from "./fakes/modelTabHarness";
+import { renderModelTabHarness, type ModelTabHarness } from "./fakes/modelTabHarness";
 import { Modal, SecretComponent, notices, requests, resetRequests } from "./fakes/obsidian-stub";
 
 const PROVIDER_ID = "kimi";
@@ -29,13 +29,7 @@ interface Scenario {
 	models?: string[];
 }
 
-interface Harness {
-	root: FakeEl;
-	provider: ModelProvider;
-	state: TaskNotesAIHelperSettings;
-}
-
-function makeHarness(scenario: Scenario): Harness {
+function makeHarness(scenario: Scenario): ModelTabHarness {
 	const models = scenario.models ?? MODELS;
 	const provider: ModelProvider = {
 		id: PROVIDER_ID,
@@ -47,8 +41,7 @@ function makeHarness(scenario: Scenario): Harness {
 		apiKeySecretId: scenario.secretId,
 		modelCatalog: [...MODELS],
 	};
-	const harness = renderModelTabHarness({ provider, secrets: scenario.secrets });
-	return { root: harness.root, provider, state: harness.state };
+	return renderModelTabHarness({ provider, secrets: scenario.secrets });
 }
 
 /** 等可能的异步链走完。 */
