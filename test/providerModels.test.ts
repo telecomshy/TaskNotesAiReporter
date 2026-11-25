@@ -96,7 +96,15 @@ test("modelCatalog 缺失清单读作空清单（#87）", () => {
 });
 
 // isModelStale：两 adapter × 五种情形表驱动（#87 / #92）
-const STALE_CASES = [
+const STALE_CASES: Array<{
+	name: string;
+	enabled: string[];
+	catalog: string[] | undefined;
+	query: string;
+	stale: boolean;
+	/** 仅该 adapter 适用的用例（其余 adapter 跳过）。 */
+	onlyKind?: "preset" | "custom";
+}> = [
 	{
 		name: "已启用但不在清单 → 已失效（上游消失）",
 		enabled: ["a", "gone"],
@@ -113,17 +121,27 @@ const STALE_CASES = [
 		stale: false,
 	},
 	{
-		name: "拉取到空清单（#92）：启用模型照实标「已失效」",
+		name: "拉取到空清单（#92）：预设照实标「已失效」",
 		enabled: ["a", "b"],
-		catalog: [] as string[] | undefined,
+		catalog: [],
 		query: "a",
 		stale: true,
+		onlyKind: "preset",
+	},
+	{
+		name: "空清单：自定义手工行不标失效（#109）",
+		enabled: ["hand"],
+		catalog: [],
+		query: "hand",
+		stale: false,
+		onlyKind: "custom",
 	},
 	{ name: "未启用的模型不谈失效", enabled: ["a"], catalog: ["a"], query: "b", stale: false },
 ];
 
 for (const { kind, make, withEnabled } of BOTH) {
 	for (const c of STALE_CASES) {
+		if (c.onlyKind && c.onlyKind !== kind) continue;
 		test(`isModelStale（${kind}）${c.name}`, () => {
 			const base = c.catalog === undefined ? make({ id: "p" }) : make({ id: "p", modelCatalog: c.catalog });
 			const p = withEnabled(base, c.enabled);
@@ -315,6 +333,12 @@ for (const { kind, make, withEnabled } of BOTH) {
 		const p = withEnabled(make({ id: "p", modelCatalog: ["x"] }), ["a"]);
 		initializeModelCatalog(p, [" x ", "x", "y"]);
 		assert.deepEqual(p.modelCatalog, ["x", "y"]);
+	});
+
+	test(`initializeModelCatalog（${kind}）：清单缺失且无启用模型 → 保持缺失，不制造空清单（#109）`, () => {
+		const p = make({ id: "p" });
+		initializeModelCatalog(p, undefined);
+		assert.equal(p.modelCatalog, undefined, "未拉取且无启用模型时，清单保持缺失");
 	});
 }
 

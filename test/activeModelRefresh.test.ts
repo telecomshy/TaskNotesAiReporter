@@ -25,6 +25,8 @@ interface Scenario {
 	secretId?: string;
 	rows?: ModelConfig[];
 	activeModel?: string;
+	/** 模型清单；缺省＝从未拉取（不标失效）。 */
+	modelCatalog?: string[];
 }
 
 function makeHarness(scenario: Scenario = {}): ModelTabHarness {
@@ -37,6 +39,7 @@ function makeHarness(scenario: Scenario = {}): ModelTabHarness {
 		models: [],
 		authType: "bearer",
 		customModels: scenario.rows ?? [],
+		modelCatalog: scenario.modelCatalog,
 	};
 	return renderModelTabHarness({
 		provider,
@@ -54,6 +57,13 @@ function optionValues(root: FakeEl): string[] {
 /** 「选择模型」下拉的 option 值编码 `providerId::model`：测试侧只在这里写一次。 */
 function optionValue(modelId: string): string {
 	return `${PROVIDER_ID}::${modelId}`;
+}
+
+/** 顶部下拉每个 option 的显示文本（含「· 已失效」后缀）。 */
+function optionTexts(root: FakeEl): string[] {
+	const select = root.querySelector(".tah-model-select");
+	if (!select) return [];
+	return select.byTag("option").map((option) => option.text);
 }
 
 /** 某个模型行的三个输入框：模型 ID / 上下文长度 / 最大输出。 */
@@ -84,6 +94,21 @@ test("添加模型行并填入 ID：不切 Tab，下拉立刻包含该模型（U
 	idInput.fire("change");
 
 	assert.deepEqual(optionValues(h.root), [optionValue("gw-model")]);
+});
+
+test("空清单的自定义供应商：添加模型行后下拉不标「已失效」（#109）", () => {
+	const h = makeHarness({ rows: [], modelCatalog: [] });
+	const addBtn = h.root.querySelector(".tah-add-model-btn");
+	assert.ok(addBtn, "应有「+ 手动添加模型 ID」按钮");
+	addBtn.fire("click");
+
+	const rows = rowInputs(h.root);
+	const idInput = rows[rows.length - 1]?.[0];
+	assert.ok(idInput, "新增草稿行应有模型 ID 输入框");
+	idInput.value = "gw-model";
+	idInput.fire("change");
+
+	assert.deepEqual(optionTexts(h.root), ["gw-model"], "空清单不应给手工模型加「已失效」后缀");
 });
 
 test("改名模型：旧值不在下拉、新值在下拉（US2）", () => {

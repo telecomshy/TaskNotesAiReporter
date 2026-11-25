@@ -45,13 +45,15 @@ export function modelCatalog(provider: ModelProvider): string[] {
 /**
  * 「已失效」（#87）：已启用但不在「模型清单」中（上游已消失），保留可移除。
  * 判定区分「从未拉取」（清单缺失＝没有上游信息，不标）与「拉取到空」（#92 定性：
- * 空表是正常状态，照实记账——全部启用模型标「已失效」，可移除，拉回即消）。
+ * 预设供应商的空表是正常状态，照实记账——全部启用模型标「已失效」，可移除，拉回即消）。
+ * 自定义供应商的模型行是手工配置，网关常不实现 `/models`；空清单不构成上游消失的
+ * 证据，因此不标「已失效」（#109）。非空清单仍按「不在清单即失效」。
  */
 export function isModelStale(provider: ModelProvider, model: string): boolean {
 	const catalog = provider.modelCatalog;
-	return (
-		catalog !== undefined && enabledModels(provider).includes(model) && !catalog.includes(model)
-	);
+	if (catalog === undefined || !enabledModels(provider).includes(model)) return false;
+	if (catalog.length === 0) return provider.type === "preset";
+	return !catalog.includes(model);
 }
 
 /** 单个模型行的参数（稀疏：只含已设置的键）。 */
@@ -190,11 +192,18 @@ export function adoptLegacyCustomModels(provider: ModelProvider, modelIds: strin
  * 清单初值＝启用集（内部走 `enabledModels`，统一 trim——存量行与清单不再因空白
  * 错位误标「已失效」）；已有清单只做非法值清洗、不并入启用集——并入会把
  * 「已启用但上游消失」的模型洗进清单，下次载入「已失效」标记就没了。
+ * 清单缺失且没有任何启用模型时保持「从未拉取」（不制造空清单）：否则之后手工
+ * 添加的自定义模型行会被空清单误标「已失效」（#109）。
  */
 export function initializeModelCatalog(provider: ModelProvider, catalogRaw: unknown): void {
 	if (Array.isArray(catalogRaw)) {
 		setModelCatalog(provider, catalogRaw as string[]); // 原始边界：写入侧 coerceModelIds 统一清洗
 		return;
 	}
-	setModelCatalog(provider, enabledModels(provider));
+	const initial = enabledModels(provider);
+	if (initial.length === 0) {
+		provider.modelCatalog = undefined;
+		return;
+	}
+	setModelCatalog(provider, initial);
 }

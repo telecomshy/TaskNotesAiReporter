@@ -193,7 +193,7 @@ const cardCases: CardCase[] = [
 		},
 	},
 	{
-		name: "custom：清单为空 → 非草稿行标「已失效」",
+		name: "custom：清单为空 → 手工模型行不标「已失效」（#109）",
 		provider: custom({ modelCatalog: [] }),
 		activeProviderId: "c1",
 		activeModel: "",
@@ -204,8 +204,8 @@ const cardCases: CardCase[] = [
 			deletable: true,
 			count: { show: true, value: 2 },
 			rows: [
-				{ rowId: "mc1", modelId: "gpt-x", params: { contextLength: 204800, maxTokens: 65535 }, stale: true, active: false, draft: false },
-				{ rowId: "mc2", modelId: "gpt-y", params: {}, stale: true, active: false, draft: false },
+				{ rowId: "mc1", modelId: "gpt-x", params: { contextLength: 204800, maxTokens: 65535 }, stale: false, active: false, draft: false },
+				{ rowId: "mc2", modelId: "gpt-y", params: {}, stale: false, active: false, draft: false },
 			],
 		},
 	},
