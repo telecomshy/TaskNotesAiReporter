@@ -56,6 +56,14 @@ export function isModelStale(provider: ModelProvider, model: string): boolean {
 	return !catalog.includes(model);
 }
 
+/**
+ * 清空「模型清单」回到「从未拉取」状态（#109）：写面原语，调用方不直接改字段。
+ * 只用于载入迁移在「清单缺失且无启用模型」时避免制造空清单。
+ */
+export function clearModelCatalog(provider: ModelProvider): void {
+	provider.modelCatalog = undefined;
+}
+
 /** 单个模型行的参数（稀疏：只含已设置的键）。 */
 function paramsOfRow(row: ModelConfig): ModelParams {
 	const params: ModelParams = {};
@@ -202,7 +210,7 @@ export function initializeModelCatalog(provider: ModelProvider, catalogRaw: unkn
 	}
 	const initial = enabledModels(provider);
 	if (initial.length === 0) {
-		provider.modelCatalog = undefined;
+		clearModelCatalog(provider);
 		return;
 	}
 	setModelCatalog(provider, initial);

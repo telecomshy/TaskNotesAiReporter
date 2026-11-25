@@ -145,7 +145,8 @@ export interface ModelProvider {
 	 * 「启用模型」从中挑选，挑选与否不影响清单本身。缺失（未迁移的旧数据）由迁移补齐，
 	 * 读取侧经 providerModels 的 `modelCatalog` 兜底为空清单。
 	 * 空清单是**正常状态**（#92：上游确实没有可用模型），照实记账，与「从未拉取」（缺失）
-	 * 区分对待——「已失效」判定只认「已拉取」的清单（见 providerModels.isModelStale）。
+	 * 区分对待。「已失效」判定只认「已拉取」的清单；空清单对预设供应商是权威结果，
+	 * 对自定义供应商的手工模型行不构成失效证据（#109，见 providerModels.isModelStale）。
 	 */
 	modelCatalog?: string[];
 	customModels?: ModelConfig[]; // 仅自定义供应商：手动维护的模型配置（每模型含 contextLength/maxTokens）

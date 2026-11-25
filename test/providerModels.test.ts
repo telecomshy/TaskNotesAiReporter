@@ -95,7 +95,7 @@ test("modelCatalog 缺失清单读作空清单（#87）", () => {
 	assert.deepEqual(modelCatalog(preset({ id: "p", modelCatalog: ["x"] })), ["x"]);
 });
 
-// isModelStale：两 adapter × 五种情形表驱动（#87 / #92）
+// isModelStale：两 adapter × 六种情形表驱动（#87 / #92 / #109）
 const STALE_CASES: Array<{
 	name: string;
 	enabled: string[];
@@ -103,12 +103,12 @@ const STALE_CASES: Array<{
 	query: string;
 	stale: boolean;
 	/** 仅该 adapter 适用的用例（其余 adapter 跳过）。 */
-	onlyKind?: "preset" | "custom";
+	onlyKind?: Adapter["kind"];
 }> = [
 	{
 		name: "已启用但不在清单 → 已失效（上游消失）",
 		enabled: ["a", "gone"],
-		catalog: ["a", "b"] as string[] | undefined,
+		catalog: ["a", "b"],
 		query: "gone",
 		stale: true,
 	},

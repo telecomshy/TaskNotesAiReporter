@@ -47,11 +47,15 @@ function makeHarness(scenario: Scenario = {}): ModelTabHarness {
 	});
 }
 
+/** 顶部下拉的全部 option 元素。 */
+function optionEls(root: FakeEl): FakeEl[] {
+	const select = root.querySelector(".tah-model-select");
+	return select ? select.byTag("option") : [];
+}
+
 /** 顶部「选择模型」下拉的全部 option 值（含分组与孤儿占位）。 */
 function optionValues(root: FakeEl): string[] {
-	const select = root.querySelector(".tah-model-select");
-	if (!select) return [];
-	return select.byTag("option").map((option) => option.value);
+	return optionEls(root).map((option) => option.value);
 }
 
 /** 「选择模型」下拉的 option 值编码 `providerId::model`：测试侧只在这里写一次。 */
@@ -61,9 +65,7 @@ function optionValue(modelId: string): string {
 
 /** 顶部下拉每个 option 的显示文本（含「· 已失效」后缀）。 */
 function optionTexts(root: FakeEl): string[] {
-	const select = root.querySelector(".tah-model-select");
-	if (!select) return [];
-	return select.byTag("option").map((option) => option.text);
+	return optionEls(root).map((option) => option.text);
 }
 
 /** 某个模型行的三个输入框：模型 ID / 上下文长度 / 最大输出。 */

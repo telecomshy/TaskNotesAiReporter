@@ -54,7 +54,9 @@
 - 删除/重命名模型、删除供应商 → 清空 `activeModel`。
 - 切换认证方式为 `none` → 清空 `apiKeySecretId`。
 - 清空预设供应商的密钥名 → 清空其 `models`（并因之清空 `activeModel`）；载入迁移只清存量启用集，悬空 `activeModel` 依 ADR-0010「载入不校验」留给解析层报 `no-model`（#90）。
-- 「模型清单」只由 `refreshModelCatalog` 整体替换；「已失效」＝已启用 ∧ 清单已拉取 ∧ 不在清单。空清单是正常状态（#92）：对预设供应商仍全部标失效；自定义供应商的模型行是手工配置、网关常不实现 `/models`，空清单不构成失效证据（#109）。清单缺失（「从未拉取」）不标失效。
+- 「模型清单」只由 `refreshModelCatalog` 整体替换。
+- 「已失效」（预设）＝已启用 ∧ 清单已拉取 ∧ 不在清单；预设的空清单仍是权威结果（#92），全部标失效。
+- 「已失效」（自定义）＝已启用 ∧ 非空清单 ∧ 不在清单；自定义的空清单不构成失效证据（#109）。清单缺失（「从未拉取」）两类都不标失效。
 - 载入迁移：清单缺失且没有任何启用模型 → 保持「从未拉取」（不制造空清单，#109）；清单缺失但有启用模型 → 初值＝启用集。
 - `resolveActive()`：模型不在启用集中（#99 起经 providerModels `enabledModels` 读取）→ `no-model`；`authType: "none"` 不要求密钥；需要却缺失 → `missing-credentials`；`baseUrl` 为空归入 `missing-credentials`。
 - **载入时不校验 `activeModel`**，`normalizeSettings` 维持只保证 `activeProviderId` 存在（见 ADR-0010）。
