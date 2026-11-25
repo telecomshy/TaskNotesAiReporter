@@ -49,7 +49,16 @@ export interface ModelTabContext {
 export function renderModelTab(container: HTMLElement, ctx: ModelTabContext): void {
 	// 本帧唯一一次「当前模型」读（顶部读面）：当前模型卡与两张供应商卡的投影共用。
 	const info = ctx.providers.activeModelInfo();
-	renderActiveModelSection(container, ctx, info);
+
+	// 顶部「当前模型」独立宿主（#107）：卡内变更经 refreshActiveModel 只重投这一块，
+	// 供应商卡的 DOM 不动，正在编辑的输入框因此不失焦、不丢光标。
+	const activeHost = container.createDiv({ cls: "tah-active-model-host" });
+	renderActiveModelSection(activeHost, ctx, info);
+	/** 目标化重绘：重读一次当前模型并重建顶部卡（下拉 + 思考行 + 能力徽标）。 */
+	const refreshActiveModel = (): void => {
+		activeHost.empty();
+		renderActiveModelSection(activeHost, ctx, ctx.providers.activeModelInfo());
+	};
 
 	const t = ctx.t;
 	container.createEl("h3", { text: t("model.providersHeading"), cls: "tah-provider-title" });
@@ -62,9 +71,9 @@ export function renderModelTab(container: HTMLElement, ctx: ModelTabContext): vo
 	for (const provider of ctx.settings.providers) {
 		const model = providerCardModel(provider, info, t);
 		if (model.kind === "preset") {
-			renderPresetProviderCard(list, model, provider, ctx);
+			renderPresetProviderCard(list, model, provider, ctx, refreshActiveModel);
 		} else {
-			renderCustomProviderCard(list, model, provider, ctx);
+			renderCustomProviderCard(list, model, provider, ctx, refreshActiveModel);
 		}
 	}
 
@@ -249,7 +258,9 @@ function renderPresetProviderCard(
 	container: HTMLElement,
 	model: PresetCardModel,
 	provider: ModelProvider,
-	ctx: ModelTabContext
+	ctx: ModelTabContext,
+	/** 顶部「当前模型」卡的目标化重绘（#107）。 */
+	refreshActiveModel: () => void
 ): void {
 	const t = ctx.t;
 	const card = createProviderCard(container, {
@@ -270,6 +281,8 @@ function renderPresetProviderCard(
 		ctx.providers.setSecretId(provider.id, value);
 		// 卡内重画：清空密钥名的清空联动（#90）可能同时改计数 / 状态 / 标签列
 		redraw();
+		// 顶部重绘：密钥变更改变「可选模型集合」（#107）
+		refreshActiveModel();
 	});
 	const fetchBtn = keyRow.createEl("button", { text: t("model.fetchModels") });
 	fetchBtn.addClass("tah-fetch-models-btn");
@@ -439,7 +452,9 @@ function renderCustomProviderCard(
 	container: HTMLElement,
 	model: CustomCardModel,
 	provider: ModelProvider,
-	ctx: ModelTabContext
+	ctx: ModelTabContext,
+	/** 顶部「当前模型」卡的目标化重绘（#107）。 */
+	refreshActiveModel: () => void
 ): void {
 	const t = ctx.t;
 	const card = createProviderCard(container, {
@@ -489,6 +504,7 @@ function renderCustomProviderCard(
 		ctx.providers.setProviderBaseUrl(provider.id, urlInput.value);
 		urlInput.value = provider.baseUrl;
 		syncHead();
+		refreshActiveModel();
 	});
 
 	// Anthropic 方言的地址提示（#105）：少了 /v1 会得到莫名其妙的 404。
@@ -512,6 +528,7 @@ function renderCustomProviderCard(
 	const secret = attachSecretControl(ctx, keyHost, provider, (value) => {
 		ctx.providers.setSecretId(provider.id, value);
 		syncHead();
+		refreshActiveModel();
 	});
 
 	const updateAuth = () => {
@@ -531,14 +548,17 @@ function renderCustomProviderCard(
 	openaiStyleBtn.addEventListener("click", () => {
 		ctx.providers.setProviderApiStyle(provider.id, "openai");
 		updateStyle();
+		refreshActiveModel();
 	});
 	anthropicStyleBtn.addEventListener("click", () => {
 		ctx.providers.setProviderApiStyle(provider.id, "anthropic");
 		updateStyle();
+		refreshActiveModel();
 	});
 	bearerBtn.addEventListener("click", () => {
 		ctx.providers.setAuthType(provider.id, "bearer");
 		updateAuth();
+		refreshActiveModel();
 	});
 	noneBtn.addEventListener("click", () => {
 		ctx.providers.setAuthType(provider.id, "none");
@@ -546,6 +566,7 @@ function renderCustomProviderCard(
 		secret.component.setValue("");
 		updateAuth();
 		syncHead();
+		refreshActiveModel();
 	});
 	updateAuth();
 	updateStyle();
@@ -568,7 +589,7 @@ function renderCustomProviderCard(
 	const renderModelRows = (rows: CustomModelRowModel[]): void => {
 		modelsList.empty();
 		for (const row of rows) {
-			renderCustomModelRow(modelsList, provider, row, ctx, syncHead, redraw);
+			renderCustomModelRow(modelsList, provider, row, ctx, syncHead, redraw, refreshActiveModel);
 		}
 		// 列表尾「手动添加」追加行：手动配置＝给列表添一行草稿，与列表编辑同属一体
 		const appendBtn = modelsList.createEl("button", {
@@ -578,6 +599,7 @@ function renderCustomProviderCard(
 		appendBtn.addEventListener("click", () => {
 			ctx.providers.addModel(provider.id);
 			redraw();
+			refreshActiveModel();
 		});
 	};
 
@@ -603,7 +625,9 @@ function renderCustomModelRow(
 	/** 行参数 / 名称变更后的头部同步（计数 / 状态），不重画列表。 */
 	syncHead: () => void,
 	/** 删除后重画整张列表（含列表尾的追加行）＋ 头部；由卡片传入 redraw。 */
-	redraw: () => void
+	redraw: () => void,
+	/** 顶部「当前模型」卡的目标化重绘（#107）；模型行参数变更不触发。 */
+	refreshActiveModel: () => void
 ): void {
 	const t = ctx.t;
 	const rowEl = listEl.createDiv({ cls: "tah-custom-model-row" });
@@ -623,6 +647,8 @@ function renderCustomModelRow(
 		// 存储侧写入的是 trim 后的值；行数据是 modelRows 快照（非活对象），回填取 trim 后的输入。
 		idInput.value = idInput.value.trim();
 		syncHead();
+		// 改名改变「可选模型集合」（旧值出、新值入），顶部下拉随之重绘（#107）
+		refreshActiveModel();
 	});
 	// 上游消失的启用模型标「已失效」，保留可移除（AC6）
 	if (row.stale) {
@@ -704,6 +730,8 @@ function renderCustomModelRow(
 		ctx.providers.removeModel(provider.id, row.rowId);
 		// 整张列表重画（含列表尾追加行）：单删一行后不再丢「+ 手动添加模型 ID」按钮。
 		redraw();
+		// 删除改变「可选模型集合」，顶部下拉随之重绘（#107）
+		refreshActiveModel();
 	});
 }
 
