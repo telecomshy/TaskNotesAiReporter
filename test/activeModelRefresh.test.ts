@@ -1,7 +1,8 @@
 /**
  * 回归（#107）：自定义供应商卡里改变「可选模型集合」后，顶部「当前模型」下拉
  * 自动、立即重绘（不切 Tab、不新增「保存」）。断言界面可见行为：下拉里有哪些 option、
- * 值是什么；不断言内部重绘函数或模块结构。
+ * 值是什么；「是否发生重绘」不可直接看见，只用元素实例恒等作代理，不引用内部函数名
+ * 或模块结构。
  *
  * 用真实 renderModelTab + FakeEl 假 DOM 的渲染 / change 缝（先例 test/fetchGate.test.ts）。
  * 运行：node --import tsx --import ./test/fakes/obsidian-shim.mjs --test test/activeModelRefresh.test.ts
@@ -25,13 +26,11 @@ import { SecretComponent } from "./fakes/obsidian-stub";
 
 const PROVIDER_ID = "custom-1";
 const SECRET_NAME = "tnar-custom-secret";
-const SECRET_VALUE = "sk-live";
 const BASE_URL = "https://gateway.example/v1";
 
 interface Scenario {
 	baseUrl?: string;
 	secretId?: string;
-	secretValue?: string;
 	rows?: ModelConfig[];
 	activeModel?: string;
 }
@@ -58,12 +57,10 @@ function makeHarness(scenario: Scenario = {}): Harness {
 	state.activeProviderId = PROVIDER_ID;
 	state.activeModel = scenario.activeModel ?? "";
 
-	const secrets: Record<string, string> = {};
-	if (scenario.secretValue !== undefined) secrets[scenario.secretId ?? SECRET_NAME] = scenario.secretValue;
-
 	const owner = createSettingsOwner(state, {
 		save: async () => {},
-		getSecret: (id) => secrets[id] ?? null,
+		// 下拉的「可选」只校验密钥名；密钥值不参与本组用例。
+		getSecret: () => null,
 	});
 	const ctx: ModelTabContext = {
 		app: {} as App,
@@ -84,6 +81,11 @@ function optionValues(root: FakeEl): string[] {
 	const select = root.querySelector(".tah-model-select");
 	if (!select) return [];
 	return select.byTag("option").map((option) => option.value);
+}
+
+/** 「选择模型」下拉的 option 值编码 `providerId::model`：测试侧只在这里写一次。 */
+function optionValue(modelId: string): string {
+	return `${PROVIDER_ID}::${modelId}`;
 }
 
 /** 某个模型行的三个输入框：模型 ID / 上下文长度 / 最大输出。 */
@@ -113,7 +115,7 @@ test("添加模型行并填入 ID：不切 Tab，下拉立刻包含该模型（U
 	idInput.value = "gw-model";
 	idInput.fire("change");
 
-	assert.deepEqual(optionValues(h.root), [`${PROVIDER_ID}::gw-model`]);
+	assert.deepEqual(optionValues(h.root), [optionValue("gw-model")]);
 });
 
 test("改名模型：旧值不在下拉、新值在下拉（US2）", () => {
@@ -123,8 +125,8 @@ test("改名模型：旧值不在下拉、新值在下拉（US2）", () => {
 	idInput.fire("change");
 
 	const values = optionValues(h.root);
-	assert.ok(values.includes(`${PROVIDER_ID}::new-model`), "新值应进入下拉");
-	assert.ok(!values.includes(`${PROVIDER_ID}::old-model`), "旧值应离开下拉");
+	assert.ok(values.includes(optionValue("new-model")), "新值应进入下拉");
+	assert.ok(!values.includes(optionValue("old-model")), "旧值应离开下拉");
 });
 
 test("删除模型行：下拉立刻不再列出它（US3）", () => {
@@ -140,8 +142,8 @@ test("删除模型行：下拉立刻不再列出它（US3）", () => {
 	delBtn.fire("click");
 
 	const values = optionValues(h.root);
-	assert.ok(values.includes(`${PROVIDER_ID}::keep-model`));
-	assert.ok(!values.includes(`${PROVIDER_ID}::drop-model`), "删除的行不应仍可被选");
+	assert.ok(values.includes(optionValue("keep-model")));
+	assert.ok(!values.includes(optionValue("drop-model")), "删除的行不应仍可被选");
 });
 
 // ===== 触发点：凭据 / 地址 / 认证方式 / 方言 =====
@@ -185,7 +187,7 @@ test("改 API 地址：供应商从不可选变为可选后，下拉立刻出现
 	urlInput!.value = BASE_URL;
 	urlInput!.fire("change");
 
-	assert.ok(optionValues(h.root).includes(`${PROVIDER_ID}::gw-model`));
+	assert.ok(optionValues(h.root).includes(optionValue("gw-model")));
 });
 
 test("从「密钥」切到「无认证」：无密钥也可选后下拉立刻出现（US6）", () => {
@@ -200,16 +202,23 @@ test("从「密钥」切到「无认证」：无密钥也可选后下拉立刻�
 	assert.ok(noneBtn, "应有「无认证」按钮");
 	noneBtn.fire("click");
 
-	assert.ok(optionValues(h.root).includes(`${PROVIDER_ID}::gw-model`));
+	assert.ok(optionValues(h.root).includes(optionValue("gw-model")));
 });
 
 test("切换「接口方言」同样触发顶部重绘（US7）", () => {
 	const h = makeHarness({ rows: [{ id: "mc-1", modelId: "gw-model" }] });
+	const selectBefore = h.root.querySelector(".tah-model-select");
+	assert.ok(selectBefore, "配置齐备时应有下拉");
+
 	const anthropicBtn = h.root.querySelectorAll(".tah-auth-btn")[1];
 	assert.ok(anthropicBtn, "应有 Anthropic 方言按钮");
 	anthropicBtn.fire("click");
 
-	assert.ok(optionValues(h.root).includes(`${PROVIDER_ID}::gw-model`), "方言切换后下拉仍在");
+	// 本 harness 下方言不改变可选集合，唯一可观察的触发证据是顶部卡被重建
+	//（下拉换了新实例）；它证明刷新被接线，不证明渲染内容更正确。
+	const selectAfter = h.root.querySelector(".tah-model-select");
+	assert.ok(selectAfter, "方言切换后下拉仍存在");
+	assert.notEqual(selectAfter, selectBefore, "切换方言后顶部卡应重绘");
 	assert.deepEqual(h.provider.apiStyle, "anthropic", "方言写入状态");
 });
 
@@ -225,6 +234,8 @@ test("上下文长度变更不重绘顶部卡（不打断输入；US8）", () =>
 	contextInput.value = "204800";
 	contextInput.fire("change");
 
+	// 焦点 / 光标不可自动化（仓库无真实 DOM / 视觉测试）：以「下拉仍是同一元素实例」
+	// 作为「顶部未重绘」的代理证据；它不引用任何内部重绘函数名。
 	assert.equal(
 		h.root.querySelector(".tah-model-select"),
 		selectBefore,
@@ -239,7 +250,7 @@ test("重绘后的「选择模型」下拉仍可正常选中（US13 / 回归网�
 	const select = h.root.querySelector(".tah-model-select");
 	assert.ok(select);
 
-	select!.value = `${PROVIDER_ID}::gw-model`;
+	select!.value = optionValue("gw-model");
 	select!.fire("change");
 
 	assert.equal(h.state.activeProviderId, PROVIDER_ID);

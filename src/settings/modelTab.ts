@@ -47,14 +47,15 @@ export interface ModelTabContext {
 
 /** 渲染「模型配置」Tab */
 export function renderModelTab(container: HTMLElement, ctx: ModelTabContext): void {
-	// 本帧唯一一次「当前模型」读（顶部读面）：当前模型卡与两张供应商卡的投影共用。
+	// 初始帧唯一一次「当前模型」读（顶部读面）：当前模型卡与两张供应商卡的投影共用。
+	// 卡内变更触发的目标化重绘（#107）是另一帧：只重读顶卡，不重投供应商卡。
 	const info = ctx.providers.activeModelInfo();
 
 	// 顶部「当前模型」独立宿主（#107）：卡内变更经 refreshActiveModel 只重投这一块，
 	// 供应商卡的 DOM 不动，正在编辑的输入框因此不失焦、不丢光标。
 	const activeHost = container.createDiv({ cls: "tah-active-model-host" });
 	renderActiveModelSection(activeHost, ctx, info);
-	/** 目标化重绘：重读一次当前模型并重建顶部卡（下拉 + 思考行 + 能力徽标）。 */
+	/** 目标化重绘：在独立帧里重读一次当前模型并重建顶部卡（下拉 + 思考行 + 能力徽标）。 */
 	const refreshActiveModel = (): void => {
 		activeHost.empty();
 		renderActiveModelSection(activeHost, ctx, ctx.providers.activeModelInfo());
@@ -105,7 +106,7 @@ function cardRow(card: HTMLElement, name: string, desc: string): HTMLElement {
  * 卡内第一行选择模型；分隔线下第二行「思考开关」两档滑动开关（开关跟模型走）；
  * 卡脚注行放能力徽标 ＋ 备注 ＋ 右对齐测试入口位。
  * 分组选项 / 当前值 / 孤儿占位由 activeModelCardModel 投影给出（#100 step 2）；
- * `info` 由 renderModelTab 顶部传入（本帧唯一一次读）。
+ * 初始帧的 `info` 由 renderModelTab 顶部传入；目标化重绘（#107）在独立帧重读后传入。
  */
 function renderActiveModelSection(
 	container: HTMLElement,
