@@ -10,10 +10,8 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-	runFetchModelsFlow,
-	type FetchModelsSlice,
-} from "../src/settings/fetchModels";
+import { runFetchModelsFlow, type FetchModelsSlice } from "../src/settings/fetchModels";
+import { isModelStale } from "../src/settings/providerModels";
 import type { HttpResponse, RequestFn, RequestParams } from "../src/ai/request";
 import { AIClientError } from "../src/ai/errors";
 import type { ModelProvider } from "../src/types";
@@ -336,6 +334,36 @@ test("OpenAI 预设：请求失败仍不写清单（过滤只在成功路径）"
 	);
 	assert.ok(outcome.kind === "failed");
 	assert.deepEqual(catalogs, []);
+});
+
+test("过滤后的清单仍是完整快照：「已失效」按过滤后清单判定，拉回即消", async () => {
+	const provider = providerOf({
+		id: "openai",
+		baseUrl: "https://api.openai.com/v1",
+		models: ["gpt-6.2-astra", "gpt-4.1", "gpt-image-2.6-sunburst"],
+	});
+	const slice = {
+		secretValue: () => "sk-live",
+		refreshModelCatalog: (providerId: string, models: string[]) => {
+			provider.modelCatalog = [...models];
+		},
+	};
+
+	const first = await runFetchModelsFlow(slice, provider, 30, fakeRequest(modelsResponse(["gpt-6.2-astra"])).request);
+	assert.equal(first.kind, "fetched");
+	assert.equal(isModelStale(provider, "gpt-6.2-astra"), false, "在过滤后的清单里");
+	assert.equal(isModelStale(provider, "gpt-4.1"), true, "上游暂时没有 ⇒ 已失效，可移除");
+	assert.equal(isModelStale(provider, "gpt-image-2.6-sunburst"), true, "非对话模型被过滤 ⇒ 已失效");
+
+	const second = await runFetchModelsFlow(
+		slice,
+		provider,
+		30,
+		fakeRequest(modelsResponse(["gpt-6.2-astra", "gpt-4.1", "gpt-image-2.6-sunburst"])).request
+	);
+	assert.equal(second.kind, "fetched");
+	assert.equal(isModelStale(provider, "gpt-4.1"), false, "拉回即消");
+	assert.equal(isModelStale(provider, "gpt-image-2.6-sunburst"), true, "图像模型永远不在过滤后的清单里");
 });
 
 // ===== 空表 / 失败 =====

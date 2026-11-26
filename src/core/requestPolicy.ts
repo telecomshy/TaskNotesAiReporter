@@ -89,14 +89,17 @@ export function shouldSendTemperature(
 
 // ===== 请求体的策略消费（生成与微型探测共用，#106 裁决 7 / 8） =====
 
-/** 生成请求额度：`max(配置上限, 策略下限)`，钳制上限仍 384K；非法配置回落 8192。 */
-export function requestMaxTokens(policy: RequestPolicy, maxTokens: number): number {
+/**
+ * 生成请求额度：`max(配置上限, 策略下限)`，钳制上限仍 384K；非法配置回落 8192。
+ * 生成与探测共用同一套钳制——**探测不调用它**（探测预算恒 256，不受下限影响）。
+ */
+export function effectiveMaxTokens(policy: RequestPolicy, maxTokens: number): number {
 	const MAX_SAFE = 384 * 1024;
 	const configured = Number.isFinite(maxTokens) && maxTokens > 0 ? maxTokens : 8192;
 	return Math.min(Math.max(configured, policy.minMaxTokens), MAX_SAFE);
 }
 
-/** 生成与探测超时：`max(全局超时, 策略下限)`；用户更大的设置优先。 */
-export function requestTimeoutSeconds(policy: RequestPolicy, timeoutSeconds: number): number {
+/** 生成与探测超时：`max(全局超时, 策略下限)`；用户更大的设置优先。清单拉取不调用它。 */
+export function effectiveTimeoutSeconds(policy: RequestPolicy, timeoutSeconds: number): number {
 	return Math.max(timeoutSeconds, policy.minTimeoutSeconds);
 }

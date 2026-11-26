@@ -551,6 +551,39 @@ test("策略预算：无下限行（非推理老模型）取全局值；配置�
 	assert.equal(JSON.parse(captured[captured.length - 1].body!).max_completion_tokens, 384 * 1024, "钳制上限仍 384K");
 });
 
+test("策略预算：用户配置大于 25k 时优先（下限不压回）", async () => {
+	await capture();
+	respond = () => ({ status: 200, json: { choices: [{ message: { content: "ok" } }] } });
+	await client.chatCompletion(
+		{ ...openAIConfig, maxTokens: 30000, requestPolicy: OPENAI_REQUEST_POLICY },
+		[{ role: "user", content: "hi" }]
+	);
+	assert.equal(JSON.parse(captured[0].body!).max_completion_tokens, 30000);
+});
+
+test("策略超时：max(全局超时, 下限)——用户全局更大时用户优先（错误里带实际毫秒数）", async () => {
+	await capture();
+	const request = () => new Promise<{ status: number; json: unknown; text: string }>(() => {});
+	await assert.rejects(
+		() =>
+			client.chatCompletion(
+				{
+					...openAIConfig,
+					timeoutSeconds: 0.5,
+					requestPolicy: { ...OPENAI_REQUEST_POLICY, minTimeoutSeconds: 0.02 },
+				},
+				[{ role: "user", content: "hi" }],
+				request
+			),
+		(e: unknown) => {
+			assert.ok(e instanceof client.AIClientError);
+			assert.equal((e as { code: string }).code, "timeout");
+			assert.equal((e as { details: { ms: number } }).details.ms, 500, "取全局 0.5 秒而非下限 20ms");
+			return true;
+		}
+	);
+});
+
 test("策略超时：max(全局超时, 下限)——下限更大时生效（错误里带实际毫秒数）", async () => {
 	await capture();
 	const request = () => new Promise<{ status: number; json: unknown; text: string }>(() => {});
@@ -577,17 +610,38 @@ test("策略超时：max(全局超时, 下限)——下限更大时生效（错�
 test("四家国产预设零变更：空策略下仍发 max_tokens 与温度，不发 max_completion_tokens", async () => {
 	await capture();
 	respond = () => ({ status: 200, json: { choices: [{ message: { content: "ok" } }] } });
-	await client.chatCompletion(
-		{
-			...config,
-			requestPolicy: { ...EMPTY_REQUEST_POLICY },
-		},
-		[{ role: "user", content: "hi" }]
-	);
-	const payload = JSON.parse(captured[0].body!);
+	const presets = [
+		"https://api.deepseek.com",
+		"https://dashscope.aliyuncs.com/compatible-mode/v1",
+		"https://api.moonshot.cn/v1",
+		"https://api.minimax.chat/v1",
+	];
+	for (const baseUrl of presets) {
+		await client.chatCompletion(
+			{
+				...config,
+				baseUrl,
+				requestPolicy: { ...EMPTY_REQUEST_POLICY },
+			},
+			[{ role: "user", content: "hi" }]
+		);
+	}
+	const payload = JSON.parse(captured[captured.length - 1].body!);
+	assert.deepEqual(Object.keys(payload).sort(), [
+		"max_tokens",
+		"messages",
+		"model",
+		"stream",
+		"temperature",
+	], "四家国产预设的请求体逐字段不变（无策略字段夹带）");
 	assert.equal(payload.max_tokens, 8192);
-	assert.equal("max_completion_tokens" in payload, false);
 	assert.equal(payload.temperature, 0.7);
+	assert.equal(payload.model, "deepseek-v4-flash");
+	assert.deepEqual(payload.messages, [{ role: "user", content: "hi" }]);
+	assert.equal(payload.stream, false);
+	for (const call of captured) {
+		assert.equal(JSON.parse(call.body!).max_tokens, 8192, "每个预设一视同仁");
+	}
 });
 
 test("思考测试微型请求遵守策略：max_completion_tokens 恒 256（不受 25k 下限影响）、温度按规则不发", async () => {
