@@ -611,21 +611,22 @@ test("四家国产预设零变更：空策略下仍发 max_tokens 与温度，�
 	await capture();
 	respond = () => ({ status: 200, json: { choices: [{ message: { content: "ok" } }] } });
 	const presets = [
-		"https://api.deepseek.com",
-		"https://dashscope.aliyuncs.com/compatible-mode/v1",
-		"https://api.moonshot.cn/v1",
-		"https://api.minimax.chat/v1",
+		{ id: "deepseek", baseUrl: "https://api.deepseek.com" },
+		{ id: "qwen", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1" },
+		{ id: "kimi", baseUrl: "https://api.moonshot.cn/v1" },
+		{ id: "minimax", baseUrl: "https://api.minimax.chat/v1" },
 	];
-	for (const baseUrl of presets) {
+	for (const preset of presets) {
 		await client.chatCompletion(
 			{
 				...config,
-				baseUrl,
+				baseUrl: preset.baseUrl,
 				requestPolicy: { ...EMPTY_REQUEST_POLICY },
 			},
 			[{ role: "user", content: "hi" }]
 		);
 	}
+	assert.equal(captured.length, presets.length);
 	const payload = JSON.parse(captured[captured.length - 1].body!);
 	assert.deepEqual(Object.keys(payload).sort(), [
 		"max_tokens",
@@ -639,8 +640,8 @@ test("四家国产预设零变更：空策略下仍发 max_tokens 与温度，�
 	assert.equal(payload.model, "deepseek-v4-flash");
 	assert.deepEqual(payload.messages, [{ role: "user", content: "hi" }]);
 	assert.equal(payload.stream, false);
-	for (const call of captured) {
-		assert.equal(JSON.parse(call.body!).max_tokens, 8192, "每个预设一视同仁");
+	for (const [index, preset] of presets.entries()) {
+		assert.deepEqual(JSON.parse(captured[index].body!), payload, `${preset.id}：请求体逐字段一致`);
 	}
 });
 
