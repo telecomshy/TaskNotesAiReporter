@@ -312,6 +312,34 @@ test("resolveActive 带出请求策略（#106）：OpenAI 预设按模型族解�
 	});
 });
 
+test("resolveActive 带出接口协议（#110）：Responses-only 模型走 responses，Chat 模型与其它供应商走 chat-completions", () => {
+	const openai = provider({
+		id: "openai",
+		type: "preset",
+		baseUrl: "https://api.openai.com/v1",
+		apiKeySecretId: "tnar-openai",
+		models: ["gpt-5.5-pro", "gpt-6.2-astra"],
+	});
+	const pro = resolveActive(
+		state({ providers: [openai], activeProviderId: "openai", activeModel: "gpt-5.5-pro" }),
+		() => "sk"
+	);
+	assert.equal(pro.ok && pro.config.protocol, "responses");
+
+	const cresult = resolveActive(
+		state({ providers: [openai], activeProviderId: "openai", activeModel: "gpt-6.2-astra" }),
+		() => "sk"
+	);
+	assert.equal(cresult.ok && cresult.config.protocol, "chat-completions", "Chat 可用的模型保持 Chat");
+
+	const deepseek = provider({ id: "deepseek", type: "preset", apiKeySecretId: "k", models: ["gpt-5.5-pro"] });
+	const ds = resolveActive(
+		state({ providers: [deepseek], activeProviderId: "deepseek", activeModel: "gpt-5.5-pro" }),
+		() => "sk"
+	);
+	assert.equal(ds.ok && ds.config.protocol, "chat-completions", "不按模型名嗅探官方端点");
+});
+
 test("setAuthType 切到 none：清空密钥名", () => {
 	const p = provider({ id: "c", type: "custom", authType: "bearer", apiKeySecretId: "k" });
 	const s = state({ providers: [p] });
@@ -436,6 +464,7 @@ test("resolveActive 成功：解析出地址与密钥值", () => {
 		providerId: "p",
 		config: {
 			apiStyle: "openai",
+			protocol: "chat-completions",
 			baseUrl: "https://api.example.com",
 			apiKey: "sk",
 			model: "m",

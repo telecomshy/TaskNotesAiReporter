@@ -1,16 +1,23 @@
 /**
- * 模型客户端：按「接口方言」描述两套协议的「请求什么」与「如何读取成功结果」。
+ * 模型客户端：按「接口方言」与「接口协议」描述请求的「请求什么」与「如何读取成功结果」。
  *
  * 本模块（client.ts）不直接静态依赖 obsidian：底层 HTTP 传输通过可注入的
  * RequestFn 提供，默认实现位于 transport.ts（包装 obsidian 的 requestUrl）。
  * 两个操作共享的请求机制（认证头 / JSON 内容类型 / 超时 / 错误映射）由 ./request
- * 的 requestJson 统一承担（#105：共享机制不因方言复制，方言只决定地址 / 认证头 /
- * 请求体 / 响应读取）。OpenAI 兼容为缺省方言，存量行为零变更。
+ * 的 requestJson 统一承担（#105：共享机制不因方言复制；方言只决定地址根与认证头，
+ * 对话端点与报文形态由「接口协议」决定，#110）。OpenAI 兼容为缺省方言、
+ * Chat Completions 为缺省协议，存量行为零变更。
  */
 
 import { requestUrlTransport } from "./transport";
-import { buildChatCompletionsUrl, buildMessagesUrl, buildModelsUrl } from "../core/aiUrl";
+import {
+	buildChatCompletionsUrl,
+	buildMessagesUrl,
+	buildModelsUrl,
+	buildResponsesUrl,
+} from "../core/aiUrl";
 import { isAnthropic } from "../core/apiStyle";
+import { protocolOf } from "../core/wireProtocol";
 import {
 	EMPTY_REQUEST_POLICY,
 	effectiveMaxTokens,
@@ -20,7 +27,7 @@ import {
 import { probeOutcomeOfError, type ThinkingProbeOutcome } from "../core/thinking";
 import { AIClientError } from "./errors";
 import { requestJson, type RequestFn } from "./request";
-import type { ApiStyle, RequestPolicy, ThinkingParam } from "../types";
+import type { ApiStyle, RequestPolicy, ThinkingParam, WireProtocol } from "../types";
 
 export { AIClientError };
 export type { AIClientErrorCode, AIClientErrorDetails } from "./errors";
@@ -34,6 +41,11 @@ export interface ChatMessage {
 export interface AIClientConfig {
 	/** 「接口方言」（#105）：缺省 OpenAI 兼容（存量行为零变更）。 */
 	apiStyle?: ApiStyle;
+	/**
+	 * 「接口协议」（#110）：缺省 `chat-completions`；`responses` 换端点与报文形态（ADR-0031）。
+	 * 由当前模型解析带出，执行层只消费。
+	 */
+	protocol?: WireProtocol;
 	baseUrl: string;
 	apiKey: string;
 	model: string;
@@ -59,6 +71,8 @@ export interface ChatResult {
 export interface ThinkingProbeConfig {
 	/** 「接口方言」（#105）：探测请求与基线同样按方言构造。 */
 	apiStyle?: ApiStyle;
+	/** 「接口协议」（#110）：Responses 走 `input` / `max_output_tokens` / `reasoning.effort`。 */
+	protocol?: WireProtocol;
 	/** 供应商 id（#106）：思考测试候选按它分派（内置 OpenAI 预设只探 reasoning_effort）。 */
 	providerId?: string;
 	baseUrl: string;
@@ -209,7 +223,7 @@ async function listAnthropicModels(
 }
 
 /**
- * 调用模型接口，返回生成正文与推理段读面。按「接口方言」分派（#105）。
+ * 调用模型接口，返回生成正文与推理段读面。按「接口方言」与「接口协议」分派（#105 / #110）。
  */
 export async function chatCompletion(
 	config: AIClientConfig,
@@ -218,6 +232,9 @@ export async function chatCompletion(
 ): Promise<ChatResult> {
 	if (isAnthropic(config.apiStyle)) {
 		return anthropicChatCompletion(config, messages, request);
+	}
+	if (protocolOf(config) === "responses") {
+		return responsesChatCompletion(config, messages, request);
 	}
 	return requestJson(
 		{
@@ -252,10 +269,11 @@ export async function chatCompletion(
 }
 
 /**
- * OpenAI 兼容方言请求体的**唯一构造处**（#106，生成与微型探测共用）：
- * 输出额度字段名、温度可发条件与思考参数的单键并入都在这里（ADR-0024 / ADR-0030）。
+ * 生成 / 微型探测共用的**中性输入**（#106 / #110）：额度、温度、思考参数先由策略定好，
+ * 再由各协议的构造器放进出（Chat 的 `messages` / Responses 的 `input`）。
+ * 策略规则只在上游一处生效，两条报文路径不会各算一遍。
  */
-interface OpenAIRequestBody {
+interface WireRequest {
 	model: string;
 	messages: ChatMessage[];
 	policy: RequestPolicy;
@@ -267,7 +285,7 @@ interface OpenAIRequestBody {
 	maxTokens: number;
 }
 
-function openAIRequestBody(input: OpenAIRequestBody): Record<string, unknown> {
+function openAIRequestBody(input: WireRequest): Record<string, unknown> {
 	const body: Record<string, unknown> = {
 		model: input.model,
 		messages: input.messages,
@@ -281,9 +299,108 @@ function openAIRequestBody(input: OpenAIRequestBody): Record<string, unknown> {
 	return body;
 }
 
+/**
+ * Responses 协议的请求体（#110，ADR-0031）：`input` 取代 `messages`、`max_output_tokens`
+ * 取代 `max_completion_tokens`；温度与思考参数仍由同一套策略决定。
+ *
+ * - `input` 复用 `ChatMessage[]`：官方迁移指南认定纯文本消息可一一对应（`system` 角色留在原位）；
+ * - `store: false`：纯文本单轮不需要会话状态，任务数据不因缺省而被上游保存；
+ * - 思考参数并入顶层后即 `reasoning: { effort }`（能力的 Responses 行以该形状给出）。
+ */
+function responsesRequestBody(input: WireRequest): Record<string, unknown> {
+	const body: Record<string, unknown> = {
+		model: input.model,
+		input: input.messages,
+		max_output_tokens: input.maxTokens,
+		stream: false,
+		store: false,
+	};
+	if (shouldSendTemperature(input.policy, input.thinking)) body.temperature = input.temperature;
+	if (input.thinking) body[input.thinking.name] = input.thinking.value;
+	return body;
+}
+
 /** 请求策略的读取侧缺省：未带策略＝空策略（现状零变更，#106 裁决 4）。 */
 function policyOf(config: { requestPolicy?: RequestPolicy }): RequestPolicy {
 	return config.requestPolicy ?? EMPTY_REQUEST_POLICY;
+}
+
+/**
+ * Responses 协议的对话（#110）：端点 `/responses`、请求体见 `responsesRequestBody`；
+ * 正文＝`output[]` 里 message 项的 `output_text` 块拼接，`output` 不是数组 ⇒ 解析失败，
+ * 正文为空（含「只推理、无正文」的 incomplete 态）⇒ 空回复。
+ */
+function responsesChatCompletion(
+	config: AIClientConfig,
+	messages: ChatMessage[],
+	request: RequestFn
+): Promise<ChatResult> {
+	const policy = policyOf(config);
+	return requestJson(
+		{
+			op: "chat",
+			url: buildResponsesUrl(config.baseUrl),
+			method: "POST",
+			apiKey: config.apiKey,
+			body: JSON.stringify(
+				responsesRequestBody({
+					model: config.model,
+					messages,
+					policy,
+					thinking: config.thinking ?? null,
+					temperature: config.temperature,
+					maxTokens: effectiveMaxTokens(policy, config.maxTokens),
+				})
+			),
+			timeoutSeconds: effectiveTimeoutSeconds(policy, config.timeoutSeconds),
+		},
+		(json) => {
+			const content = responsesTextOf((json as { output?: unknown } | null)?.output);
+			if (content === null) throw new AIClientError("chat.parse");
+			if (content === "") throw new AIClientError("chat.empty");
+			return { content, hasReasoning: detectResponsesReasoning(json) };
+		},
+		request
+	);
+}
+
+/**
+ * Responses `output[]` 的正文读面：message 项的 `output_text` 块拼接（多个消息项以换行分隔）。
+ * `output` 不是数组返回 `null`（＝非对话补全形态，解析失败）；没有正文返回 `""`（＝空回复）。
+ */
+function responsesTextOf(output: unknown): string | null {
+	if (!Array.isArray(output)) return null;
+	const parts: string[] = [];
+	for (const item of output) {
+		const it = item as { type?: unknown; content?: unknown } | null;
+		if (it?.type !== "message" || !Array.isArray(it.content)) continue;
+		const text = it.content
+			.map((block) => {
+				const b = block as { type?: unknown; text?: unknown } | null;
+				return b?.type === "output_text" && typeof b.text === "string" ? b.text : "";
+			})
+			.join("");
+		if (text !== "") parts.push(text);
+	}
+	return parts.join("\n");
+}
+
+/**
+ * Responses 的推理段读面（#110）：任一 `type:"reasoning"` 输出项，或
+ * `usage.output_tokens_details.reasoning_tokens > 0`。假关判定与思考测试用它。
+ */
+function detectResponsesReasoning(data: unknown): boolean {
+	const body = data as {
+		output?: unknown;
+		usage?: { output_tokens_details?: { reasoning_tokens?: unknown } };
+	} | null;
+	if (Array.isArray(body?.output)) {
+		for (const item of body.output) {
+			if ((item as { type?: unknown } | null)?.type === "reasoning") return true;
+		}
+	}
+	const reasoningTokens = body?.usage?.output_tokens_details?.reasoning_tokens;
+	return typeof reasoningTokens === "number" && reasoningTokens > 0;
 }
 
 /**
@@ -406,9 +523,7 @@ export async function thinkingProbe(
 	request: RequestFn = defaultRequest
 ): Promise<ThinkingProbeOutcome> {
 	try {
-		const hasReasoning = isAnthropic(config.apiStyle)
-			? await anthropicThinkingProbe(config, param, request)
-			: await openaiThinkingProbe(config, param, request);
+		const hasReasoning = await probeHasReasoning(config, param, request);
 		return hasReasoning ? "reasoning-present" : "reasoning-absent";
 	} catch (error) {
 		const status =
@@ -417,6 +532,17 @@ export async function thinkingProbe(
 				: undefined;
 		return probeOutcomeOfError(status);
 	}
+}
+
+/** 探测请求按方言 / 协议分派（#105 / #110）：Anthropic 的读面与两种 OpenAI 形态各自独立。 */
+function probeHasReasoning(
+	config: ThinkingProbeConfig,
+	param: ThinkingParam | null,
+	request: RequestFn
+): Promise<boolean> {
+	if (isAnthropic(config.apiStyle)) return anthropicThinkingProbe(config, param, request);
+	if (protocolOf(config) === "responses") return responsesThinkingProbe(config, param, request);
+	return openaiThinkingProbe(config, param, request);
 }
 
 /** OpenAI 方言的微型请求：与生成请求共用同一个请求体构造（温度规则 / 额度字段），预算恒 256。 */
@@ -453,6 +579,44 @@ function openaiThinkingProbe(
 				throw new AIClientError("chat.parse");
 			}
 			return detectReasoning(json);
+		},
+		request
+	);
+}
+
+/**
+ * Responses 协议的微型请求（#110）：与生成共用同一请求构造（温度规则 / 额度 / store:false），
+ * 预算恒 256（不受 25k 下限影响）；`output` 不是数组 ⇒ 解析失败（200 不是证据），
+ * 否则按 reasoning 项 / usage 读面判定。
+ */
+function responsesThinkingProbe(
+	config: ThinkingProbeConfig,
+	param: ThinkingParam | null,
+	request: RequestFn
+): Promise<boolean> {
+	const policy = policyOf(config);
+	return requestJson(
+		{
+			op: "chat",
+			url: buildResponsesUrl(config.baseUrl),
+			method: "POST",
+			apiKey: config.apiKey,
+			body: JSON.stringify(
+				responsesRequestBody({
+					model: config.model,
+					messages: [{ role: "user", content: THINKING_PROBE_PROMPT }],
+					policy,
+					thinking: param,
+					temperature: 0,
+					maxTokens: THINKING_PROBE_MAX_TOKENS,
+				})
+			),
+			timeoutSeconds: effectiveTimeoutSeconds(policy, config.timeoutSeconds),
+		},
+		(json) => {
+			const payload = json as { output?: unknown } | null;
+			if (!Array.isArray(payload?.output)) throw new AIClientError("chat.parse");
+			return detectResponsesReasoning(json);
 		},
 		request
 	);

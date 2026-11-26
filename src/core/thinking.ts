@@ -7,7 +7,7 @@
  * 未实测（#89 习得能力）前一律未知。
  */
 
-import type { ApiStyle } from "../types";
+import type { ApiStyle, WireProtocol } from "../types";
 import { resolveApiStyle } from "./apiStyle";
 import type {
 	LearnedCapability,
@@ -286,10 +286,13 @@ export function isThinkingFakeOff(
 }
 
 /**
- * 模型匹配：`*` 结尾为前缀匹配，否则精确匹配。
- * 策略表与思考能力表共用同一判定（行键形状同构，#106）。
+ * 模型匹配：`*` 结尾为前缀匹配、`*` 开头为后缀匹配，否则精确匹配（`*` 单独恒命中）。
+ * 策略表、能力表与协议表共用同一判定（行键形状同构，ADR-0030 / ADR-0031）。
+ * 后缀分支由 #110 引入：`*-pro` 覆盖未来 pro 族，避免每上新一版就补一行。
  */
 export function matchModelPattern(pattern: string, model: string): boolean {
+	if (pattern === "*") return true;
+	if (pattern.startsWith("*")) return model.endsWith(pattern.slice(1));
 	if (pattern.endsWith("*")) return model.startsWith(pattern.slice(0, -1));
 	return pattern === model;
 }
@@ -324,15 +327,30 @@ export const OPENAI_THINKING_OFF_CANDIDATES: readonly ThinkingParam[] = [
 ];
 
 /**
- * 取思考测试候选清单：内置 OpenAI 预设按**供应商 id**分派（单字段 `reasoning_effort`）；
+ * Responses 协议下的关字段候选（#110）：开关是嵌套对象路径 `reasoning.effort`，
+ * 顶层 `reasoning_effort` 在 `/responses` 上是不存在的字段。
+ */
+export const RESPONSES_THINKING_OFF_CANDIDATES: readonly ThinkingParam[] = [
+	{ name: "reasoning", value: { effort: "none" } },
+];
+
+/**
+ * 取思考测试候选清单：内置 OpenAI 预设按**供应商 id + 协议**分派（#106 / #110）——
+ * Chat Completions 只试顶层 `reasoning_effort`，Responses 只试嵌套 `reasoning.effort`；
  * 其余 OpenAI 方言保持三字段（#105 收窄到方言级）；Anthropic 方言只试自己的关字段。
  * 状态机（基线 → 逐字段 → 四值判定）与判定规则不因候选清单分叉。
  */
 export function thinkingOffCandidates(
 	apiStyle?: ApiStyle,
-	providerId?: string
+	providerId?: string,
+	protocol?: WireProtocol
 ): readonly ThinkingParam[] {
-	if (providerId === "openai") return OPENAI_THINKING_OFF_CANDIDATES;
+	if (providerId === "openai") {
+		// 同一家供应商的两种报文形态各有自己的字段名：发错顶层/嵌套都只会白落 400。
+		return protocol === "responses"
+			? RESPONSES_THINKING_OFF_CANDIDATES
+			: OPENAI_THINKING_OFF_CANDIDATES;
+	}
 	return resolveApiStyle(apiStyle) === "anthropic"
 		? ANTHROPIC_THINKING_OFF_CANDIDATES
 		: THINKING_OFF_CANDIDATES;

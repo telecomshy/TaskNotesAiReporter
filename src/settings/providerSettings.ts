@@ -22,6 +22,7 @@ import type {
 } from "../types";
 import { apiStyleOf } from "../core/apiStyle";
 import { resolveRequestPolicy } from "../core/requestPolicy";
+import { resolveWireProtocol } from "../core/wireProtocol";
 import {
 	resolveThinking,
 	thinkingDisplay,
@@ -419,6 +420,8 @@ export function resolveActive(
 	const config: ActiveModelConfig = {
 		// 「接口方言」（#105）：生成 / 测试 / 拉取清单全部按解析结果分派。
 		apiStyle: apiStyleOf(provider),
+		// 「接口协议」（#110）：与方言 / 策略同路产出，执行层只消费（ADR-0031）。
+		protocol: resolveWireProtocol(provider.id, state.activeModel),
 		baseUrl: provider.baseUrl,
 		apiKey,
 		model: state.activeModel,

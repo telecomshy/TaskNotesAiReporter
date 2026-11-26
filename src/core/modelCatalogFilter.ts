@@ -1,8 +1,11 @@
 /**
  * OpenAI 官方预设的「模型清单」过滤（#106）：`/v1/models` 不带任何能力 / 端点字段，
- * 只能靠内置名单把非对话模型与仅 Responses 的模型剔掉（事实锚点见
- * docs/research/openai-official-preset.md）。排除优先于 `gpt-*` 粗白名单；
- * 未来新出的 `gpt-7*` 一类对话族无需改表即可出现。
+ * 只能靠内置名单把非对话模型剔掉（事实锚点见 docs/research/openai-official-preset.md）。
+ * 排除优先于 `gpt-*` 粗白名单；未来新出的 `gpt-7*` 一类对话族无需改表即可出现。
+ *
+ * 仅 Responses 可用的对话模型（`*-pro` / `gpt-oss-*` / `gpt-5.6-cyber`）自 #110 起放回——
+ * 它们的端点由「接口协议」表路由（core/wireProtocol）。`gpt-rosalind-research` 没有可核实的端点页、
+ * `chat-latest` 官方不建议 API 使用，两者继续排除。
  *
  * 规则按供应商 id 选择：只有 `openai` 预设过滤，其余供应商零变更。
  * 纯函数，无 obsidian、无 DOM。
@@ -24,16 +27,17 @@ const NON_CHAT_PREFIXES: readonly string[] = [
 	"sora",
 ];
 
-/** 仅 Responses 的模型前缀（Chat Completions 不可用，#106 裁决 18 单开 #110）。 */
-const RESPONSES_ONLY_PREFIXES: readonly string[] = ["gpt-oss-"];
+/** 精确排除：端点无官方依据的目录条目，与官方明说不建议 API 使用的别名。 */
+const NON_CHAT_EXACT: readonly string[] = [
+	// 目录有 ID、无独立模型页可核对端点（研究笔记 §2.2）。
+	"gpt-rosalind-research",
+	// 官方注明「用于 ChatGPT、不建议 API 使用」。
+	"chat-latest",
+];
 
 function isExcluded(id: string): boolean {
 	if (NON_CHAT_PREFIXES.some((prefix) => id.startsWith(prefix))) return true;
-	if (RESPONSES_ONLY_PREFIXES.some((prefix) => id.startsWith(prefix))) return true;
-	// `*-pro`（gpt-5.5-pro 等）与专用的 `gpt-5.6-cyber` 只支持 Responses。
-	if (id.endsWith("-pro") || id === "gpt-5.6-cyber") return true;
-	// 目录注明「用于 ChatGPT、不建议 API 使用」的别名。
-	return id === "chat-latest";
+	return NON_CHAT_EXACT.includes(id);
 }
 
 /** 单个模型 ID 是否为 OpenAI 官方预设可用的对话模型（排除优先，再走 `gpt-*` 粗白名单）。 */

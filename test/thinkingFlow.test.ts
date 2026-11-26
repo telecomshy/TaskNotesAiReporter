@@ -225,6 +225,60 @@ test("OpenAI 预设（#106）：只试 reasoning_effort:none；基线与逐字�
 	assert.deepEqual(slice.recorded[0][2].off, { name: "reasoning_effort", value: "none" });
 });
 
+test("Responses 协议（#110）：探嵌套 reasoning.effort、请求 /responses、读 output[] 的 reasoning 项", async () => {
+	const calls: RequestParams[] = [];
+	let index = 0;
+	const responses: HttpResponse[] = [
+		{
+			status: 200,
+			json: {
+				output: [
+					{ type: "reasoning", summary: [] },
+					{ type: "message", content: [{ type: "output_text", text: "2" }] },
+				],
+			},
+			text: "",
+		},
+		{
+			status: 200,
+			json: { output: [{ type: "message", content: [{ type: "output_text", text: "2" }] }] },
+			text: "",
+		},
+	];
+	const request: RequestFn = async (params) => {
+		calls.push(params);
+		return responses[Math.min(index++, responses.length - 1)];
+	};
+
+	const slice = fakeSlice({
+		ok: true,
+		providerId: "openai",
+		config: {
+			apiStyle: "openai",
+			protocol: "responses",
+			baseUrl: "https://api.openai.com/v1",
+			apiKey: "sk",
+			model: "gpt-5.5-pro",
+			thinking: { setting: "off", param: null, note: "unknown", learned: null },
+		},
+	});
+	const result = await runThinkingTestFlow(slice, 5, false, request);
+
+	assert.ok(result);
+	assert.equal(result.verdict, "switchable");
+	assert.equal(calls.length, 2, "基线 + 单字段 candidate（Responses 不试顶层 reasoning_effort）");
+	assert.equal(calls[0].url, "https://api.openai.com/v1/responses");
+	const baseline = JSON.parse(calls[0].body!);
+	const probe = JSON.parse(calls[1].body!);
+	assert.equal(baseline.max_output_tokens, 256, "探测恒定 256");
+	assert.equal("max_completion_tokens" in baseline, false);
+	assert.equal("messages" in baseline, false);
+	assert.equal(baseline.store, false);
+	assert.deepEqual(probe.reasoning, { effort: "none" });
+	assert.equal("reasoning_effort" in probe, false);
+	assert.deepEqual(slice.recorded[0][2].off, { name: "reasoning", value: { effort: "none" } });
+});
+
 // ===== 共享界面动作（#97）：跑 + 报 + 回调 =====
 test("共享动作：成功路径提示结论并回调刷新", async () => {
 	notices.length = 0;

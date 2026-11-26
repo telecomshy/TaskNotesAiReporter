@@ -20,6 +20,16 @@ export function buildMessagesUrl(baseUrl: string): string {
 	return `${url}/messages`;
 }
 
+/**
+ * Responses 协议的对话端点（#110）：base + `/responses`。
+ * 已以 `/responses` 结尾则原样使用；同样不自动插 `/v1`（哑函数，规则同 #105 裁决 5）。
+ */
+export function buildResponsesUrl(baseUrl: string): string {
+	const url = baseUrl.trim().replace(/\/+$/, "");
+	if (url.endsWith("/responses")) return url;
+	return `${url}/responses`;
+}
+
 /** 规范化 base URL，去掉末尾斜杠，指向 /models 端点。 */
 export function buildModelsUrl(baseUrl: string): string {
 	let url = baseUrl.trim().replace(/\/+$/, "");

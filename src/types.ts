@@ -118,11 +118,19 @@ export interface ReportTemplate {
 /**
  * 「接口方言」（#105，见 CONTEXT.md）：供应商与模型交互所用的请求协议。
  * OpenAI 兼容＝`chat/completions`；Anthropic 兼容＝原生 Messages（`/messages`）。
- * 它决定对话与模型列表的地址、认证头、请求体参数与响应读取方式。
+ * 它决定地址根、认证头、错误语义与模型列表的读取；对话端点与报文形态见「接口协议」（#110）。
  */
 export type ApiStyle = "openai" | "anthropic";
 
-/** 输出额度字段名（#106，ADR-0030）：OpenAI 官方的「含推理 token 的输出预算」只有 `max_completion_tokens`。 */
+/**
+ * 「接口协议」（#110，见 CONTEXT.md / ADR-0031）：OpenAI 方言内部、按（供应商, 模型）
+ * 选择的报文形态。`chat-completions`＝`POST {base}/chat/completions`；
+ * `responses`＝`POST {base}/responses`。缺省（含存量数据）读作 `chat-completions`。
+ */
+export type WireProtocol = "chat-completions" | "responses";
+
+
+/** 输出额度字段名（#106，ADR-0030）：OpenAI 官方的「含推理 token 的输出预算」只有 `max_completion_tokens`。只对 Chat Completions 生效——Responses 协议固定 `max_output_tokens`（#110，ADR-0031）。 */
 export type OutputTokenField = "max_tokens" | "max_completion_tokens";
 
 /**
@@ -255,6 +263,11 @@ export interface ThinkingResolution {
 export interface ActiveModelConfig {
 	/** 「接口方言」（#105）：生成 / 测试 / 拉取清单全部按它分派，调用方不各自判断供应商类型。 */
 	apiStyle: ApiStyle;
+	/**
+	 * 「接口协议」（#110）：随解析结果带出，执行层只消费（ADR-0031）。
+	 * 缺省（含无解析结果 / 界面手填配置）读作 `chat-completions`。
+	 */
+	protocol?: WireProtocol;
 	baseUrl: string;
 	apiKey: string;
 	model: string;

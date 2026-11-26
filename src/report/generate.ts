@@ -144,6 +144,8 @@ async function runGeneration(intent: GenerateIntent, deps: GenerateDeps): Promis
 		const chatResult = await deps.chat(prompt, {
 			// 「接口方言」随解析结果带出（#105）：生成走该供应商的协议，调用方不另判供应商类型。
 			apiStyle: config.apiStyle,
+			// 「接口协议」随解析结果带出（#110）：Responses-only 模型换端点与报文形态（ADR-0031）。
+			protocol: config.protocol,
 			baseUrl: config.baseUrl,
 			apiKey: config.apiKey,
 			model: config.model,

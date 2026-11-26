@@ -332,6 +332,25 @@ test("请求策略透传（#106）：当前模型解析出的策略随 chat 配�
 	assert.deepEqual(captured.chatConfig?.requestPolicy, policy);
 });
 
+test("接口协议透传（#110）：Responses-only 模型的协议随 chat 配置交出（生成层不判断模型）", async () => {
+	const { deps, captured } = setup({
+		resolveModel: () => ({
+			ok: true,
+			providerId: "openai",
+			config: {
+				apiStyle: "openai",
+				protocol: "responses",
+				baseUrl: "https://api.openai.com/v1",
+				apiKey: "sk",
+				model: "gpt-5.5-pro",
+				thinking: { setting: "off", param: null, note: "unknown", learned: null },
+			},
+		}),
+	});
+	await createGeneration(deps)(baseIntent());
+	assert.equal(captured.chatConfig?.protocol, "responses");
+});
+
 test("假关告警：设关发参而响应仍带推理段 → 成功结果带 fakeOff", async () => {
 	const { deps } = setup({
 		resolveModel: () => ({

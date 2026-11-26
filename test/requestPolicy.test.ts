@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import {
 	EMPTY_REQUEST_POLICY,
 	OPENAI_REQUEST_POLICY,
+	effectiveEffort,
 	effectiveMaxTokens,
 	effectiveTimeoutSeconds,
 	resolveRequestPolicy,
@@ -89,6 +90,27 @@ test("温度判定：omit-unless-none 仅在生效 effort 为 none 时发（开�
 	assert.equal(shouldSendTemperature(policy, { name: "thinking", value: { type: "disabled" } }), false, "别的字段不等于 effort=none");
 });
 
+test("温度判定（#110）：嵌套 reasoning.effort 与顶层 reasoning_effort 等价（同一条规则）", () => {
+	const policy = OPENAI_REQUEST_POLICY;
+	assert.equal(shouldSendTemperature(policy, { name: "reasoning", value: { effort: "none" } }), true, "Responses 的关＝reasoning.effort:none 也合法");
+	assert.equal(shouldSendTemperature(policy, { name: "reasoning", value: { effort: "high" } }), false);
+	assert.equal(shouldSendTemperature(policy, { name: "reasoning", value: {} }), false, "不带 effort 的对象不算 none");
+});
+
+test("effectiveEffort：只认两种携带形态，其它参数与畸形值返回 null", () => {
+	assert.equal(effectiveEffort({ name: "reasoning_effort", value: "none" }), "none");
+	assert.equal(effectiveEffort({ name: "reasoning_effort", value: "high" }), "high");
+	assert.equal(effectiveEffort({ name: "reasoning", value: { effort: "none" } }), "none");
+	assert.equal(effectiveEffort({ name: "reasoning", value: { effort: "medium" } }), "medium");
+	assert.equal(effectiveEffort({ name: "thinking", value: { type: "disabled" } }), null);
+	assert.equal(effectiveEffort({ name: "enable_thinking", value: false }), null);
+	assert.equal(effectiveEffort({ name: "reasoning_effort", value: 1 }), null, "非字符串不解释");
+	assert.equal(effectiveEffort({ name: "reasoning", value: null }), null);
+	assert.equal(effectiveEffort({ name: "reasoning", value: "none" }), null, "字符串形态不属于嵌套字段");
+	assert.equal(effectiveEffort(null), null);
+	assert.equal(effectiveEffort(undefined), null);
+});
+
 // ===== 预算与超时的取值规则（两者都取 max，双向都要断言） =====
 
 test("预算：取下限与配置中的较大者，双向都成立；仍钳制 384K，非法配置回落 8192", () => {
@@ -127,7 +149,7 @@ test("清单过滤：只收对话模型，嵌入 / 图像 / 语音 / 实时 / �
 	assert.deepEqual(filterModelCatalog("openai", ids), ["gpt-6.2-astra"]);
 });
 
-test("清单过滤：保留老的非推理对话模型与未来新族，仅 Responses 族与 chat-latest 剔除", () => {
+test("清单过滤：Responses-only 对话族自 #110 放回；gpt-rosalind-research 与 chat-latest 仍剔除", () => {
 	const ids = [
 		"gpt-4.1",
 		"gpt-4o",
@@ -135,6 +157,7 @@ test("清单过滤：保留老的非推理对话模型与未来新族，仅 Resp
 		"gpt-5.5-pro",
 		"gpt-oss-120b",
 		"gpt-5.6-cyber",
+		"gpt-rosalind-research",
 		"chat-latest",
 		"gpt-6.1-terra",
 	];
@@ -142,6 +165,9 @@ test("清单过滤：保留老的非推理对话模型与未来新族，仅 Resp
 		"gpt-4.1",
 		"gpt-4o",
 		"gpt-7-future",
+		"gpt-5.5-pro",
+		"gpt-oss-120b",
+		"gpt-5.6-cyber",
 		"gpt-6.1-terra",
 	]);
 });
@@ -161,11 +187,12 @@ test("清单过滤：其它供应商零变更（不按模型名过滤）", () =>
 	assert.deepEqual(filterModelCatalog("custom_x", ids), ids);
 });
 
-test("单模型判定：排除优先于 gpt-* 粗白名单", () => {
+test("单模型判定：排除优先于 gpt-* 粗白名单（Responses-only 对话族已放回）", () => {
 	assert.equal(isOpenAIChatModel("gpt-6.2-astra"), true);
 	assert.equal(isOpenAIChatModel("gpt-image-2.6-sunburst"), false, "gpt- 开头但属图像族");
-	assert.equal(isOpenAIChatModel("gpt-5.5-pro"), false, "仅 Responses");
-	assert.equal(isOpenAIChatModel("gpt-oss-120b"), false);
-	assert.equal(isOpenAIChatModel("gpt-5.6-cyber"), false);
-	assert.equal(isOpenAIChatModel("chat-latest"), false, "白名单之外");
+	assert.equal(isOpenAIChatModel("gpt-5.5-pro"), true, "仅 Responses 的对话模型自 #110 放回");
+	assert.equal(isOpenAIChatModel("gpt-oss-120b"), true);
+	assert.equal(isOpenAIChatModel("gpt-5.6-cyber"), true);
+	assert.equal(isOpenAIChatModel("gpt-rosalind-research"), false, "端点无官方依据");
+	assert.equal(isOpenAIChatModel("chat-latest"), false, "官方不建议 API 使用");
 });

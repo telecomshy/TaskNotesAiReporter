@@ -12,6 +12,7 @@ import {
 	THINKING_OFF_CANDIDATES,
 	ANTHROPIC_THINKING_OFF_CANDIDATES,
 	OPENAI_THINKING_OFF_CANDIDATES,
+	RESPONSES_THINKING_OFF_CANDIDATES,
 	thinkingOffCandidates,
 } from "../src/core/thinking";
 
@@ -425,6 +426,27 @@ test("OpenAI 预设候选（#106）：按供应商 id 收窄为单字段 reasoni
 		thinkingOffCandidates("anthropic", "anthropic"),
 		ANTHROPIC_THINKING_OFF_CANDIDATES,
 		"Anthropic 路径不变"
+	);
+});
+
+test("Responses 候选（#110）：按协议收窄为嵌套 reasoning.effort:\"none\"，不试顶层字段", () => {
+	assert.deepEqual(RESPONSES_THINKING_OFF_CANDIDATES, [
+		{ name: "reasoning", value: { effort: "none" } },
+	]);
+	assert.deepEqual(
+		thinkingOffCandidates("openai", "openai", "responses"),
+		RESPONSES_THINKING_OFF_CANDIDATES,
+		"Responses 只探嵌套对象路径"
+	);
+	assert.deepEqual(
+		thinkingOffCandidates("openai", "openai", "chat-completions"),
+		OPENAI_THINKING_OFF_CANDIDATES,
+		"Chat 协议仍只探顶层 reasoning_effort"
+	);
+	assert.deepEqual(
+		thinkingOffCandidates("openai", "custom_x", "responses"),
+		THINKING_OFF_CANDIDATES,
+		"协议只在内置 OpenAI 预设上改变候选"
 	);
 });
 

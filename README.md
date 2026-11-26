@@ -66,7 +66,7 @@ Open **Settings → Community plugins → TaskNotes AI Reporter**:
 
 ## Network use
 
-This plugin talks only to the OpenAI-compatible or Anthropic-compatible endpoint(s) **you configure** (built-in presets such as OpenAI, DeepSeek, Qwen, Kimi, MiniMax, or Anthropic, or a custom base URL). It sends the selected task data and the generated prompt to that endpoint to produce the report, and fetches the model list from it. No data is sent anywhere else, and the plugin collects **no telemetry**.
+This plugin talks only to the OpenAI-compatible or Anthropic-compatible endpoint(s) **you configure** (built-in presets such as OpenAI, DeepSeek, Qwen, Kimi, MiniMax, or Anthropic, or a custom base URL). It sends the selected task data and the generated prompt to that endpoint to produce the report, and fetches the model list from it. Models that exist only on OpenAI's Responses API are called at `/v1/responses` with `store: false`, so the upstream service does not retain the response. No data is sent anywhere else, and the plugin collects **no telemetry**.
 
 API keys are stored in Obsidian's **SecretStorage**; the plugin's own `data.json` stores only the secret's name.
 
@@ -107,6 +107,6 @@ Pure logic (date ranges, task filtering, filenames, prompts) lives in `src/core/
 
 > **已取消**：在 TaskNotes 状态设置里勾选了跳过（isSkipped）标志的状态归为「已取消」，不再计入报告的未完成子集。升级后若自建的取消类状态没被认出，去 TaskNotes 的状态设置给它勾上「跳过」标志；未勾选的仍按「待办」处理。
 
-**网络用途**：插件只会访问你自己配置的 OpenAI 兼容或 Anthropic 兼容端点（内置 OpenAI、DeepSeek、通义千问、Kimi、MiniMax、Anthropic 预设，或自定义 Base URL），把所选任务数据与提示词发送过去以生成报告，并从该端点拉取模型列表；不会发送到其它地方，也不收集任何遥测。
+**网络用途**：插件只会访问你自己配置的 OpenAI 兼容或 Anthropic 兼容端点（内置 OpenAI、DeepSeek、通义千问、Kimi、MiniMax、Anthropic 预设，或自定义 Base URL），把所选任务数据与提示词发送过去以生成报告，并从该端点拉取模型列表；只存在于 OpenAI Responses API 的模型会请求 `/v1/responses` 并显式 `store: false`，上游不会保存响应。不会发送到其它地方，也不收集任何遥测。
 
 **安装**：在「设置 → 第三方插件 → 浏览」中搜索 **TaskNotes AI Reporter** 安装并启用，并启用 **TaskNotes** 插件。

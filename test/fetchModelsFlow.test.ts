@@ -293,17 +293,42 @@ test("OpenAI 预设：拉取成功后过滤，写回的清单只含对话模型�
 	);
 	assert.deepEqual(outcome, {
 		kind: "fetched",
-		models: ["gpt-6.2-astra", "gpt-4.1", "gpt-6.7-terra"],
+		models: ["gpt-6.2-astra", "gpt-4.1", "gpt-5.5-pro", "gpt-6.7-terra"],
 	});
 	assert.deepEqual(catalogs, [
-		{ providerId: "openai", models: ["gpt-6.2-astra", "gpt-4.1", "gpt-6.7-terra"] },
+		{ providerId: "openai", models: ["gpt-6.2-astra", "gpt-4.1", "gpt-5.5-pro", "gpt-6.7-terra"] },
 	], "写回的是过滤后的完整快照");
+});
+
+test("OpenAI 预设：Responses-only 对话族自 #110 起放回清单（结局 fetched）", async () => {
+	const { slice, catalogs } = fakeSlice({ [SECRET_NAME]: "sk-live" });
+	const { request } = fakeRequest(
+		modelsResponse(["gpt-5.4-pro", "gpt-oss-120b", "gpt-5.6-cyber", "gpt-rosalind-research"])
+	);
+	const outcome = await runFetchModelsFlow(
+		slice,
+		providerOf({ id: "openai", baseUrl: "https://api.openai.com/v1" }),
+		30,
+		request
+	);
+	assert.deepEqual(outcome, {
+		kind: "fetched",
+		models: ["gpt-5.4-pro", "gpt-oss-120b", "gpt-5.6-cyber"],
+	});
+	assert.deepEqual(catalogs, [
+		{ providerId: "openai", models: ["gpt-5.4-pro", "gpt-oss-120b", "gpt-5.6-cyber"] },
+	], "端点无官方依据的 gpt-rosalind-research 仍被排除");
 });
 
 test("OpenAI 预设：全部被过滤 ⇒ 结局 empty、清单照实为空（不新增错误码）", async () => {
 	const { slice, catalogs } = fakeSlice({ [SECRET_NAME]: "sk-live" });
 	const { request } = fakeRequest(
-		modelsResponse(["text-embedding-3-small", "gpt-oss-20b", "gpt-5.6-cyber", "chat-latest"])
+		modelsResponse([
+			"text-embedding-3-small",
+			"gpt-image-2.6-sunburst",
+			"gpt-rosalind-research",
+			"chat-latest",
+		])
 	);
 	const outcome = await runFetchModelsFlow(
 		slice,

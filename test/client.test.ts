@@ -1,6 +1,6 @@
 import { test, before, mock } from "node:test";
 import assert from "node:assert/strict";
-import { buildChatCompletionsUrl, buildMessagesUrl, buildModelsUrl } from "../src/core/aiUrl";
+import { buildChatCompletionsUrl, buildMessagesUrl, buildModelsUrl, buildResponsesUrl } from "../src/core/aiUrl";
 import { EMPTY_REQUEST_POLICY, OPENAI_REQUEST_POLICY } from "../src/core/requestPolicy";
 
 // ===== URL 拼接（纯函数，原有用例保留） =====
@@ -45,6 +45,16 @@ test("buildMessagesUrl 拼接 Anthropic Messages 端点：不自动补 /v1（哑
 	);
 	// 裸域名不自动插 /v1（地址由用户负责，见 #105 裁决 5）
 	assert.equal(buildMessagesUrl("https://gateway.example.com"), "https://gateway.example.com/messages");
+});
+
+test("buildResponsesUrl 拼接 Responses 端点：同样不自动补 /v1（哑函数）", () => {
+	assert.equal(buildResponsesUrl("https://api.openai.com/v1"), "https://api.openai.com/v1/responses");
+	assert.equal(buildResponsesUrl("https://api.openai.com/v1/"), "https://api.openai.com/v1/responses");
+	assert.equal(
+		buildResponsesUrl("https://api.openai.com/v1/responses"),
+		"https://api.openai.com/v1/responses"
+	);
+	assert.equal(buildResponsesUrl("https://gateway.example.com"), "https://gateway.example.com/responses");
 });
 
 // ===== chatCompletion / listModels（通过 mock transport） =====
@@ -681,4 +691,152 @@ test("思考测试微型请求：探 reasoning_effort:none 时温度照发（同
 	assert.equal(payload.reasoning_effort, "none");
 	assert.equal(payload.temperature, 0);
 	assert.equal(payload.max_completion_tokens, 256);
+});
+
+// ===== 接口协议（#110，ADR-0031）：Responses 的请求形态与读取面 =====
+
+const responsesConfig = {
+	...openAIConfig,
+	model: "gpt-5.5-pro",
+	protocol: "responses" as const,
+	requestPolicy: OPENAI_REQUEST_POLICY,
+};
+
+test("Responses 协议：发 input / max_output_tokens / store:false；无 messages 与两个 chat 额度字段", async () => {
+	await capture();
+	respond = () => ({
+		status: 200,
+		json: {
+			status: "completed",
+			output: [{ type: "message", content: [{ type: "output_text", text: "报告正文" }] }],
+			usage: { output_tokens_details: { reasoning_tokens: 12 } },
+		},
+	});
+	const result = await client.chatCompletion(responsesConfig, [
+		{ role: "system", content: "sys" },
+		{ role: "user", content: "hi" },
+	]);
+	assert.equal(captured[0].url, "https://api.openai.com/v1/responses");
+	const payload = JSON.parse(captured[0].body!);
+	assert.equal("messages" in payload, false, "Responses 用 input");
+	assert.deepEqual(payload.input, [
+		{ role: "system", content: "sys" },
+		{ role: "user", content: "hi" },
+	], "纯文本消息原样复用（system 角色留在原位）");
+	assert.equal(payload.max_output_tokens, 25000, "预算取下限 25,000");
+	assert.equal("max_tokens" in payload, false);
+	assert.equal("max_completion_tokens" in payload, false);
+	assert.equal(payload.store, false, "无状态：任务数据不被上游保存");
+	assert.equal(payload.stream, false);
+	assert.equal("temperature" in payload, false, "无 effort ⇒ 默认 medium，温度不合法");
+	assert.equal(result.content, "报告正文");
+	assert.equal(result.hasReasoning, true, "usage 的 reasoning_tokens 是推理段读面");
+});
+
+test("Responses 协议：思考发嵌套 reasoning.effort；omit-unless-none 在 none 时温度照发", async () => {
+	await capture();
+	respond = () => ({ status: 200, json: { output: [{ type: "message", content: [{ type: "output_text", text: "ok" }] }] } });
+	await client.chatCompletion(
+		{ ...responsesConfig, thinking: { name: "reasoning", value: { effort: "none" } } },
+		[{ role: "user", content: "hi" }]
+	);
+	const payload = JSON.parse(captured[0].body!);
+	assert.deepEqual(payload.reasoning, { effort: "none" }, "开关是嵌套 reasoning.effort");
+	assert.equal("reasoning_effort" in payload, false, "顶层字段不属于 Responses");
+	assert.equal(payload.temperature, 0.7, "生效 effort=none ⇒ 温度合法");
+});
+
+test("Responses 读取：多个 message 项与多个 output_text 块按换行拼接；reasoning 项即推理段", async () => {
+	await capture();
+	respond = () => ({
+		status: 200,
+		json: {
+			output: [
+				{ type: "reasoning", summary: [] },
+				{ type: "message", content: [{ type: "output_text", text: "A" }, { type: "output_text", text: "B" }] },
+				{ type: "message", content: [{ type: "output_text", text: "C" }] },
+			],
+		},
+	});
+	const result = await client.chatCompletion(responsesConfig, [{ role: "user", content: "hi" }]);
+	assert.equal(result.content, "AB\nC");
+	assert.equal(result.hasReasoning, true, "reasoning 项（即便 summary 为空）即推理证据");
+});
+
+test("Responses 读取：只推理无正文（incomplete）归空回复，不新增错误码", async () => {
+	await capture();
+	respond = () => ({
+		status: 200,
+		json: {
+			status: "incomplete",
+			incomplete_details: { reason: "max_output_tokens" },
+			output: [{ type: "reasoning", summary: [] }],
+		},
+	});
+	await assert.rejects(
+		() => client.chatCompletion(responsesConfig, [{ role: "user", content: "hi" }]),
+		assertErrorCode("chat.empty")
+	);
+});
+
+test("Responses 读取：output 不是数组 → chat.parse（200 不是证据）", async () => {
+	await capture();
+	respond = () => ({ status: 200, json: { error: { message: "gateway shape" } } });
+	await assert.rejects(
+		() => client.chatCompletion(responsesConfig, [{ role: "user", content: "hi" }]),
+		assertErrorCode("chat.parse")
+	);
+});
+
+test("Responses 微型探测：同一请求构造、预算恒 256；读 output 的 reasoning 项", async () => {
+	await capture();
+	respond = () => ({ status: 200, json: { output: [{ type: "reasoning", summary: [] }, { type: "message", content: [{ type: "output_text", text: "2" }] }] } });
+	const outcome = await client.thinkingProbe(
+		{
+			baseUrl: "https://api.openai.com/v1",
+			apiKey: "sk",
+			model: "gpt-5.5-pro",
+			protocol: "responses",
+			timeoutSeconds: 30,
+			requestPolicy: OPENAI_REQUEST_POLICY,
+		},
+		{ name: "reasoning", value: { effort: "none" } }
+	);
+	assert.equal(outcome, "reasoning-present");
+	const payload = JSON.parse(captured[0].body!);
+	assert.equal(captured[0].url, "https://api.openai.com/v1/responses");
+	assert.equal(payload.max_output_tokens, 256, "探测恒定 256，不受下限影响");
+	assert.equal("max_tokens" in payload, false);
+	assert.equal(payload.store, false);
+	assert.deepEqual(payload.reasoning, { effort: "none" });
+	assert.equal(payload.temperature, 0, "生效 effort=none ⇒ 探测温度照发（同一套策略）");
+});
+
+test("Responses 微型探测：output 不是数组 → 中断（chat.parse 不是探测信号）", async () => {
+	await capture();
+	respond = () => ({ status: 200, json: {} });
+	const outcome = await client.thinkingProbe(
+		{
+			baseUrl: "https://api.openai.com/v1",
+			apiKey: "sk",
+			model: "gpt-5.5-pro",
+			protocol: "responses",
+			timeoutSeconds: 30,
+			requestPolicy: OPENAI_REQUEST_POLICY,
+		},
+		null
+	);
+	assert.equal(outcome, "interrupted");
+});
+
+test("Chat 路径零变更：未带 protocol 时仍走 chat/completions（#110 只在必需时切换）", async () => {
+	await capture();
+	respond = () => ({ status: 200, json: { choices: [{ message: { content: "ok" } }] } });
+	await client.chatCompletion({ ...openAIConfig, model: "gpt-6.2-astra", requestPolicy: OPENAI_REQUEST_POLICY }, [
+		{ role: "user", content: "hi" },
+	]);
+	assert.equal(captured[0].url, "https://api.openai.com/v1/chat/completions");
+	const payload = JSON.parse(captured[0].body!);
+	assert.ok(Array.isArray(payload.messages));
+	assert.equal(payload.max_completion_tokens, 25000);
 });
