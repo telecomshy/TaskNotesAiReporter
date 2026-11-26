@@ -11,11 +11,7 @@ import assert from "node:assert/strict";
 import {
 	EMPTY_REQUEST_POLICY,
 	OPENAI_REQUEST_POLICY,
-	effectiveEffort,
-	effectiveMaxTokens,
-	effectiveTimeoutSeconds,
 	resolveRequestPolicy,
-	shouldSendTemperature,
 } from "../src/core/requestPolicy";
 import { filterModelCatalog, isOpenAIChatModel } from "../src/core/modelCatalogFilter";
 
@@ -66,67 +62,8 @@ test("策略表：首个命中行生效、只按供应商 id 命中（不按模�
 	assert.deepEqual(resolveRequestPolicy("custom_x", "gpt-6.2-astra", table), EMPTY_REQUEST_POLICY);
 });
 
-// ===== 温度判定矩阵 =====
-
-test("温度判定：send 恒发（含任何思考参数与无参数）", () => {
-	const policy = { ...EMPTY_REQUEST_POLICY, temperature: "send" as const };
-	assert.equal(shouldSendTemperature(policy, undefined), true);
-	assert.equal(shouldSendTemperature(policy, { name: "reasoning_effort", value: "none" }), true);
-	assert.equal(shouldSendTemperature(policy, { name: "reasoning_effort", value: "high" }), true);
-});
-
-test("温度判定：omit-always 永不发（含生效 effort 为 none）", () => {
-	const policy = { ...OPENAI_REQUEST_POLICY, temperature: "omit-always" as const };
-	assert.equal(shouldSendTemperature(policy, undefined), false);
-	assert.equal(shouldSendTemperature(policy, { name: "reasoning_effort", value: "none" }), false);
-	assert.equal(shouldSendTemperature(policy, { name: "reasoning_effort", value: "high" }), false);
-});
-
-test("温度判定：omit-unless-none 仅在生效 effort 为 none 时发（开＝high 不给，关＝none 才给）", () => {
-	const policy = OPENAI_REQUEST_POLICY;
-	assert.equal(shouldSendTemperature(policy, { name: "reasoning_effort", value: "none" }), true, "关：none 合法");
-	assert.equal(shouldSendTemperature(policy, { name: "reasoning_effort", value: "high" }), false, "开：high 不合法");
-	assert.equal(shouldSendTemperature(policy, undefined), false, "强制 / 无思考 / 未知：默认 medium，不合法");
-	assert.equal(shouldSendTemperature(policy, { name: "thinking", value: { type: "disabled" } }), false, "别的字段不等于 effort=none");
-});
-
-test("温度判定（#110）：嵌套 reasoning.effort 与顶层 reasoning_effort 等价（同一条规则）", () => {
-	const policy = OPENAI_REQUEST_POLICY;
-	assert.equal(shouldSendTemperature(policy, { name: "reasoning", value: { effort: "none" } }), true, "Responses 的关＝reasoning.effort:none 也合法");
-	assert.equal(shouldSendTemperature(policy, { name: "reasoning", value: { effort: "high" } }), false);
-	assert.equal(shouldSendTemperature(policy, { name: "reasoning", value: {} }), false, "不带 effort 的对象不算 none");
-});
-
-test("effectiveEffort：只认两种携带形态，其它参数与畸形值返回 null", () => {
-	assert.equal(effectiveEffort({ name: "reasoning_effort", value: "none" }), "none");
-	assert.equal(effectiveEffort({ name: "reasoning_effort", value: "high" }), "high");
-	assert.equal(effectiveEffort({ name: "reasoning", value: { effort: "none" } }), "none");
-	assert.equal(effectiveEffort({ name: "reasoning", value: { effort: "medium" } }), "medium");
-	assert.equal(effectiveEffort({ name: "thinking", value: { type: "disabled" } }), null);
-	assert.equal(effectiveEffort({ name: "enable_thinking", value: false }), null);
-	assert.equal(effectiveEffort({ name: "reasoning_effort", value: 1 }), null, "非字符串不解释");
-	assert.equal(effectiveEffort({ name: "reasoning", value: null }), null);
-	assert.equal(effectiveEffort({ name: "reasoning", value: "none" }), null, "字符串形态不属于嵌套字段");
-	assert.equal(effectiveEffort(null), null);
-	assert.equal(effectiveEffort(undefined), null);
-});
-
-// ===== 预算与超时的取值规则（两者都取 max，双向都要断言） =====
-
-test("预算：取下限与配置中的较大者，双向都成立；仍钳制 384K，非法配置回落 8192", () => {
-	assert.equal(effectiveMaxTokens(OPENAI_REQUEST_POLICY, 8192), 25000, "配置更小 → 下限生效");
-	assert.equal(effectiveMaxTokens(OPENAI_REQUEST_POLICY, 30000), 30000, "用户配置更大 → 用户优先");
-	assert.equal(effectiveMaxTokens(OPENAI_REQUEST_POLICY, 400000), 384 * 1024, "钳制上限仍 384K");
-	assert.equal(effectiveMaxTokens(EMPTY_REQUEST_POLICY, 8192), 8192, "无下限 → 原值");
-	assert.equal(effectiveMaxTokens(OPENAI_REQUEST_POLICY, 0), 25000, "非法配置按缺省 8192 再抬到下限");
-	assert.equal(effectiveMaxTokens(OPENAI_REQUEST_POLICY, Number.NaN), 25000);
-});
-
-test("超时：取全局与下限中的较大者，双向都成立", () => {
-	assert.equal(effectiveTimeoutSeconds(OPENAI_REQUEST_POLICY, 30), 120, "全局更小 → 下限生效");
-	assert.equal(effectiveTimeoutSeconds(OPENAI_REQUEST_POLICY, 300), 300, "用户全局更大 → 用户优先");
-	assert.equal(effectiveTimeoutSeconds(EMPTY_REQUEST_POLICY, 30), 30, "无下限 → 原值");
-});
+// ===== 温度判定矩阵 / 额度与超时的取值规则 =====
+// 已随请求装配搬到 test/modelRequest.test.ts（#111，ADR-0032：策略算术的实现与测试同迁，不留双份）。
 
 // ===== OpenAI 清单过滤 =====
 

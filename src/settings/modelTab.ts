@@ -10,7 +10,8 @@ import { Notice, SecretComponent, type App } from "obsidian";
 import type { ModelProvider } from "../types";
 import { apiStyleOf } from "../core/apiStyle";
 import type { Translator } from "../i18n";
-import { AIClientError, testConnection } from "../ai/client";
+import { AIClientError, chatCompletion } from "../ai/client";
+import { modelTestRequest } from "./modelTest";
 import { describeAIError } from "../ai/errorMessage";
 import { runAndAnnounceThinkingTest } from "../ui/thinkingTestAction";
 import {
@@ -697,19 +698,23 @@ function renderCustomModelRow(
 			return;
 		}
 		new Notice(t("model.testing"));
-		void testConnection({
-			// 「测试」按当前方言发请求（#105）：测试通过即真实生成路径可用。
-			apiStyle: apiStyleOf(provider),
-			baseUrl: provider.baseUrl.trim(),
+		// 「测试」与生成共用装配（#111，ADR-0032）：事实按该行解析（行参数取输入框值），
+		// 与真实生成路径同源——测试通过 ⇔ 生成可用（带习得条目的行会发该行的思考参数）。
+		const request = modelTestRequest({
+			provider,
+			modelId,
+			maxTokens: parseIntSafe(maxInput.value),
 			apiKey:
 				provider.authType === "bearer"
 					? ctx.providers.secretValue(provider.apiKeySecretId)
 					: "",
-			model: modelId,
-			temperature: ctx.settings.temperature,
-			maxTokens: parseIntSafe(maxInput.value) ?? ctx.settings.maxTokens,
-			timeoutSeconds: ctx.settings.timeoutSeconds,
-		})
+			globals: {
+				temperature: ctx.settings.temperature,
+				maxTokens: ctx.settings.maxTokens,
+				timeoutSeconds: ctx.settings.timeoutSeconds,
+			},
+		});
+		void chatCompletion(request)
 			.then(() => {
 				new Notice(t("model.testPassed", { model: modelId }));
 			})

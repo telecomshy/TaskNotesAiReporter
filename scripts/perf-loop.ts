@@ -20,6 +20,7 @@ import { buildReportPrompt } from "../src/core/prompt";
 import { getReportRange } from "../src/core/dates";
 import { buildChatCompletionsUrl } from "../src/core/aiUrl";
 import { resolveThinking } from "../src/core/thinking";
+import { EMPTY_REQUEST_POLICY } from "../src/core/requestPolicy";
 import { fakeTaskRepository } from "../test/fakes/taskRepository";
 import { makeTask } from "../test/fakes/task";
 import type { TaskInfo } from "../src/types";
@@ -146,6 +147,7 @@ async function main(): Promise<void> {
 				maxTokens,
 				// chat 为桩，参数被桩吞掉；不夹带特定厂商的开关参数
 				thinking: { setting: "on", param: null, note: null, learned: null },
+				requestPolicy: EMPTY_REQUEST_POLICY,
 			},
 		}),
 		chat: async () => ({ content: "（桩）", hasReasoning: false }),

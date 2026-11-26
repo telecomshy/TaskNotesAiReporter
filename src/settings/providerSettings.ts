@@ -20,12 +20,10 @@ import type {
 	ThinkingResolution,
 	ThinkingSetting,
 } from "../types";
-import { apiStyleOf } from "../core/apiStyle";
-import { resolveRequestPolicy } from "../core/requestPolicy";
-import { resolveWireProtocol } from "../core/wireProtocol";
+import { resolveModelFacts } from "../ai/modelRequest";
 import {
-	resolveThinking,
 	thinkingDisplay,
+	thinkingFor,
 	unknownThinking,
 	type ThinkingDisplay,
 } from "../core/thinking";
@@ -68,18 +66,10 @@ export interface ProviderStateRead {
 // ===== 判定谓词 =====
 
 /**
- * 读取某个模型的「思考」解析结果：该模型的「思考开关」取值（缺省＝关）经能力层映射，
- * 请求参数与置灰标注一并带出（ADR-0024）。设置页与当前模型 解析共用这一个读面。
- * 能力层优先级（#89）：习得能力 ＞ 内置能力表 ＞ 未知——自定义供应商与预设同路（ADR-0026）。
+ * 「思考」解析读面（ADR-0024 / ADR-0026，实现见 core/thinking）：本模块原位 re-export，
+ * 既有调用方零改动（#111：实现挪 core 以断 ai ↔ settings 环）。
  */
-export function thinkingFor(provider: ModelProvider, model: string): ThinkingResolution {
-	return resolveThinking({
-		providerId: provider.id,
-		model,
-		setting: provider.thinkingByModel?.[model] ?? "off",
-		learned: provider.learnedByModel?.[model] ?? null,
-	});
-}
+export { thinkingFor } from "../core/thinking";
 
 /** 卡片状态：供应商是否「已配置」。预设看是否选了密钥；自定义看地址且有模型。 */
 export function isConfigured(provider: ModelProvider): boolean {
@@ -400,6 +390,10 @@ export function selectActiveModel(
 /**
  * 解析当前生效的模型配置；失败时给出原因。
  * 无认证（authType === "none"）的供应商不要求密钥值。
+ *
+ * 本函数只管**守卫 / 身份 / 密钥**：守卫语义与既有实现零变更；身份（baseUrl / apiKey / model）
+ * 是自己的产物；请求事实（方言 / 协议 / 思考 / 策略 / 行级额度）委托 `resolveModelFacts`
+ * （#111，ADR-0032）——事实与请求装配同源，不再在此手工投影。
  */
 export function resolveActive(
 	state: ProviderStateRead,
@@ -417,28 +411,18 @@ export function resolveActive(
 		return { ok: false, reason: "missing-credentials" };
 	}
 
-	const apiStyle = apiStyleOf(provider);
+	// 模型参数经 providerModels 读面取（预设恒空；自定义带出该行参数），作为事实解析的入参。
+	const facts = resolveModelFacts(
+		provider,
+		state.activeModel,
+		modelParams(provider, state.activeModel)
+	);
 	const config: ActiveModelConfig = {
-		// 「接口方言」（#105）：生成 / 测试 / 拉取清单全部按解析结果分派。
-		apiStyle,
-		// 「接口协议」（#110）：只属于 OpenAI 方言（ADR-0031）——Anthropic 永远 Messages，
-		// 不查协议表，配置里也不带该字段（避免「有值却被忽略」的误导）。
-		...(apiStyle === "openai"
-			? { protocol: resolveWireProtocol(provider.id, state.activeModel) }
-			: {}),
+		...facts,
 		baseUrl: provider.baseUrl,
 		apiKey,
 		model: state.activeModel,
-		// 「思考」解析（能力表映射 / 置灰标注）由纯模块产出（ADR-0024）；
-		// 自定义供应商与预设同路：能力表未命中即未知（ADR-0026）。
-		thinking: thinkingFor(provider, state.activeModel),
-		// 「模型请求策略」（#106）：与思考解析同路产出，执行层只消费（ADR-0030）。
-		requestPolicy: resolveRequestPolicy(provider.id, state.activeModel),
 	};
-	// 模型参数经 providerModels 读面取（预设恒空；自定义带出该行参数）。
-	const params = modelParams(provider, state.activeModel);
-	if (params.contextLength !== undefined) config.contextLength = params.contextLength;
-	if (params.maxTokens !== undefined) config.maxTokens = params.maxTokens;
 	return { ok: true, providerId: state.activeProviderId, config };
 }
 

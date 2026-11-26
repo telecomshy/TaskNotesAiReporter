@@ -5,8 +5,11 @@
  * RequestFn 提供，默认实现位于 transport.ts（包装 obsidian 的 requestUrl）。
  * 两个操作共享的请求机制（认证头 / JSON 内容类型 / 超时 / 错误映射）由 ./request
  * 的 requestJson 统一承担（#105：共享机制不因方言复制；方言只决定地址根与认证头，
- * 对话端点与报文形态由「接口协议」决定，#110）。OpenAI 兼容为缺省方言、
- * Chat Completions 为缺省协议，存量行为零变更。
+ * 对话端点与报文形态由「接口协议」决定，#110）。
+ *
+ * #111（ADR-0032）起本模块是**纯执行层**：入参是装配层（./modelRequest）定案后的
+ * `ModelRequest`（额度、温度、思考参数都已是最终值），这里只把它们放进报文、发出去、
+ * 读解析结果——不再 import 请求策略，不再做温度判定 / 下限 / 钳制。
  */
 
 import { requestUrlTransport } from "./transport";
@@ -16,79 +19,21 @@ import {
 	buildModelsUrl,
 	buildResponsesUrl,
 } from "../core/aiUrl";
-import { isAnthropic } from "../core/apiStyle";
-import { protocolOf } from "../core/wireProtocol";
-import {
-	EMPTY_REQUEST_POLICY,
-	effectiveMaxTokens,
-	effectiveTimeoutSeconds,
-	shouldSendTemperature,
-} from "../core/requestPolicy";
 import { probeOutcomeOfError, type ThinkingProbeOutcome } from "../core/thinking";
 import { AIClientError } from "./errors";
 import { requestJson, type RequestFn } from "./request";
-import type { ApiStyle, RequestPolicy, ThinkingParam, WireProtocol } from "../types";
+import type { ApiStyle, ChatMessage, ModelRequest, ThinkingParam } from "../types";
 
 export { AIClientError };
 export type { AIClientErrorCode, AIClientErrorDetails } from "./errors";
 export type { RequestFn, RequestParams, HttpResponse } from "./request";
-
-export interface ChatMessage {
-	role: "system" | "user" | "assistant";
-	content: string;
-}
-
-export interface AIClientConfig {
-	/** 「接口方言」（#105）：缺省 OpenAI 兼容（存量行为零变更）。 */
-	apiStyle?: ApiStyle;
-	/**
-	 * 「接口协议」（#110）：缺省 `chat-completions`；`responses` 换端点与报文形态（ADR-0031）。
-	 * 由当前模型解析带出，执行层只消费。
-	 */
-	protocol?: WireProtocol;
-	baseUrl: string;
-	apiKey: string;
-	model: string;
-	temperature: number;
-	maxTokens: number;
-	timeoutSeconds: number;
-	/** 思考开关参数（单键，一次只发一个，见 ADR-0024）；缺省不发思考参数。 */
-	thinking?: ThinkingParam;
-	/**
-	 * 「模型请求策略」（#106）：由当前模型解析带出，执行层只消费（ADR-0030）。
-	 * 缺省＝空策略（现状：`max_tokens` + 温度恒发 + 无下限）——自定义卡的「测试」不传策略。
-	 */
-	requestPolicy?: RequestPolicy;
-}
+export type { ChatMessage } from "../types";
 
 /** 一次对话的结果：正文 + 是否残留推理段（假关判定读面，见 ADR-0024）。 */
 export interface ChatResult {
 	content: string;
 	hasReasoning: boolean;
 }
-
-/** 思考测试微型请求的目标（#89）：微型请求自带提示与输出上限，不需要温度/上限配置。 */
-export interface ThinkingProbeConfig {
-	/** 「接口方言」（#105）：探测请求与基线同样按方言构造。 */
-	apiStyle?: ApiStyle;
-	/** 「接口协议」（#110）：Responses 走 `input` / `max_output_tokens` / `reasoning.effort`。 */
-	protocol?: WireProtocol;
-	/** 供应商 id（#106）：思考测试候选按它分派（内置 OpenAI 预设只探 reasoning_effort）。 */
-	providerId?: string;
-	baseUrl: string;
-	apiKey: string;
-	model: string;
-	timeoutSeconds: number;
-	/**
-	 * 「模型请求策略」（#106）：基线 / 逐字段探测与生成请求同一套构造规则
-	 * （不该发的温度不发、输出额度字段与超时下限生效）；预算恒 256、不受下限影响。
-	 */
-	requestPolicy?: RequestPolicy;
-}
-
-/** 思考测试微型请求的提示与输出上限（#89）：越小越省，够读出推理段读面即可。 */
-const THINKING_PROBE_PROMPT = "1+1=? Reply with the number only.";
-const THINKING_PROBE_MAX_TOKENS = 256;
 
 /**
  * Anthropic 方言固定版本头（#105）：随插件版本维护的常量。
@@ -124,7 +69,7 @@ export async function listModels(
 	config: ListModelsConfig,
 	request: RequestFn = defaultRequest
 ): Promise<string[]> {
-	if (isAnthropic(config.apiStyle)) return listAnthropicModels(config, request);
+	if (config.apiStyle === "anthropic") return listAnthropicModels(config, request);
 	return requestJson(
 		{
 			op: "models",
@@ -222,38 +167,130 @@ async function listAnthropicModels(
 	});
 }
 
+// ===== 报文构造（生成与微型探测共用同一套；装配已定案数值，这里只放字段） =====
+
+/** Chat Completions 变体（`dialect: openai` × `protocol: chat-completions`）。 */
+type ChatCompletionsRequest = Extract<
+	ModelRequest,
+	{ dialect: "openai"; protocol: "chat-completions" }
+>;
+/** Responses 变体（`dialect: openai` × `protocol: responses`）。 */
+type ResponsesRequest = Extract<ModelRequest, { dialect: "openai"; protocol: "responses" }>;
+/** Anthropic Messages 变体（无 protocol / 无温度）。 */
+type AnthropicRequest = Extract<ModelRequest, { dialect: "anthropic" }>;
+
+/** 报文里温度与思考参数的并入字段（两条 OpenAI 报文共用）。 */
+interface TemperatureAndThinking {
+	/** 缺席＝不发（装配已判死）。 */
+	temperature?: number;
+	thinking: ThinkingParam | null;
+}
+
 /**
- * 调用模型接口，返回生成正文与推理段读面。按「接口方言」与「接口协议」分派（#105 / #110）。
+ * 温度与思考参数的并入（两条 OpenAI 报文共用）：温度缺席＝装配已判死（不发）；
+ * 思考参数按类型表的单键并入顶层（一次只发一个，ADR-0024）。
+ */
+function applyTemperatureAndThinking(
+	body: Record<string, unknown>,
+	req: TemperatureAndThinking
+): void {
+	if (req.temperature !== undefined) body.temperature = req.temperature;
+	if (req.thinking) body[req.thinking.name] = req.thinking.value;
+}
+
+/** Chat Completions 报文：额度字段名由装配定案（`outputField`）。 */
+function chatCompletionsBody(req: ChatCompletionsRequest): Record<string, unknown> {
+	const body: Record<string, unknown> = {
+		model: req.model,
+		messages: req.messages,
+		[req.outputField]: req.maxTokens,
+		stream: false,
+	};
+	applyTemperatureAndThinking(body, req);
+	return body;
+}
+
+/**
+ * Responses 报文（#110，ADR-0031）：`input` 取代 `messages`、`max_output_tokens` 取代
+ * `max_completion_tokens`；温度与思考参数由装配后的请求字段决定。
+ *
+ * - `input` 复用 `ChatMessage[]`：官方迁移指南认定纯文本消息可一一对应（`system` 角色留在原位）；
+ * - `store: false`：纯文本单轮不需要会话状态，任务数据不因缺省而被上游保存；
+ * - 思考参数并入顶层后即 `reasoning: { effort }`（能力的 Responses 行以该形状给出）。
+ */
+function responsesBody(req: ResponsesRequest): Record<string, unknown> {
+	const body: Record<string, unknown> = {
+		model: req.model,
+		input: req.messages,
+		max_output_tokens: req.maxTokens,
+		stream: false,
+		store: false,
+	};
+	applyTemperatureAndThinking(body, req);
+	return body;
+}
+
+/**
+ * Anthropic 兼容报文（原生 Messages）：
+ * - `max_tokens` 必发、`messages` 只收 user/assistant、system 提升为顶层、`stream:false`；
+ * - **不发** `temperature` / `top_p` / `top_k`（`2026-10-21` 起已删除）；变体上没有该字段；
+ * - 思考开关参数并入请求体顶层（`thinking: {type:…}`，一次只发一个，见 ADR-0024）。
+ */
+function anthropicBody(req: AnthropicRequest): Record<string, unknown> {
+	const { system, turns } = splitSystemMessages(req.messages);
+	return {
+		model: req.model,
+		max_tokens: req.maxTokens,
+		messages: turns,
+		stream: false,
+		...(system !== "" ? { system } : {}),
+		...(req.thinking ? { [req.thinking.name]: req.thinking.value } : {}),
+	};
+}
+
+/** 把 system 消息合并为顶层 `system`（Anthropic 不接受 system 角色）。 */
+function splitSystemMessages(messages: ChatMessage[]): {
+	system: string;
+	turns: Array<{ role: "user" | "assistant"; content: string }>;
+} {
+	const system = messages
+		.filter((m) => m.role === "system")
+		.map((m) => m.content)
+		.join("\n\n");
+	const turns = messages
+		.filter((m): m is ChatMessage & { role: "user" | "assistant" } => m.role !== "system")
+		.map((m) => ({ role: m.role, content: m.content }));
+	return { system, turns };
+}
+
+// ===== 对话（生成） =====
+
+/**
+ * 调用模型接口，返回生成正文与推理段读面。按 `ModelRequest` 的 `dialect` × `protocol`
+ * 分派（#105 / #110）：报文构造只放字段，不判断策略。
  */
 export async function chatCompletion(
-	config: AIClientConfig,
-	messages: ChatMessage[],
+	req: ModelRequest,
 	request: RequestFn = defaultRequest
 ): Promise<ChatResult> {
-	if (isAnthropic(config.apiStyle)) {
-		return anthropicChatCompletion(config, messages, request);
-	}
-	if (protocolOf(config) === "responses") {
-		return responsesChatCompletion(config, messages, request);
-	}
+	if (req.dialect === "anthropic") return anthropicChatCompletion(req, request);
+	if (req.protocol === "responses") return responsesChatCompletion(req, request);
+	return chatCompletionsChatCompletion(req, request);
+}
+
+/** Chat Completions 的对话：正文＝`choices[0].message.content`，空值即空回复。 */
+function chatCompletionsChatCompletion(
+	req: ChatCompletionsRequest,
+	request: RequestFn
+): Promise<ChatResult> {
 	return requestJson(
 		{
 			op: "chat",
-			url: buildChatCompletionsUrl(config.baseUrl),
+			url: buildChatCompletionsUrl(req.baseUrl),
 			method: "POST",
-			apiKey: config.apiKey,
-			body: JSON.stringify(
-				chatCompletionsRequestBody({
-					model: config.model,
-					messages,
-					policy: policyOf(config),
-					thinking: config.thinking ?? null,
-					temperature: config.temperature,
-					// 额度字段名与预算下限随策略：OpenAI 预设发 max_completion_tokens。
-					maxTokens: effectiveMaxTokens(policyOf(config), config.maxTokens),
-				})
-			),
-			timeoutSeconds: effectiveTimeoutSeconds(policyOf(config), config.timeoutSeconds),
+			apiKey: req.apiKey,
+			body: JSON.stringify(chatCompletionsBody(req)),
+			timeoutSeconds: req.timeoutSeconds,
 		},
 		(json) => {
 			const data = json as {
@@ -269,104 +306,49 @@ export async function chatCompletion(
 }
 
 /**
- * 生成 / 微型探测共用的**中性输入**（#106 / #110）：额度、温度、思考参数先由策略定好，
- * 再由各协议的构造器放进出（Chat 的 `messages` / Responses 的 `input`）。
- * 策略规则只在上游一处生效，两条报文路径不会各算一遍。
- */
-interface WireRequest {
-	model: string;
-	messages: ChatMessage[];
-	policy: RequestPolicy;
-	/** 本次要发的思考参数；null＝不发（生成取能力的解析结果，探测取候选 / 基线）。 */
-	thinking: ThinkingParam | null;
-	/** 温度值（仅在策略允许时发出）。 */
-	temperature: number;
-	/** 已定好的输出额度（生成走下限与钳制，探测恒 256、不受下限影响）。 */
-	maxTokens: number;
-}
-
-function chatCompletionsRequestBody(input: WireRequest): Record<string, unknown> {
-	const body: Record<string, unknown> = {
-		model: input.model,
-		messages: input.messages,
-		[input.policy.outputField]: input.maxTokens,
-		stream: false,
-	};
-	applyPolicyFields(body, input);
-	return body;
-}
-
-/**
- * 策略决定的字段并入（Chat Completions 与 Responses 共用，#110）：温度按
- * 「策略 × 本次生效 effort」判定，思考参数按类型表的单键并入（一次只发一个，ADR-0024）。
- * 两条报文路径不各算一遍，策略规则不会分叉。
- */
-function applyPolicyFields(body: Record<string, unknown>, input: WireRequest): void {
-	// 温度判定输入是「策略 × 本次生效 effort」，不是用户的思考开关（ADR-0030）。
-	if (shouldSendTemperature(input.policy, input.thinking)) body.temperature = input.temperature;
-	// 思考开关参数并入请求体顶层（一次只发一个，见 ADR-0024）
-	if (input.thinking) body[input.thinking.name] = input.thinking.value;
-}
-
-/**
- * Responses 协议的请求体（#110，ADR-0031）：`input` 取代 `messages`、`max_output_tokens`
- * 取代 `max_completion_tokens`；温度与思考参数仍由同一套策略决定。
- *
- * - `input` 复用 `ChatMessage[]`：官方迁移指南认定纯文本消息可一一对应（`system` 角色留在原位）；
- * - `store: false`：纯文本单轮不需要会话状态，任务数据不因缺省而被上游保存；
- * - 思考参数并入顶层后即 `reasoning: { effort }`（能力的 Responses 行以该形状给出）。
- */
-function responsesRequestBody(input: WireRequest): Record<string, unknown> {
-	const body: Record<string, unknown> = {
-		model: input.model,
-		input: input.messages,
-		max_output_tokens: input.maxTokens,
-		stream: false,
-		store: false,
-	};
-	applyPolicyFields(body, input);
-	return body;
-}
-
-/** 请求策略的读取侧缺省：未带策略＝空策略（现状零变更，#106 裁决 4）。 */
-function policyOf(config: { requestPolicy?: RequestPolicy }): RequestPolicy {
-	return config.requestPolicy ?? EMPTY_REQUEST_POLICY;
-}
-
-/**
- * Responses 协议的对话（#110）：端点 `/responses`、请求体见 `responsesRequestBody`；
+ * Responses 协议的对话（#110）：端点 `/responses`、请求体见 `responsesBody`；
  * 正文＝`output[]` 里 message 项的 `output_text` 块拼接，`output` 不是数组 ⇒ 解析失败，
  * 正文为空（含「只推理、无正文」的 incomplete 态）⇒ 空回复。
  */
-function responsesChatCompletion(
-	config: AIClientConfig,
-	messages: ChatMessage[],
-	request: RequestFn
-): Promise<ChatResult> {
-	const policy = policyOf(config);
+function responsesChatCompletion(req: ResponsesRequest, request: RequestFn): Promise<ChatResult> {
 	return requestJson(
 		{
 			op: "chat",
-			url: buildResponsesUrl(config.baseUrl),
+			url: buildResponsesUrl(req.baseUrl),
 			method: "POST",
-			apiKey: config.apiKey,
-			body: JSON.stringify(
-				responsesRequestBody({
-					model: config.model,
-					messages,
-					policy,
-					thinking: config.thinking ?? null,
-					temperature: config.temperature,
-					maxTokens: effectiveMaxTokens(policy, config.maxTokens),
-				})
-			),
-			timeoutSeconds: effectiveTimeoutSeconds(policy, config.timeoutSeconds),
+			apiKey: req.apiKey,
+			body: JSON.stringify(responsesBody(req)),
+			timeoutSeconds: req.timeoutSeconds,
 		},
 		(json) => {
 			const content = responsesTextOf((json as { output?: unknown } | null)?.output);
 			if (content === null) throw new AIClientError("chat.parse");
 			if (content === "") throw new AIClientError("chat.empty");
 			return { content, hasReasoning: detectResponsesReasoning(json) };
+		},
+		request
+	);
+}
+
+/** Anthropic 方言的对话：认证 `x-api-key` + 固定版本头，报文见 `anthropicBody`。 */
+function anthropicChatCompletion(req: AnthropicRequest, request: RequestFn): Promise<ChatResult> {
+	return requestJson(
+		{
+			op: "chat",
+			url: buildMessagesUrl(req.baseUrl),
+			method: "POST",
+			apiKey: req.apiKey,
+			authHeader: "x-api-key",
+			extraHeaders: anthropicHeaders(),
+			body: JSON.stringify(anthropicBody(req)),
+			timeoutSeconds: req.timeoutSeconds,
+		},
+		(json) => {
+			const body = json as { content?: unknown } | null;
+			const content = anthropicTextOf(body?.content);
+			if (content === null) throw new AIClientError("chat.parse");
+			if (content === "") throw new AIClientError("chat.empty");
+			return { content, hasReasoning: detectAnthropicReasoning(body) };
 		},
 		request
 	);
@@ -412,51 +394,6 @@ function detectResponsesReasoning(data: unknown): boolean {
 }
 
 /**
- * Anthropic 兼容（原生 Messages，`POST /messages`）：
- * - 认证 `x-api-key` + 固定版本头，不发 `Authorization`；
- * - 请求体发 `model` / `max_tokens` / `messages`（仅 user/assistant）/ 顶层 `system` /
- *   `stream:false`，**不发** `temperature` / `top_p` / `top_k`（`2026-10-21` 起已删除）；
- * - 正文＝`content[]` 中所有 `text` 块拼接；非补全形态 ⇒ 解析失败；正文为空 ⇒ 空回复。
- */
-function anthropicChatCompletion(
-	config: AIClientConfig,
-	messages: ChatMessage[],
-	request: RequestFn
-): Promise<ChatResult> {
-	const { system, turns } = splitSystemMessages(messages);
-	return requestJson(
-		{
-			op: "chat",
-			url: buildMessagesUrl(config.baseUrl),
-			method: "POST",
-			apiKey: config.apiKey,
-			authHeader: "x-api-key",
-			extraHeaders: anthropicHeaders(),
-			body: JSON.stringify({
-				model: config.model,
-				// 输出额度随策略（当前 Anthropic 无策略行＝空策略，行为与现状一致）；
-				// 温度不随策略加回——`2026-10-21` 起 Anthropic 已删除该参数（ADR-0030 分层）。
-				max_tokens: effectiveMaxTokens(policyOf(config), config.maxTokens),
-				messages: turns,
-				stream: false,
-				...(system !== "" ? { system } : {}),
-				// 思考开关参数并入请求体顶层（`thinking: {type:…}`，一次只发一个，见 ADR-0024）
-				...(config.thinking ? { [config.thinking.name]: config.thinking.value } : {}),
-			}),
-			timeoutSeconds: effectiveTimeoutSeconds(policyOf(config), config.timeoutSeconds),
-		},
-		(json) => {
-			const body = json as { content?: unknown } | null;
-			const content = anthropicTextOf(body?.content);
-			if (content === null) throw new AIClientError("chat.parse");
-			if (content === "") throw new AIClientError("chat.empty");
-			return { content, hasReasoning: detectAnthropicReasoning(body) };
-		},
-		request
-	);
-}
-
-/**
  * Anthropic `content[]` 的正文读面：所有 `text` 块拼接；`content` 不是数组返回 `null`
  * （＝非对话补全形态，解析失败），空数组或全空文本返回 `""`（＝空回复）。
  */
@@ -468,21 +405,6 @@ function anthropicTextOf(content: unknown): string | null {
 			return b?.type === "text" && typeof b.text === "string" ? b.text : "";
 		})
 		.join("");
-}
-
-/** 把 system 消息合并为顶层 `system`（Anthropic 不接受 system 角色）。 */
-function splitSystemMessages(messages: ChatMessage[]): {
-	system: string;
-	turns: Array<{ role: "user" | "assistant"; content: string }>;
-} {
-	const system = messages
-		.filter((m) => m.role === "system")
-		.map((m) => m.content)
-		.join("\n\n");
-	const turns = messages
-		.filter((m): m is ChatMessage & { role: "user" | "assistant" } => m.role !== "system")
-		.map((m) => ({ role: m.role, content: m.content }));
-	return { system, turns };
 }
 
 /**
@@ -520,18 +442,20 @@ function detectChatCompletionsReasoning(data: unknown): boolean {
 	return typeof reasoningTokens === "number" && reasoningTokens > 0;
 }
 
+// ===== 微型探测（思考测试） =====
+
 /**
  * 思考测试微型请求（#89）：只读「响应推理段读面」（唯一证据，不认 HTTP 200）。
  * 空正文不算失败（思考模型可能把输出额度花在推理段上）；
  * 错误按 `probeOutcomeOfError` 归类——测试内 400＝字段不适用（探测信号），其余异常＝中断。
+ * 请求本身由装配层逐步给出（预算恒 256、参数逐字段变化）。
  */
 export async function thinkingProbe(
-	config: ThinkingProbeConfig,
-	param: ThinkingParam | null,
+	req: ModelRequest,
 	request: RequestFn = defaultRequest
 ): Promise<ThinkingProbeOutcome> {
 	try {
-		const hasReasoning = await probeHasReasoning(config, param, request);
+		const hasReasoning = await probeHasReasoning(req, request);
 		return hasReasoning ? "reasoning-present" : "reasoning-absent";
 	} catch (error) {
 		const status =
@@ -543,41 +467,27 @@ export async function thinkingProbe(
 }
 
 /** 探测请求按方言 / 协议分派（#105 / #110）：Anthropic 的读面与两种 OpenAI 形态各自独立。 */
-function probeHasReasoning(
-	config: ThinkingProbeConfig,
-	param: ThinkingParam | null,
-	request: RequestFn
-): Promise<boolean> {
-	if (isAnthropic(config.apiStyle)) return anthropicThinkingProbe(config, param, request);
-	if (protocolOf(config) === "responses") return responsesThinkingProbe(config, param, request);
-	return openaiThinkingProbe(config, param, request);
+function probeHasReasoning(req: ModelRequest, request: RequestFn): Promise<boolean> {
+	if (req.dialect === "anthropic") return anthropicThinkingProbe(req, request);
+	if (req.protocol === "responses") return responsesThinkingProbe(req, request);
+	return openaiThinkingProbe(req, request);
 }
 
-/** OpenAI 方言的微型请求：与生成请求共用同一个请求体构造（温度规则 / 额度字段），预算恒 256。 */
+/**
+ * OpenAI 方言的微型请求：与生成请求共用同一个报文构造（温度 / 额度字段），预算已由装配定为 256。
+ */
 function openaiThinkingProbe(
-	config: ThinkingProbeConfig,
-	param: ThinkingParam | null,
+	req: ChatCompletionsRequest,
 	request: RequestFn
 ): Promise<boolean> {
-	const policy = policyOf(config);
 	return requestJson(
 		{
 			op: "chat",
-			url: buildChatCompletionsUrl(config.baseUrl),
+			url: buildChatCompletionsUrl(req.baseUrl),
 			method: "POST",
-			apiKey: config.apiKey,
-			body: JSON.stringify(
-				chatCompletionsRequestBody({
-					model: config.model,
-					messages: [{ role: "user", content: THINKING_PROBE_PROMPT }],
-					policy,
-					thinking: param,
-					temperature: 0,
-					// 探测预算恒定 256，不受 25k 下限影响（不烧钱，#106 裁决 7）。
-					maxTokens: THINKING_PROBE_MAX_TOKENS,
-				})
-			),
-			timeoutSeconds: effectiveTimeoutSeconds(policy, config.timeoutSeconds),
+			apiKey: req.apiKey,
+			body: JSON.stringify(chatCompletionsBody(req)),
+			timeoutSeconds: req.timeoutSeconds,
 		},
 		(json) => {
 			// 200 不算证据（AC2）：响应体不是对话补全体（如错误体回 200）时读面不可信，
@@ -593,33 +503,19 @@ function openaiThinkingProbe(
 }
 
 /**
- * Responses 协议的微型请求（#110）：与生成共用同一请求构造（温度规则 / 额度 / store:false），
- * 预算恒 256（不受 25k 下限影响）；`output` 不是数组 ⇒ 解析失败（200 不是证据），
+ * Responses 协议的微型请求（#110）：与生成共用同一报文构造（温度 / 额度 / store:false），
+ * 预算已由装配定为 256；`output` 不是数组 ⇒ 解析失败（200 不是证据），
  * 否则按 reasoning 项 / usage 读面判定。
  */
-function responsesThinkingProbe(
-	config: ThinkingProbeConfig,
-	param: ThinkingParam | null,
-	request: RequestFn
-): Promise<boolean> {
-	const policy = policyOf(config);
+function responsesThinkingProbe(req: ResponsesRequest, request: RequestFn): Promise<boolean> {
 	return requestJson(
 		{
 			op: "chat",
-			url: buildResponsesUrl(config.baseUrl),
+			url: buildResponsesUrl(req.baseUrl),
 			method: "POST",
-			apiKey: config.apiKey,
-			body: JSON.stringify(
-				responsesRequestBody({
-					model: config.model,
-					messages: [{ role: "user", content: THINKING_PROBE_PROMPT }],
-					policy,
-					thinking: param,
-					temperature: 0,
-					maxTokens: THINKING_PROBE_MAX_TOKENS,
-				})
-			),
-			timeoutSeconds: effectiveTimeoutSeconds(policy, config.timeoutSeconds),
+			apiKey: req.apiKey,
+			body: JSON.stringify(responsesBody(req)),
+			timeoutSeconds: req.timeoutSeconds,
 		},
 		(json) => {
 			const payload = json as { output?: unknown } | null;
@@ -631,27 +527,17 @@ function responsesThinkingProbe(
 }
 
 /** Anthropic 方言的微型请求：不发温度（已删除），`max_tokens` 必发，读面 = content[] / thinking_tokens。 */
-function anthropicThinkingProbe(
-	config: ThinkingProbeConfig,
-	param: ThinkingParam | null,
-	request: RequestFn
-): Promise<boolean> {
+function anthropicThinkingProbe(req: AnthropicRequest, request: RequestFn): Promise<boolean> {
 	return requestJson(
 		{
 			op: "chat",
-			url: buildMessagesUrl(config.baseUrl),
+			url: buildMessagesUrl(req.baseUrl),
 			method: "POST",
-			apiKey: config.apiKey,
+			apiKey: req.apiKey,
 			authHeader: "x-api-key",
 			extraHeaders: anthropicHeaders(),
-			body: JSON.stringify({
-				model: config.model,
-				max_tokens: THINKING_PROBE_MAX_TOKENS,
-				messages: [{ role: "user", content: THINKING_PROBE_PROMPT }],
-				stream: false,
-				...(param ? { [param.name]: param.value } : {}),
-			}),
-			timeoutSeconds: effectiveTimeoutSeconds(policyOf(config), config.timeoutSeconds),
+			body: JSON.stringify(anthropicBody(req)),
+			timeoutSeconds: req.timeoutSeconds,
 		},
 		(json) => {
 			const content = (json as { content?: unknown } | null)?.content;
@@ -660,12 +546,4 @@ function anthropicThinkingProbe(
 		},
 		request
 	);
-}
-
-/** 测试连接：发送一条极简请求以校验配置是否可用。 */
-export async function testConnection(
-	config: AIClientConfig,
-	request: RequestFn = defaultRequest
-): Promise<void> {
-	await chatCompletion(config, [{ role: "user", content: "ping" }], request);
 }

@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 import { runThinkingTestFlow, type ThinkingTestStateSlice } from "../src/ai/thinkingTest";
 import type { HttpResponse, RequestFn, RequestParams } from "../src/ai/request";
 import type { ActiveModelResolution, LearnedCapability } from "../src/types";
+import { EMPTY_REQUEST_POLICY } from "../src/core/requestPolicy";
 import { runAndAnnounceThinkingTest } from "../src/ui/thinkingTestAction";
 import { BUNDLES, createTranslator } from "../src/i18n";
 import { notices } from "./fakes/obsidian-stub";
@@ -71,6 +72,7 @@ function activeResolution(): ActiveModelResolution {
 			apiKey: "sk",
 			model: "model-y",
 			thinking: { setting: "off", param: null, note: null, learned: null },
+			requestPolicy: EMPTY_REQUEST_POLICY,
 		},
 	};
 }
@@ -126,6 +128,7 @@ function anthropicResolution(): ActiveModelResolution {
 				note: null,
 				learned: null,
 			},
+			requestPolicy: EMPTY_REQUEST_POLICY,
 		},
 	};
 }
@@ -260,6 +263,7 @@ test("Responses 协议（#110）：探嵌套 reasoning.effort、请求 /response
 			apiKey: "sk",
 			model: "gpt-5.5-pro",
 			thinking: { setting: "off", param: null, note: "unknown", learned: null },
+			requestPolicy: EMPTY_REQUEST_POLICY,
 		},
 	});
 	const result = await runThinkingTestFlow(slice, 5, false, request);

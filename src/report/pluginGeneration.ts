@@ -31,7 +31,7 @@ export interface PluginGenerationDeps {
 	providers: { resolveActive(): ActiveModelResolution };
 	/** 界面打开时已打开的仓库；生成期间沿用它，不重判 来源缺失（#45 / #49 修订一）。 */
 	repository: TaskRepository;
-	/** 可注入传输缝（测试用）；缺省：chatCompletion 包装（单条 user 消息）。 */
+	/** 可注入传输缝（测试用）；缺省：chatCompletion 包装（请求已由装配层定案）。 */
 	chat?: GenerateDeps["chat"];
 	/** 可注入保存缝（测试用）；缺省：saveReport(app, …)。 */
 	save?: GenerateDeps["save"];
@@ -64,7 +64,7 @@ export function createPluginGeneration(deps: PluginGenerationDeps): GenerateEntr
 		resolveModel: () => deps.providers.resolveActive(),
 		chat:
 			deps.chat ??
-			((prompt, config) => chatCompletion(config, [{ role: "user", content: prompt }])),
+			((request) => chatCompletion(request)),
 		save:
 			deps.save ??
 			((folder, range, content, templateName) =>

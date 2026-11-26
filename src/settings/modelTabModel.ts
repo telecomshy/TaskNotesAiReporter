@@ -2,7 +2,7 @@
  * 「模型配置」Tab 的卡级 view-model（#100，架构候选 2 step 2）：
  * 领域规则——count 显隐、stale / active 标记、当前模型下拉的分组与孤儿判定——
  * 收进纯函数；modelTab.ts 只剩渲染接线（provider 对象留在视图侧，供密钥控件 /
- * 命令 / testConnection 使用，本模块不重复携带 providerId）。
+ * 命令 / 模型测试请求使用，本模块不重复携带 providerId）。
  *
  * 纯函数，无 DOM、无 obsidian。初始帧 `activeModelInfo()` 只调一次（renderModelTab 顶部），
  * 结果传两个投影：`providerCardModel`（供应商卡）与 `activeModelCardModel`（当前模型卡）；

@@ -10,9 +10,9 @@ import {
 } from "../src/report/generate";
 import { fakeTaskRepository } from "./fakes/taskRepository";
 import { makeTask } from "./fakes/task";
-import type { AIClientConfig } from "../src/ai/client";
+import type { DateRange, ModelRequest } from "../src/types";
+import { EMPTY_REQUEST_POLICY } from "../src/core/requestPolicy";
 import { AIClientError } from "../src/ai/errors";
-import type { DateRange } from "../src/types";
 
 function baseSettings(over: Partial<GenerateSettings> = {}): GenerateSettings {
 	return {
@@ -42,7 +42,7 @@ function baseIntent(over: Partial<GenerateIntent> = {}): GenerateIntent {
 
 interface Captured {
 	prompt: string;
-	chatConfig: AIClientConfig;
+	chatRequest: ModelRequest;
 	saved: { folder: string; range: DateRange; content: string; templateName?: string };
 }
 
@@ -62,11 +62,12 @@ function setup(
 				apiKey: "sk",
 				model: "m",
 				thinking: { setting: "off", param: null, note: "unknown", learned: null },
+				requestPolicy: EMPTY_REQUEST_POLICY,
 			},
 		}),
-		chat: async (prompt, config) => {
-			captured.prompt = prompt;
-			captured.chatConfig = config;
+		chat: async (request) => {
+			captured.prompt = request.messages[0].content;
+			captured.chatRequest = request;
 			return { content: "生成的报告正文", hasReasoning: false };
 		},
 		save: async (folder, range, content, templateName) => {
@@ -154,31 +155,6 @@ test("时间范围：无日期回退到本周（now 注入）", async () => {
 	assert.deepEqual(captured.saved?.range, { start: "2026-08-31", end: "2026-09-06" });
 });
 
-test("模型参数回退：该模型自带上限优先", async () => {
-	const { deps, captured } = setup({
-		resolveModel: () => ({
-			ok: true,
-			providerId: "p",
-			config: {
-				apiStyle: "openai",
-				baseUrl: "https://x",
-				apiKey: "k",
-				model: "m",
-				maxTokens: 4096,
-				thinking: { setting: "on", param: null, note: null, learned: null },
-			},
-		}),
-	});
-	await createGeneration(deps)(baseIntent());
-	assert.equal(captured.chatConfig?.maxTokens, 4096);
-});
-
-test("模型参数回退：无自带上限用全局（设置查询）", async () => {
-	const { deps, captured } = setup();
-	await createGeneration(deps)(baseIntent());
-	assert.equal(captured.chatConfig?.maxTokens, 8192);
-});
-
 test("装配在 module 内：报告语言与生成参数取自设置查询（#49 修订三）", async () => {
 	const { deps, captured } = setup({
 		settings: () =>
@@ -191,9 +167,6 @@ test("装配在 module 内：报告语言与生成参数取自设置查询（#49
 	});
 	await createGeneration(deps)(baseIntent());
 	assert.ok(captured.prompt?.trimEnd().endsWith("输出语言：English。"));
-	assert.equal(captured.chatConfig?.temperature, 0.2);
-	assert.equal(captured.chatConfig?.maxTokens, 1111);
-	assert.equal(captured.chatConfig?.timeoutSeconds, 7);
 });
 
 test("模板名随保存一起交出：与文件名同源（#55）", async () => {
@@ -289,8 +262,11 @@ const thinkingOffParam = {
 	learned: null,
 };
 
-test("思考参数透传：当前模型的思考参数随 chat 配置交出（界面不拼参数）", async () => {
-	const { deps, captured } = setup({
+// 思考参数 / 请求策略 / 接口协议的「逐字段交接」已不存在（生成层只交装配好的 ModelRequest，
+// 见 src/ai/modelRequest 与 test/modelRequest.test.ts；#111，ADR-0032）。
+
+test("假关告警：设关发参而响应仍带推理段 → 成功结果带 fakeOff", async () => {
+	const { deps } = setup({
 		resolveModel: () => ({
 			ok: true,
 			providerId: "p",
@@ -300,63 +276,8 @@ test("思考参数透传：当前模型的思考参数随 chat 配置交出（�
 				apiKey: "sk",
 				model: "m",
 				thinking: thinkingOffParam,
+				requestPolicy: EMPTY_REQUEST_POLICY,
 			},
-		}),
-	});
-	await createGeneration(deps)(baseIntent());
-	assert.deepEqual(captured.chatConfig?.thinking, { name: "thinking", value: { type: "disabled" } });
-});
-
-test("请求策略透传（#106）：当前模型解析出的策略随 chat 配置交出（生成层不判断供应商）", async () => {
-	const policy = {
-		outputField: "max_completion_tokens" as const,
-		temperature: "omit-unless-none" as const,
-		minMaxTokens: 25000,
-		minTimeoutSeconds: 120,
-	};
-	const { deps, captured } = setup({
-		resolveModel: () => ({
-			ok: true,
-			providerId: "openai",
-			config: {
-				apiStyle: "openai",
-				baseUrl: "https://api.openai.com/v1",
-				apiKey: "sk",
-				model: "gpt-5.6-sol",
-				thinking: { setting: "off", param: null, note: null, learned: null },
-				requestPolicy: policy,
-			},
-		}),
-	});
-	await createGeneration(deps)(baseIntent());
-	assert.deepEqual(captured.chatConfig?.requestPolicy, policy);
-});
-
-test("接口协议透传（#110）：Responses-only 模型的协议随 chat 配置交出（生成层不判断模型）", async () => {
-	const { deps, captured } = setup({
-		resolveModel: () => ({
-			ok: true,
-			providerId: "openai",
-			config: {
-				apiStyle: "openai",
-				protocol: "responses",
-				baseUrl: "https://api.openai.com/v1",
-				apiKey: "sk",
-				model: "gpt-5.5-pro",
-				thinking: { setting: "off", param: null, note: "unknown", learned: null },
-			},
-		}),
-	});
-	await createGeneration(deps)(baseIntent());
-	assert.equal(captured.chatConfig?.protocol, "responses");
-});
-
-test("假关告警：设关发参而响应仍带推理段 → 成功结果带 fakeOff", async () => {
-	const { deps } = setup({
-		resolveModel: () => ({
-			ok: true,
-			providerId: "p",
-			config: { apiStyle: "openai", baseUrl: "https://api.example.com", apiKey: "sk", model: "m", thinking: thinkingOffParam },
 		}),
 		chat: async () => ({ content: "生成的报告正文", hasReasoning: true }),
 	});
@@ -376,6 +297,7 @@ test("假关不误报：未发参数（强制思考）或响应无推理段 → 
 				apiKey: "sk",
 				model: "m",
 				thinking: { setting: "off", param: null, note: "forced", learned: null },
+				requestPolicy: EMPTY_REQUEST_POLICY,
 			},
 		}),
 		chat: async () => ({ content: "正文", hasReasoning: true }),
@@ -387,7 +309,14 @@ test("假关不误报：未发参数（强制思考）或响应无推理段 → 
 		resolveModel: () => ({
 			ok: true,
 			providerId: "p",
-			config: { apiStyle: "openai", baseUrl: "https://api.example.com", apiKey: "sk", model: "m", thinking: thinkingOffParam },
+			config: {
+				apiStyle: "openai",
+				baseUrl: "https://api.example.com",
+				apiKey: "sk",
+				model: "m",
+				thinking: thinkingOffParam,
+				requestPolicy: EMPTY_REQUEST_POLICY,
+			},
 		}),
 		chat: async () => ({ content: "正文", hasReasoning: false }),
 	});
@@ -406,24 +335,4 @@ test("400 拒收归 ai-error 上浮、不降级重试：chat 恰好调用一次"
 	const result = failure(await createGeneration(deps)(baseIntent()));
 	assert.equal(result.reason, "ai-error");
 	assert.equal(calls, 1);
-});
-
-test("生成请求带出「接口方言」（#105）：解析为 anthropic 时下传 apiStyle", async () => {
-	const { deps, captured } = setup({
-		resolveModel: () => ({
-			ok: true,
-			providerId: "anthropic",
-			config: {
-				apiStyle: "anthropic",
-				baseUrl: "https://api.anthropic.com/v1",
-				apiKey: "sk-ant",
-				model: "claude-sonnet-4-6",
-				thinking: { setting: "off", param: null, note: null, learned: null },
-			},
-		}),
-	});
-	const result = await createGeneration(deps)(baseIntent());
-	assert.equal(result.ok, true);
-	assert.equal(captured.chatConfig?.apiStyle, "anthropic");
-	assert.equal(captured.chatConfig?.baseUrl, "https://api.anthropic.com/v1");
 });

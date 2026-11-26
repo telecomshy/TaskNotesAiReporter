@@ -2,15 +2,21 @@
  * 思考测试（#89）：HTTP 薄壳 + 流程编排。
  * 判定与习得条目由 core/thinking 纯状态机产出，本层不裁决（#86 决定）。
  * 「中断」时 entry 为 null——调用方据此不留结论、测试入口保持可点。
+ *
+ * #111（ADR-0032）起探测请求由装配层逐步给出（`assembleProbeRequest`）：
+ * 预算恒 256、超时吃下限、param 并入覆盖事实思考、候选分派收进装配缝。
  */
 
-import { startThinkingTest, stepThinkingTest, thinkingOffCandidates } from "../core/thinking";
+import { startThinkingTest, stepThinkingTest } from "../core/thinking";
+import { assembleProbeRequest, probeOffCandidates } from "./modelRequest";
 import type {
 	ActiveModelResolution,
 	LearnedCapability,
+	ModelFacts,
+	RequestTarget,
 	ThinkingTestVerdict,
 } from "../types";
-import { thinkingProbe, type RequestFn, type ThinkingProbeConfig } from "./client";
+import { thinkingProbe, type RequestFn } from "./client";
 
 /** 一次思考测试的结论（#89）：四值判定 + 习得条目（「中断」不落条目）。 */
 export interface ThinkingTestResult {
@@ -18,19 +24,31 @@ export interface ThinkingTestResult {
 	entry: LearnedCapability | null;
 }
 
+/** 一次思考测试的输入：目标 + 事实（同一份解析产物）+ 供应商 id（候选分派用）+ 超时。 */
+export interface ThinkingTestInput {
+	target: RequestTarget;
+	facts: ModelFacts;
+	/** 候选分派按供应商 id（#106）：只有内置 OpenAI 预设收窄到 reasoning_effort。 */
+	providerId: string;
+	timeoutSeconds: number;
+}
+
 /** 跑一次完整思考测试：基线微型请求 → 逐字段探测 → 四值判定。 */
 export async function runThinkingTest(
-	config: ThinkingProbeConfig,
+	input: ThinkingTestInput,
 	request?: RequestFn
 ): Promise<ThinkingTestResult> {
-	// 候选按（接口方言, 供应商 id, 接口协议）取（#105 / #106 / #110）：OpenAI 预设按协议只探
-	// `reasoning_effort`（Chat）或 `reasoning.effort`（Responses），Anthropic 只探自己的关字段，
-	// 其余 OpenAI 方言保持三字段。
-	let { state, action } = startThinkingTest(
-		thinkingOffCandidates(config.apiStyle, config.providerId, config.protocol)
-	);
+	// 候选按（接口方言, 供应商 id, 接口协议）取（#105 / #106 / #110）：分派收进装配缝。
+	let { state, action } = startThinkingTest(probeOffCandidates(input.facts, input.providerId));
 	while (action.kind === "probe") {
-		const outcome = await thinkingProbe(config, action.param, request);
+		// 状态机照旧拥有「基线 → 逐字段 → 四值判定」循环；每步现装配一次（ADR-0032）。
+		const probe = assembleProbeRequest({
+			target: input.target,
+			facts: input.facts,
+			timeoutSeconds: input.timeoutSeconds,
+			param: action.param,
+		});
+		const outcome = await thinkingProbe(probe, request);
 		({ state, action } = stepThinkingTest(state, outcome));
 	}
 	return { verdict: action.verdict, entry: action.entry };
@@ -62,22 +80,17 @@ export async function runThinkingTestFlow(
 	const resolved = slice.resolveActive();
 	if (!resolved.ok) return null;
 	const providerId = resolved.providerId;
-	const model = resolved.config.model;
+	const config = resolved.config;
+	const model = config.model;
 	if (retest) slice.clearLearnedThinking(providerId, model);
 	const result = await runThinkingTest(
 		{
-			// 探测请求同样按方言构造（#105）：地址 / 认证头 / 请求体 / 响应读面随解析结果走。
-			apiStyle: resolved.config.apiStyle,
-			// 探测再按协议分派（#110）：Responses 的开关是嵌套 `reasoning.effort`，读面是 `output[]`。
-			protocol: resolved.config.protocol,
+			// 目标与事实是同一份解析产物的两半：探测按方言 / 协议构造（#105 / #110）。
+			target: { baseUrl: config.baseUrl, apiKey: config.apiKey, model },
+			facts: config,
 			// 候选分派按供应商 id（#106）：只有内置 OpenAI 预设收窄到 reasoning_effort。
 			providerId,
-			baseUrl: resolved.config.baseUrl,
-			apiKey: resolved.config.apiKey,
-			model,
 			timeoutSeconds,
-			// 「模型请求策略」同样随解析结果带出：基线与逐字段都服从它（#106 裁决 33）。
-			requestPolicy: resolved.config.requestPolicy,
 		},
 		request
 	);

@@ -11,6 +11,7 @@ import type { ApiStyle, WireProtocol } from "../types";
 import { resolveApiStyle } from "./apiStyle";
 import type {
 	LearnedCapability,
+	ModelProvider,
 	ThinkingParam,
 	ThinkingResolution,
 	ThinkingSetting,
@@ -197,6 +198,23 @@ export function resolveThinking(
 	if (setting === "off") return { setting, param: cap.off, note: null, learned: null };
 	if (setting === "on" && cap.on) return { setting, param: cap.on, note: null, learned: null };
 	return { setting, param: null, note: null, learned: null };
+}
+
+/**
+ * 读取某个模型的「思考」解析结果：该模型的「思考开关」取值（缺省＝关）经能力层映射，
+ * 请求参数与置灰标注一并带出（ADR-0024）。设置页与当前模型 解析共用这一个读面。
+ * 能力层优先级（#89）：习得能力 ＞ 内置能力表 ＞ 未知——自定义供应商与预设同路（ADR-0026）。
+ *
+ * #111 起本函数落在 core：请求装配（ai/modelRequest）要读它，而 ai 不得依赖 settings 侧模块
+ * （ADR-0032 防环）；settings/providerSettings 原位 re-export，既有调用方零改动。
+ */
+export function thinkingFor(provider: ModelProvider, model: string): ThinkingResolution {
+	return resolveThinking({
+		providerId: provider.id,
+		model,
+		setting: provider.thinkingByModel?.[model] ?? "off",
+		learned: provider.learnedByModel?.[model] ?? null,
+	});
 }
 
 /**

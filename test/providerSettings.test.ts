@@ -263,96 +263,7 @@ test("setProviderApiStyle：供应商不存在时不动", () => {
 	assert.equal(s.providers[0].apiStyle, undefined);
 });
 
-test("resolveActive 带出方言：存量缺 apiStyle 读作 OpenAI 兼容", () => {
-	const p = provider({ id: "p", type: "preset", apiKeySecretId: "k", models: ["m"] });
-	const s = state({ providers: [p], activeProviderId: "p", activeModel: "m" });
-	const result = resolveActive(s, () => "sk");
-	assert.equal(result.ok && result.config.apiStyle, "openai", "缺 apiStyle 的存量数据读作 OpenAI 兼容");
-});
-
-test("resolveActive 带出方言：Anthropic 供应商解析为 anthropic（调用方不各自判断）", () => {
-	const p = provider({
-		id: "c",
-		type: "custom",
-		baseUrl: "https://gateway.example.com/v1",
-		apiStyle: "anthropic",
-		authType: "none",
-		customModels: [{ id: "mc1", modelId: "claude-sonnet-4-6" }],
-	});
-	const s = state({ providers: [p], activeProviderId: "c", activeModel: "claude-sonnet-4-6" });
-	const result = resolveActive(s, () => null);
-	assert.equal(result.ok && result.config.apiStyle, "anthropic");
-});
-
-test("resolveActive 带出请求策略（#106）：OpenAI 预设按模型族解析，其它供应商空策略", () => {
-	const openai = provider({
-		id: "openai",
-		type: "preset",
-		baseUrl: "https://api.openai.com/v1",
-		apiKeySecretId: "tnar-openai",
-		models: ["gpt-6.2-astra"],
-	});
-	const s = state({ providers: [openai], activeProviderId: "openai", activeModel: "gpt-6.2-astra" });
-	const result = resolveActive(s, () => "sk");
-	assert.deepEqual(result.ok && result.config.requestPolicy, {
-		outputField: "max_completion_tokens",
-		temperature: "omit-always",
-		minMaxTokens: 25000,
-		minTimeoutSeconds: 120,
-	});
-
-	const qwen = provider({ id: "qwen", type: "preset", apiKeySecretId: "k", models: ["qwen3.8-max"] });
-	const qs = state({ providers: [qwen], activeProviderId: "qwen", activeModel: "qwen3.8-max" });
-	const qresult = resolveActive(qs, () => "sk");
-	assert.deepEqual(qresult.ok && qresult.config.requestPolicy, {
-		outputField: "max_tokens",
-		temperature: "send",
-		minMaxTokens: 0,
-		minTimeoutSeconds: 0,
-	});
-});
-
-test("resolveActive 带出接口协议（#110）：Responses-only 模型走 responses，Chat 模型与其它供应商走 chat-completions", () => {
-	const openai = provider({
-		id: "openai",
-		type: "preset",
-		baseUrl: "https://api.openai.com/v1",
-		apiKeySecretId: "tnar-openai",
-		models: ["gpt-5.5-pro", "gpt-6.2-astra"],
-	});
-	const pro = resolveActive(
-		state({ providers: [openai], activeProviderId: "openai", activeModel: "gpt-5.5-pro" }),
-		() => "sk"
-	);
-	assert.equal(pro.ok && pro.config.protocol, "responses");
-
-	const cresult = resolveActive(
-		state({ providers: [openai], activeProviderId: "openai", activeModel: "gpt-6.2-astra" }),
-		() => "sk"
-	);
-	assert.equal(cresult.ok && cresult.config.protocol, "chat-completions", "Chat 可用的模型保持 Chat");
-
-	const deepseek = provider({ id: "deepseek", type: "preset", apiKeySecretId: "k", models: ["gpt-5.5-pro"] });
-	const ds = resolveActive(
-		state({ providers: [deepseek], activeProviderId: "deepseek", activeModel: "gpt-5.5-pro" }),
-		() => "sk"
-	);
-	assert.equal(ds.ok && ds.config.protocol, "chat-completions", "不按模型名嗅探官方端点");
-
-	const claude = provider({
-		id: "anthropic",
-		type: "preset",
-		baseUrl: "https://api.anthropic.com/v1",
-		apiStyle: "anthropic",
-		apiKeySecretId: "k",
-		models: ["claude-sonnet-4-6"],
-	});
-	const claudeResult = resolveActive(
-		state({ providers: [claude], activeProviderId: "anthropic", activeModel: "claude-sonnet-4-6" }),
-		() => "sk"
-	);
-	assert.equal(claudeResult.ok && claudeResult.config.protocol, undefined, "Anthropic 方言不参与协议层");
-});
+// ===== resolveActive 的委托（事实形状见 test/modelRequest.test.ts） =====
 
 test("setAuthType 切到 none：清空密钥名", () => {
 	const p = provider({ id: "c", type: "custom", authType: "bearer", apiKeySecretId: "k" });
@@ -463,7 +374,7 @@ test("selectActiveModel 供应商不存在：不改变现状（activeProviderId 
 
 // ===== resolveActive =====
 
-test("resolveActive 成功：解析出地址与密钥值", () => {
+test("resolveActive 成功：解析出身份与密钥值（事实解析委托给装配缝）", () => {
 	const p = provider({
 		id: "p",
 		type: "preset",
@@ -473,24 +384,14 @@ test("resolveActive 成功：解析出地址与密钥值", () => {
 	});
 	const s = state({ providers: [p], activeProviderId: "p", activeModel: "m" });
 	const result = resolveActive(s, (id) => (id === "my-key" ? "sk" : null));
-	assert.deepEqual(result, {
-		ok: true,
-		providerId: "p",
-		config: {
-			apiStyle: "openai",
-			protocol: "chat-completions",
-			baseUrl: "https://api.example.com",
-			apiKey: "sk",
-			model: "m",
-			thinking: { setting: "off", param: null, note: "unknown", learned: null },
-			requestPolicy: {
-				outputField: "max_tokens",
-				temperature: "send",
-				minMaxTokens: 0,
-				minTimeoutSeconds: 0,
-			},
-		},
-	});
+	assert.equal(result.ok, true);
+	if (!result.ok) return;
+	assert.equal(result.providerId, "p");
+	assert.equal(result.config.baseUrl, "https://api.example.com");
+	assert.equal(result.config.apiKey, "sk");
+	assert.equal(result.config.model, "m");
+	// 事实（方言 / 协议 / 思考 / 策略 / 额度）由 resolveModelFacts 产出，形状见 test/modelRequest.test.ts。
+	assert.equal(result.config.apiStyle, "openai");
 });
 
 test("resolveActive 无当前供应商 → no-provider", () => {
@@ -517,7 +418,7 @@ test("resolveActive 无认证供应商：无需密钥即可成功", () => {
 	assert.equal(result.ok, true);
 });
 
-test("resolveActive 自定义供应商：带出该模型的独立参数", () => {
+test("resolveActive 自定义供应商：带出该模型的独立参数（contextLength 已退役）", () => {
 	const p = provider({
 		id: "c",
 		type: "custom",
@@ -526,8 +427,12 @@ test("resolveActive 自定义供应商：带出该模型的独立参数", () => 
 	});
 	const s = state({ providers: [p], activeProviderId: "c", activeModel: "m" });
 	const result = resolveActive(s, () => null);
-	assert.equal(result.ok && result.config.contextLength, 4096);
 	assert.equal(result.ok && result.config.maxTokens, 2048);
+	assert.equal(
+		result.ok && "contextLength" in result.config,
+		false,
+		"contextLength 解析产物无消费者，已退役（模型行 UI / 持久化照常）"
+	);
 });
 
 test("resolveActive 未选密钥名：不查询存储", () => {

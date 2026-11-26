@@ -258,28 +258,94 @@ export interface ThinkingResolution {
 	learned: LearnedCapability | null;
 }
 
-/** 当前生效的模型配置（由设置解析而来）：供应商接口 + 选中模型 + 该模型参数。 */
-export interface ActiveModelConfig {
-	/** 「接口方言」（#105）：生成 / 测试 / 拉取清单全部按它分派，调用方不各自判断供应商类型。 */
-	apiStyle: ApiStyle;
-	/**
-	 * 「接口协议」（#110）：随解析结果带出，执行层只消费（ADR-0031）。
-	 * 缺省（含无解析结果 / 界面手填配置）读作 `chat-completions`。
-	 */
-	protocol?: WireProtocol;
+/**
+ * 对话消息（请求装配的输入）。system 角色由 Anthropic 方言在出口处提升为顶层字段。
+ */
+export interface ChatMessage {
+	role: "system" | "user" | "assistant";
+	content: string;
+}
+
+/** 请求目标：请求到哪去、以谁的身份（供应商身份与密钥由解析结果带出，ADR-0010）。 */
+export interface RequestTarget {
 	baseUrl: string;
 	apiKey: string;
 	model: string;
-	maxTokens?: number;
-	contextLength?: number;
+}
+
+/**
+ * 生成期的全局参数窄三元组（#111，ADR-0032）：温度 / 输出上限 / 超时。
+ * 不收整份设置，避免与 appSettings 的 `GenerationParams` 撞名。
+ */
+export interface RequestGlobals {
+	temperature: number;
+	maxTokens: number;
+	timeoutSeconds: number;
+}
+
+/**
+ * 「当前模型」解析出的事实（#111，ADR-0032）：请求装配的输入，按需零散读。
+ * 方言 / 协议是两根独立的轴（ADR-0028 / ADR-0031）；思考与策略同样是（供应商, 模型）级事实。
+ */
+export interface ModelFacts {
+	/** 「接口方言」（#105）：装配按它分派，调用方不各自判断供应商类型。 */
+	apiStyle: ApiStyle;
 	/**
-	 * 「模型请求策略」（#106）：随解析结果带出，执行层只消费、不判断供应商类型。
-	 * 缺省（无解析结果 / 界面手填配置）＝空策略（现状：`max_tokens` + 温度恒发）。
+	 * 「接口协议」（#110）：只属于 OpenAI 方言（ADR-0031）；Anthropic 恒 Messages，不带该字段。
+	 * 缺省（含界面手填配置）读作 `chat-completions`。
 	 */
-	requestPolicy?: RequestPolicy;
+	protocol?: WireProtocol;
 	/** 「思考」两档与能力表解析结果（ADR-0024 / ADR-0026）。 */
 	thinking: ThinkingResolution;
+	/** 「模型请求策略」（#106）：装配层只消费、不判断供应商类型（ADR-0030）。 */
+	requestPolicy: RequestPolicy;
+	/** 模型行级输出上限；未设置＝按全局（`RequestGlobals.maxTokens`）回落。 */
+	maxTokens?: number;
 }
+
+/** 当前生效的模型配置（由设置解析而来）：事实解析产物 + 请求目标。 */
+export type ActiveModelConfig = ModelFacts & RequestTarget;
+
+/**
+ * 各变体共有的装配结果：这些字段是**已定案的数值**（策略算术在装配层完成，ADR-0032），
+ * 执行层只把它们放进报文。
+ */
+interface ModelRequestBase {
+	baseUrl: string;
+	apiKey: string;
+	model: string;
+	messages: ChatMessage[];
+	/** 本次请求的输出上限（生成走下限与钳制，探测恒 256）。 */
+	maxTokens: number;
+	/** 本次请求的实际超时（已按策略下限抬过）。 */
+	timeoutSeconds: number;
+	/** 本次要发的思考参数；null＝不发（生成取解析结果，探测取候选 / 基线）。 */
+	thinking: ThinkingParam | null;
+}
+
+/**
+ * 「当前模型 → 请求」的三变体判别联合（#111，ADR-0032）：两级判别 `dialect` × `protocol`
+ * 镜像 ADR-0028 / ADR-0031 的两根轴；矛盾组合（Anthropic 带 protocol、Anthropic 带温度）
+ * 编译期不可表示。温度缺席＝不发（策略已定案）。
+ */
+export type ModelRequest =
+	| (ModelRequestBase & {
+			dialect: "openai";
+			protocol: "chat-completions";
+			/** 输出额度字段名（策略定案：`max_tokens` / `max_completion_tokens`）。 */
+			outputField: OutputTokenField;
+			temperature?: number;
+	  })
+	| (ModelRequestBase & {
+			dialect: "openai";
+			protocol: "responses";
+			/** 额度字段恒 `max_output_tokens`（ADR-0031）。 */
+			temperature?: number;
+	  })
+	| (ModelRequestBase & {
+			dialect: "anthropic";
+			/** 无 protocol / 无温度（Messages API 已删除该参数，ADR-0030 分层）。 */
+	  });
 
 /** 当前模型无法解析的原因：没有当前供应商 / 没有当前模型 / 缺必填配置或凭据。 */
 export type ActiveModelFailureReason = "no-provider" | "no-model" | "missing-credentials";

@@ -10,9 +10,9 @@ import { test, before, beforeEach, mock } from "node:test";
 import assert from "node:assert/strict";
 import type { App } from "obsidian";
 import type { SettingsSnapshot } from "../src/settings/owner";
-import type { ActiveModelResolution, DateRange } from "../src/types";
-import type { AIClientConfig } from "../src/ai/client";
+import type { ActiveModelResolution, DateRange, ModelRequest } from "../src/types";
 import type { PluginGenerationDeps } from "../src/report/pluginGeneration";
+import { EMPTY_REQUEST_POLICY } from "../src/core/requestPolicy";
 import { makeTask } from "./fakes/task";
 import { fakeTaskRepository } from "./fakes/taskRepository";
 
@@ -107,13 +107,14 @@ function resolveOk(): ActiveModelResolution {
 			apiKey: "sk",
 			model: "m",
 			thinking: { setting: "off", param: null, note: "unknown", learned: null },
+			requestPolicy: EMPTY_REQUEST_POLICY,
 		},
 	};
 }
 
 interface Captured {
 	prompt: string;
-	chatConfig: AIClientConfig;
+	chatRequest: ModelRequest;
 	saved: { folder: string; range: DateRange; content: string; templateName?: string };
 }
 
@@ -127,9 +128,9 @@ function setup(
 		settings: () => fakeSnapshot(snapshot),
 		providers: { resolveActive: () => resolveOk() },
 		repository: fakeTaskRepository({ bodies: { a: "任务详情" } }),
-		chat: async (prompt, config) => {
-			captured.prompt = prompt;
-			captured.chatConfig = config;
+		chat: async (request) => {
+			captured.prompt = request.messages[0].content;
+			captured.chatRequest = request;
 			return { content: "生成的报告正文", hasReasoning: false };
 		},
 		save: async (folder, range, content, templateName) => {
@@ -148,7 +149,7 @@ function baseIntent(templateId = ""): { tasks: ReturnType<typeof makeTask>[]; te
 
 // ===== 测试（#101 测试政策） =====
 
-test("投影字段流：生成参数进入 chat config，报告目录与周起始进入 save", async () => {
+test("投影字段流：生成参数进入装配请求，报告目录与周起始进入 save", async () => {
 	const run = async (weekStartsOnMonday: boolean): Promise<Partial<Captured>> => {
 		const { deps, captured } = setup({
 			now: () => new Date(2026, 8, 3),
@@ -172,9 +173,14 @@ test("投影字段流：生成参数进入 chat config，报告目录与周起�
 	const withSunday = await run(false);
 	// 报告语言：投影后由 module 拼进提示词（与 generate.test.ts 的断言同源）
 	assert.ok(withMonday.prompt?.trimEnd().endsWith("输出语言：English。"));
-	assert.equal(withMonday.chatConfig?.temperature, 0.2);
-	assert.equal(withMonday.chatConfig?.maxTokens, 1111);
-	assert.equal(withMonday.chatConfig?.timeoutSeconds, 7);
+	assert.equal(
+		withMonday.chatRequest && "temperature" in withMonday.chatRequest
+			? withMonday.chatRequest.temperature
+			: undefined,
+		0.2
+	);
+	assert.equal(withMonday.chatRequest?.maxTokens, 1111);
+	assert.equal(withMonday.chatRequest?.timeoutSeconds, 7);
 	assert.equal(withMonday.saved?.folder, "Reports/X");
 	// 周起始：投影值真的流入——无日期任务回退本周（字面量照 generate.test.ts 的工作示例）
 	assert.deepEqual(withMonday.saved?.range, { start: "2026-08-31", end: "2026-09-06" });

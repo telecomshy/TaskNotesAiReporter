@@ -13,10 +13,12 @@
 import type {
 	ActiveModelResolution,
 	DateRange,
+	ModelRequest,
 	TaskInfo,
 	TaskNotesAIHelperSettings,
 } from "../types";
-import type { AIClientConfig, ChatResult } from "../ai/client";
+import type { ChatResult } from "../ai/client";
+import { assembleChatRequest } from "../ai/modelRequest";
 import { isThinkingFakeOff } from "../core/thinking";
 import { hydrateTasks, type TaskRepository } from "../tasks/repository";
 import { buildReportPrompt } from "../core/prompt";
@@ -57,8 +59,8 @@ export interface GenerateDeps {
 	settings(): GenerateSettings;
 	/** 供应商模块对当前模型 的解析结果（ADR-0010）。 */
 	resolveModel(): ActiveModelResolution;
-	/** 调用模型，返回生成正文与推理段读面（假关判定用）。 */
-	chat(prompt: string, config: AIClientConfig): Promise<ChatResult>;
+	/** 调用模型，返回生成正文与推理段读面（假关判定用）；请求已由装配层定案。 */
+	chat(request: ModelRequest): Promise<ChatResult>;
 	/** 保存报告，返回最终文件路径。 */
 	save(
 		folder: string,
@@ -141,22 +143,20 @@ async function runGeneration(intent: GenerateIntent, deps: GenerateDeps): Promis
 			now,
 			statuses,
 		});
-		const chatResult = await deps.chat(prompt, {
-			// 「接口方言」随解析结果带出（#105）：生成走该供应商的协议，调用方不另判供应商类型。
-			apiStyle: config.apiStyle,
-			// 「接口协议」随解析结果带出（#110）：Responses-only 模型换端点与报文形态（ADR-0031）。
-			protocol: config.protocol,
-			baseUrl: config.baseUrl,
-			apiKey: config.apiKey,
-			model: config.model,
-			temperature: s.temperature,
-			maxTokens: config.maxTokens ?? s.maxTokens,
-			timeoutSeconds: s.timeoutSeconds,
-			// 思考开关参数由能力表解析结果带出（一次只发一个，见 ADR-0024）。
-			thinking: config.thinking.param ?? undefined,
-			// 「模型请求策略」随解析结果带出（#106）：执行层只消费，不判断供应商类型。
-			requestPolicy: config.requestPolicy,
-		});
+		const chatResult = await deps.chat(
+			assembleChatRequest({
+				// 身份与密钥随解析结果带出（ADR-0010）；事实（方言 / 协议 / 思考 / 策略 / 行级额度）
+				// 是同一份解析产物的另一半（#111，ADR-0032）。
+				target: { baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model },
+				facts: config,
+				messages: [{ role: "user", content: prompt }],
+				globals: {
+					temperature: s.temperature,
+					maxTokens: s.maxTokens,
+					timeoutSeconds: s.timeoutSeconds,
+				},
+			})
+		);
 		content = chatResult.content;
 		// 假关：设「关」、发出了关参数、响应仍带推理段——一次性非阻断告警由界面呈现（#84）。
 		fakeOff = isThinkingFakeOff(config.thinking, chatResult.hasReasoning);
