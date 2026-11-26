@@ -670,4 +670,3 @@ test("Anthropic 探测：content 不是数组 → 中断", async () => {
 	respond = () => ({ status: 200, json: { choices: [] } });
 	assert.equal(await client.thinkingProbe(anthropicRequest({ maxTokens: 256 })), "interrupted");
 });
-

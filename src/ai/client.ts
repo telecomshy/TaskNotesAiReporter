@@ -263,6 +263,25 @@ function splitSystemMessages(messages: ChatMessage[]): {
 	return { system, turns };
 }
 
+// ===== 变体分派（生成与探测共用） =====
+
+/**
+ * 按 `dialect` × `protocol` 三变体分派（#105 / #110 / #111 复查）：分支决策只有这一处，
+ * 生成与探测各自传自己的三个实现；实现仍收窄到各自的请求类型。
+ */
+function dispatchRequest<T>(
+	req: ModelRequest,
+	handlers: {
+		anthropic: (req: AnthropicRequest) => T;
+		responses: (req: ResponsesRequest) => T;
+		chatCompletions: (req: ChatCompletionsRequest) => T;
+	}
+): T {
+	if (req.dialect === "anthropic") return handlers.anthropic(req);
+	if (req.protocol === "responses") return handlers.responses(req);
+	return handlers.chatCompletions(req);
+}
+
 // ===== 对话（生成） =====
 
 /**
@@ -273,9 +292,11 @@ export async function chatCompletion(
 	req: ModelRequest,
 	request: RequestFn = defaultRequest
 ): Promise<ChatResult> {
-	if (req.dialect === "anthropic") return anthropicChatCompletion(req, request);
-	if (req.protocol === "responses") return responsesChatCompletion(req, request);
-	return chatCompletionsChatCompletion(req, request);
+	return dispatchRequest(req, {
+		anthropic: (r) => anthropicChatCompletion(r, request),
+		responses: (r) => responsesChatCompletion(r, request),
+		chatCompletions: (r) => chatCompletionsChatCompletion(r, request),
+	});
 }
 
 /** Chat Completions 的对话：正文＝`choices[0].message.content`，空值即空回复。 */
@@ -468,9 +489,11 @@ export async function thinkingProbe(
 
 /** 探测请求按方言 / 协议分派（#105 / #110）：Anthropic 的读面与两种 OpenAI 形态各自独立。 */
 function probeHasReasoning(req: ModelRequest, request: RequestFn): Promise<boolean> {
-	if (req.dialect === "anthropic") return anthropicThinkingProbe(req, request);
-	if (req.protocol === "responses") return responsesThinkingProbe(req, request);
-	return openaiThinkingProbe(req, request);
+	return dispatchRequest(req, {
+		anthropic: (r) => anthropicThinkingProbe(r, request),
+		responses: (r) => responsesThinkingProbe(r, request),
+		chatCompletions: (r) => openaiThinkingProbe(r, request),
+	});
 }
 
 /**

@@ -146,8 +146,8 @@ async function runGeneration(intent: GenerateIntent, deps: GenerateDeps): Promis
 		const chatResult = await deps.chat(
 			assembleChatRequest({
 				// 身份与密钥随解析结果带出（ADR-0010）；事实（方言 / 协议 / 思考 / 策略 / 行级额度）
-				// 是同一份解析产物的另一半（#111，ADR-0032）。
-				target: { baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model },
+				// 是同一份解析产物的另一半（#111，ADR-0032）。目标直接取解析结果，不再手抄（#111 复查）。
+				target: config,
 				facts: config,
 				messages: [{ role: "user", content: prompt }],
 				globals: {

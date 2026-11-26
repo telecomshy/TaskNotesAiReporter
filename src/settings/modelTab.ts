@@ -11,7 +11,7 @@ import type { ModelProvider } from "../types";
 import { apiStyleOf } from "../core/apiStyle";
 import type { Translator } from "../i18n";
 import { AIClientError, chatCompletion } from "../ai/client";
-import { modelTestRequest } from "./modelTest";
+import { connectionTestRequest } from "./connectionTest";
 import { describeAIError } from "../ai/errorMessage";
 import { runAndAnnounceThinkingTest } from "../ui/thinkingTestAction";
 import {
@@ -700,7 +700,7 @@ function renderCustomModelRow(
 		new Notice(t("model.testing"));
 		// 「测试」与生成共用装配（#111，ADR-0032）：事实按该行解析（行参数取输入框值），
 		// 与真实生成路径同源——测试通过 ⇔ 生成可用（带习得条目的行会发该行的思考参数）。
-		const request = modelTestRequest({
+		const request = connectionTestRequest({
 			provider,
 			modelId,
 			maxTokens: parseIntSafe(maxInput.value),

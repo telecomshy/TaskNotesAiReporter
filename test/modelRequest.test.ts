@@ -18,7 +18,7 @@ import {
 	OPENAI_REQUEST_POLICY,
 } from "../src/core/requestPolicy";
 import { resolveActive } from "../src/settings/providerSettings";
-import { modelTestRequest } from "../src/settings/modelTest";
+import { connectionTestRequest } from "../src/settings/connectionTest";
 import type { ChatMessage, ModelFacts, ModelProvider, ModelRequest, RequestGlobals } from "../src/types";
 
 // ===== 假件 =====
@@ -417,20 +417,16 @@ test("按钮 ≡ 生成等价：同一（供应商, 模型）与同一 globals �
 	assert.equal(resolved.ok, true, "无认证供应商不要求密钥");
 	if (!resolved.ok) return;
 
-	// 生成路径：解析结果 = 事实 & 目标（装配层切成两半）。
+	// 生成路径：解析结果 = 事实 & 目标（装配层切成两半）；目标直接取解析结果（#111 复查）。
 	const generation = assembleChatRequest({
-		target: {
-			baseUrl: resolved.config.baseUrl,
-			apiKey: resolved.config.apiKey,
-			model: resolved.config.model,
-		},
+		target: resolved.config,
 		facts: resolved.config,
 		messages,
 		globals,
 	});
 
-	// 「测试」按钮路径：生产代码的装配（modelTestRequest）现解析事实（行参数取输入框值）。
-	const button = modelTestRequest({
+	// 「测试」按钮路径：生产代码的装配（connectionTestRequest）现解析事实（行参数取输入框值）。
+	const button = connectionTestRequest({
 		provider: p,
 		modelId: "m",
 		maxTokens: 2048,
@@ -463,16 +459,12 @@ test("按钮 ≡ 生成等价：OpenAI 预设的响应协议与策略同样一�
 	if (!resolved.ok) return;
 
 	const generation = assembleChatRequest({
-		target: {
-			baseUrl: resolved.config.baseUrl,
-			apiKey: resolved.config.apiKey,
-			model: resolved.config.model,
-		},
+		target: resolved.config,
 		facts: resolved.config,
 		messages,
 		globals,
 	});
-	const button = modelTestRequest({
+	const button = connectionTestRequest({
 		provider: p,
 		modelId: "gpt-5.5-pro",
 		apiKey: "sk",

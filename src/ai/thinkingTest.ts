@@ -85,8 +85,9 @@ export async function runThinkingTestFlow(
 	if (retest) slice.clearLearnedThinking(providerId, model);
 	const result = await runThinkingTest(
 		{
-			// 目标与事实是同一份解析产物的两半：探测按方言 / 协议构造（#105 / #110）。
-			target: { baseUrl: config.baseUrl, apiKey: config.apiKey, model },
+			// 目标与事实是同一份解析产物的两半：探测按方言 / 协议构造（#105 / #110）；
+			// 目标直接取解析结果，不再手抄三件套（#111 复查）。
+			target: config,
 			facts: config,
 			// 候选分派按供应商 id（#106）：只有内置 OpenAI 预设收窄到 reasoning_effort。
 			providerId,
