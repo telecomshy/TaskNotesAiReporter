@@ -23,8 +23,11 @@ export async function runThinkingTest(
 	config: ThinkingProbeConfig,
 	request?: RequestFn
 ): Promise<ThinkingTestResult> {
-	// 候选按「接口方言」取（#105）：Anthropic 只探自己的关字段，不拿 OpenAI 字段去猜。
-	let { state, action } = startThinkingTest(thinkingOffCandidates(config.apiStyle));
+	// 候选按（接口方言, 供应商 id）取（#105 / #106）：OpenAI 预设只探 reasoning_effort，
+	// Anthropic 只探自己的关字段，其余 OpenAI 方言保持三字段。
+	let { state, action } = startThinkingTest(
+		thinkingOffCandidates(config.apiStyle, config.providerId)
+	);
 	while (action.kind === "probe") {
 		const outcome = await thinkingProbe(config, action.param, request);
 		({ state, action } = stepThinkingTest(state, outcome));
@@ -64,10 +67,14 @@ export async function runThinkingTestFlow(
 		{
 			// 探测请求同样按方言构造（#105）：地址 / 认证头 / 请求体 / 响应读面随解析结果走。
 			apiStyle: resolved.config.apiStyle,
+			// 候选分派按供应商 id（#106）：只有内置 OpenAI 预设收窄到 reasoning_effort。
+			providerId,
 			baseUrl: resolved.config.baseUrl,
 			apiKey: resolved.config.apiKey,
 			model,
 			timeoutSeconds,
+			// 「模型请求策略」同样随解析结果带出：基线与逐字段都服从它（#106 裁决 33）。
+			requestPolicy: resolved.config.requestPolicy,
 		},
 		request
 	);

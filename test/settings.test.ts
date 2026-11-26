@@ -123,8 +123,8 @@ test("normalizeSettings 保留新结构的 apiKeySecretId", () => {
 		{ id: "deepseek", name: "DeepSeek", type: "preset" as const, baseUrl: "https://api.deepseek.com", apiKeySecretId: "my-key", models: ["m1"], authType: "bearer" as const },
 	];
 	const { settings, pendingSecrets } = normalizeSettings({ providers, activeProviderId: "deepseek", activeModel: "m1" });
-	// 内置预设补齐（#105）会把缺失的预设追加到末尾；本用例只关心既有项不被改写。
-	assert.equal(settings.providers.length, 5);
+	// 内置预设补齐（#105 / #106）会把缺失的预设追加到末尾；本用例只关心既有项不被改写。
+	assert.equal(settings.providers.length, 6);
 	assert.equal(settings.providers[0].id, "deepseek", "既有顺序不变");
 	assert.equal(settings.providers[0].apiKeySecretId, "my-key");
 	assert.equal(settings.activeProviderId, "deepseek");
@@ -159,8 +159,8 @@ test("normalizeSettings 过滤器掉空的 custom 占位，保留已配置的 cu
 		{ id: "custom_abc", name: "我的供应商", type: "custom" as const, baseUrl: "https://x.com/v1", apiKey: "sk-x", models: ["m2"], authType: "bearer" as const },
 	];
 	const settings = load({ providers, activeProviderId: "deepseek" });
-	// 过滤后剩 2 个既有项 + 缺失的内置预设补齐（#105）：deepseek 已在，补 qwen/kimi/minimax/anthropic。
-	assert.equal(settings.providers.length, 6);
+	// 过滤后剩 2 个既有项 + 缺失的内置预设补齐（#105 / #106）：deepseek 已在，补 qwen/kimi/minimax/anthropic/openai。
+	assert.equal(settings.providers.length, 7);
 	assert.equal(settings.providers.some((p) => p.id === "custom"), false, "空的 custom 占位应被移除");
 	assert.equal(settings.providers.some((p) => p.id === "custom_abc"), true, "已配置的 custom 应保留");
 });

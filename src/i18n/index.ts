@@ -68,6 +68,7 @@ export function calendarLabels(language: UiLanguage): Strings["calendar"] {
  */
 export const PRESET_NAME_KEYS: Partial<Record<string, TranslationKey>> = {
 	anthropic: "model.presetAnthropicName",
+	openai: "model.presetOpenaiName",
 };
 
 /**

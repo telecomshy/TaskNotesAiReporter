@@ -268,9 +268,15 @@ test("loadSettings 内置预设补齐（#105）：追加到末尾、不覆盖既
 	assert.equal(ids[1], "custom_z");
 	assert.deepEqual(
 		ids.slice(2),
-		["deepseek", "qwen", "minimax", "anthropic"],
+		["deepseek", "qwen", "minimax", "anthropic", "openai"],
 		"缺失的内置预设按定义顺序追加到末尾"
 	);
+	const openai = settings.providers.find((p) => p.id === "openai");
+	assert.equal(openai?.baseUrl, "https://api.openai.com/v1");
+	assert.equal("apiStyle" in (openai ?? {}), false, "OpenAI 预设方言内置固定（OpenAI 兼容），不发明字段");
+	assert.equal(openai?.apiKeySecretId, "");
+	assert.equal(openai?.authType, "bearer");
+	assert.deepEqual(openai?.models, [], "未配置 ⇒ 无启用模型");
 	const anthropic = settings.providers.find((p) => p.id === "anthropic");
 	assert.equal(anthropic?.baseUrl, "https://api.anthropic.com/v1");
 	assert.equal(anthropic?.apiStyle, "anthropic");

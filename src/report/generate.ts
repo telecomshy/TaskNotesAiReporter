@@ -152,6 +152,8 @@ async function runGeneration(intent: GenerateIntent, deps: GenerateDeps): Promis
 			timeoutSeconds: s.timeoutSeconds,
 			// 思考开关参数由能力表解析结果带出（一次只发一个，见 ADR-0024）。
 			thinking: config.thinking.param ?? undefined,
+			// 「模型请求策略」随解析结果带出（#106）：执行层只消费，不判断供应商类型。
+			requestPolicy: config.requestPolicy,
 		});
 		content = chatResult.content;
 		// 假关：设「关」、发出了关参数、响应仍带推理段——一次性非阻断告警由界面呈现（#84）。

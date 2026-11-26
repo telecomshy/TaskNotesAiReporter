@@ -1,5 +1,8 @@
 # 接口方言是供应商属性，协议层自写而不引官方 SDK
 
+> **部分被 [ADR-0030](0030-model-request-policy-overlay.md) 取代**：本 ADR 里「请求体参数策略由方言固定」
+> 一句已修订为「方言定基线，模型请求策略只能在其上窄化」（#106）。其余裁决不变。
+
 > 规格见 issue #105。与 [ADR-0002](0002-ai-transport-decoupled-from-obsidian.md)（AI 传输与 Obsidian 解耦）、
 > [ADR-0024](0024-thinking-off-by-default.md)（思考默认关、一次只发一个开关参数）、
 > [ADR-0026](0026-thinking-test-learned-capability-model-catalog.md)（习得能力盖过能力表）衔接；

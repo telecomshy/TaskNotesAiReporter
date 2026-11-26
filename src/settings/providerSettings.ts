@@ -21,6 +21,7 @@ import type {
 	ThinkingSetting,
 } from "../types";
 import { apiStyleOf } from "../core/apiStyle";
+import { resolveRequestPolicy } from "../core/requestPolicy";
 import {
 	resolveThinking,
 	thinkingDisplay,
@@ -424,6 +425,8 @@ export function resolveActive(
 		// 「思考」解析（能力表映射 / 置灰标注）由纯模块产出（ADR-0024）；
 		// 自定义供应商与预设同路：能力表未命中即未知（ADR-0026）。
 		thinking: thinkingFor(provider, state.activeModel),
+		// 「模型请求策略」（#106）：与思考解析同路产出，执行层只消费（ADR-0030）。
+		requestPolicy: resolveRequestPolicy(provider.id, state.activeModel),
 	};
 	// 模型参数经 providerModels 读面取（预设恒空；自定义带出该行参数）。
 	const params = modelParams(provider, state.activeModel);

@@ -61,6 +61,18 @@ function enableThinkingSwitch(): ThinkingCapability {
 	};
 }
 
+/**
+ * 顶层 `reasoning_effort` 开关（OpenAI 官方预设，#106）：关＝`"none"`、开＝`"high"`。
+ * 关态发 `none` 在强制族上会 400，故那几族用 `{kind:"forced"}` 而不是本开关。
+ */
+function reasoningEffortSwitch(): ThinkingCapability {
+	return {
+		kind: "switchable",
+		off: { name: "reasoning_effort", value: "none" },
+		on: { name: "reasoning_effort", value: "high" },
+	};
+}
+
 /** 内置（供应商, 模型）能力表；事实源 docs/research/thinking-toggle-apis.md。 */
 export const THINKING_CAPABILITIES: readonly ThinkingCapabilityRow[] = [
 	// DeepSeek 直连：全系统一语义（thinking 优先于 reasoning_effort，二者同发安全）。
@@ -103,6 +115,20 @@ export const THINKING_CAPABILITIES: readonly ThinkingCapabilityRow[] = [
 	// Anthropic 官方预设（#105）：adaptive 时代——开 `{type:"adaptive"}`、关 `{type:"disabled"}`。
 	// 自定义 Anthropic 网关不在表内，初始未知、由思考测试学习（#105 裁决 9）。
 	{ providerId: "anthropic", modelPattern: "claude-*", capability: thinkingTypeSwitch("adaptive") },
+	// OpenAI 官方预设（#106）：Chat Completions 的开关是顶层 `reasoning_effort`；
+	// 开＝"high"、关＝"none"。强制族（关态发 none 会 400）行排在通用族之前。
+	{ providerId: "openai", modelPattern: "gpt-6-astra", capability: { kind: "forced" } },
+	{ providerId: "openai", modelPattern: "gpt-6.1-sol", capability: { kind: "forced" } },
+	{ providerId: "openai", modelPattern: "gpt-6.2*", capability: { kind: "forced" } },
+	{ providerId: "openai", modelPattern: "gpt-6.1-terra*", capability: reasoningEffortSwitch() },
+	{ providerId: "openai", modelPattern: "gpt-6-sol*", capability: reasoningEffortSwitch() },
+	{ providerId: "openai", modelPattern: "gpt-6-luna*", capability: reasoningEffortSwitch() },
+	{ providerId: "openai", modelPattern: "gpt-5.2*", capability: reasoningEffortSwitch() },
+	{ providerId: "openai", modelPattern: "gpt-5.4*", capability: reasoningEffortSwitch() },
+	{ providerId: "openai", modelPattern: "gpt-5.6*", capability: reasoningEffortSwitch() },
+	// 老的非推理对话模型：不支持思考参数。
+	{ providerId: "openai", modelPattern: "gpt-4.1*", capability: { kind: "none" } },
+	{ providerId: "openai", modelPattern: "gpt-4o*", capability: { kind: "none" } },
 	// 智谱 GLM：5.3 全系强制思考（thinking.type 仅接受 enabled，传 disabled 报错）。
 	{ providerId: "zhipu", modelPattern: "glm-5.3*", capability: { kind: "forced" } },
 	// GLM-4.5 以下不支持 thinking 参数（glm-4-long / 老免费档）。
@@ -146,7 +172,7 @@ export function resolveThinking(
 	}
 
 	const row = table.find(
-		(r) => r.providerId === input.providerId && matchModel(r.modelPattern, input.model)
+		(r) => r.providerId === input.providerId && matchModelPattern(r.modelPattern, input.model)
 	);
 	if (!row) return unknownThinking(setting);
 
@@ -259,8 +285,11 @@ export function isThinkingFakeOff(
 	return resolution.setting === "off" && resolution.param !== null && responseHasReasoning;
 }
 
-/** 模型匹配：`*` 结尾为前缀匹配，否则精确匹配。 */
-function matchModel(pattern: string, model: string): boolean {
+/**
+ * 模型匹配：`*` 结尾为前缀匹配，否则精确匹配。
+ * 策略表与思考能力表共用同一判定（行键形状同构，#106）。
+ */
+export function matchModelPattern(pattern: string, model: string): boolean {
 	if (pattern.endsWith("*")) return model.startsWith(pattern.slice(0, -1));
 	return pattern === model;
 }
@@ -286,8 +315,24 @@ export const ANTHROPIC_THINKING_OFF_CANDIDATES: readonly ThinkingParam[] = [
 	{ name: "thinking", value: { type: "disabled" } },
 ];
 
-/** 按「接口方言」（可缺省）取思考测试候选清单；缺省归一路径与供应商属性同一个（core/apiStyle）。 */
-export function thinkingOffCandidates(apiStyle?: ApiStyle): readonly ThinkingParam[] {
+/**
+ * OpenAI 官方预设的关字段候选（#106 裁决 12）：Chat Completions 上唯一的文档化开关是
+ * 顶层 `reasoning_effort`，其余 OpenAI 参数名（`thinking` / `enable_thinking`）只会白落 400。
+ */
+export const OPENAI_THINKING_OFF_CANDIDATES: readonly ThinkingParam[] = [
+	{ name: "reasoning_effort", value: "none" },
+];
+
+/**
+ * 取思考测试候选清单：内置 OpenAI 预设按**供应商 id**分派（单字段 `reasoning_effort`）；
+ * 其余 OpenAI 方言保持三字段（#105 收窄到方言级）；Anthropic 方言只试自己的关字段。
+ * 状态机（基线 → 逐字段 → 四值判定）与判定规则不因候选清单分叉。
+ */
+export function thinkingOffCandidates(
+	apiStyle?: ApiStyle,
+	providerId?: string
+): readonly ThinkingParam[] {
+	if (providerId === "openai") return OPENAI_THINKING_OFF_CANDIDATES;
 	return resolveApiStyle(apiStyle) === "anthropic"
 		? ANTHROPIC_THINKING_OFF_CANDIDATES
 		: THINKING_OFF_CANDIDATES;

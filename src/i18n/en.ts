@@ -151,6 +151,7 @@ export const en = {
 		providersIntro: "Configure a provider's API key, then pick the \"current model\" below.",
 		addProvider: "+ Add provider",
 		presetAnthropicName: "Anthropic (Claude)",
+		presetOpenaiName: "OpenAI",
 		activeHeading: "Current model",
 		noModels: "No models available yet. Configure a provider API key first.",
 		selectModelName: "Select model",

@@ -1,6 +1,7 @@
 import { test, before, mock } from "node:test";
 import assert from "node:assert/strict";
 import { buildChatCompletionsUrl, buildMessagesUrl, buildModelsUrl } from "../src/core/aiUrl";
+import { EMPTY_REQUEST_POLICY, OPENAI_REQUEST_POLICY } from "../src/core/requestPolicy";
 
 // ===== URL 拼接（纯函数，原有用例保留） =====
 
@@ -473,4 +474,156 @@ test("chatCompletion 透传 AIClientError，不被网络错误重包", async () 
 			return true;
 		}
 	);
+});
+
+// ===== 模型请求策略（#106，ADR-0030）：OpenAI 预设的请求形态 =====
+
+const openAIConfig = {
+	...config,
+	baseUrl: "https://api.openai.com/v1",
+	model: "gpt-5.6-sol",
+};
+
+test("OpenAI 预设：发 max_completion_tokens、不发 max_tokens；omit-unless-none 且无 effort 时温度不发", async () => {
+	await capture();
+	respond = () => ({ status: 200, json: { choices: [{ message: { content: "ok" } }] } });
+	await client.chatCompletion({ ...openAIConfig, requestPolicy: OPENAI_REQUEST_POLICY }, [
+		{ role: "user", content: "hi" },
+	]);
+	const payload = JSON.parse(captured[0].body!);
+	assert.equal("max_tokens" in payload, false, "官方已弃用 max_tokens");
+	assert.equal(payload.max_completion_tokens, 25000, "推理族预算取下限 25,000（配置 8192 被抬高）");
+	assert.equal("temperature" in payload, false, "未发 reasoning_effort ⇒ 默认 medium，温度不合法");
+	assert.equal(payload.stream, false);
+});
+
+test("OpenAI 预设：omit-unless-none 族在生效 effort 为 none 时温度照发", async () => {
+	await capture();
+	respond = () => ({ status: 200, json: { choices: [{ message: { content: "ok" } }] } });
+	await client.chatCompletion(
+		{
+			...openAIConfig,
+			requestPolicy: OPENAI_REQUEST_POLICY,
+			thinking: { name: "reasoning_effort", value: "none" },
+		},
+		[{ role: "user", content: "hi" }]
+	);
+	const payload = JSON.parse(captured[0].body!);
+	assert.equal(payload.temperature, 0.7, "关（none）时温度合法");
+	assert.equal(payload.reasoning_effort, "none");
+	assert.equal(payload.max_completion_tokens, 25000);
+});
+
+test("OpenAI 预设：omit-always 族永不发温度（即便 effort=none）；思考参数形状不变", async () => {
+	await capture();
+	respond = () => ({ status: 200, json: { choices: [{ message: { content: "ok" } }] } });
+	await client.chatCompletion(
+		{
+			...openAIConfig,
+			model: "gpt-6.2-astra",
+			requestPolicy: { ...OPENAI_REQUEST_POLICY, temperature: "omit-always" },
+			thinking: { name: "reasoning_effort", value: "none" },
+		},
+		[{ role: "user", content: "hi" }]
+	);
+	const payload = JSON.parse(captured[0].body!);
+	assert.equal("temperature" in payload, false);
+	assert.equal(payload.reasoning_effort, "none");
+});
+
+test("策略预算：无下限行（非推理老模型）取全局值；配置更大时用户设置优先；仍钳制 384K", async () => {
+	await capture();
+	respond = () => ({ status: 200, json: { choices: [{ message: { content: "ok" } }] } });
+	const legacyPolicy = {
+		outputField: "max_completion_tokens" as const,
+		temperature: "send" as const,
+		minMaxTokens: 0,
+		minTimeoutSeconds: 120,
+	};
+	await client.chatCompletion({ ...openAIConfig, model: "gpt-4.1", requestPolicy: legacyPolicy }, [
+		{ role: "user", content: "hi" },
+	]);
+	assert.equal(JSON.parse(captured[0].body!).max_completion_tokens, 8192, "非推理族不为下限多花钱");
+
+	await client.chatCompletion({ ...openAIConfig, maxTokens: 400000, requestPolicy: legacyPolicy }, [
+		{ role: "user", content: "hi" },
+	]);
+	assert.equal(JSON.parse(captured[captured.length - 1].body!).max_completion_tokens, 384 * 1024, "钳制上限仍 384K");
+});
+
+test("策略超时：max(全局超时, 下限)——下限更大时生效（错误里带实际毫秒数）", async () => {
+	await capture();
+	const request = () => new Promise<{ status: number; json: unknown; text: string }>(() => {});
+	await assert.rejects(
+		() =>
+			client.chatCompletion(
+				{
+					...openAIConfig,
+					timeoutSeconds: 0.02,
+					requestPolicy: { ...OPENAI_REQUEST_POLICY, minTimeoutSeconds: 1 },
+				},
+				[{ role: "user", content: "hi" }],
+				request
+			),
+		(e: unknown) => {
+			assert.ok(e instanceof client.AIClientError);
+			assert.equal((e as { code: string }).code, "timeout");
+			assert.equal((e as { details: { ms: number } }).details.ms, 1000, "取策略下限 1 秒而非 20ms");
+			return true;
+		}
+	);
+});
+
+test("四家国产预设零变更：空策略下仍发 max_tokens 与温度，不发 max_completion_tokens", async () => {
+	await capture();
+	respond = () => ({ status: 200, json: { choices: [{ message: { content: "ok" } }] } });
+	await client.chatCompletion(
+		{
+			...config,
+			requestPolicy: { ...EMPTY_REQUEST_POLICY },
+		},
+		[{ role: "user", content: "hi" }]
+	);
+	const payload = JSON.parse(captured[0].body!);
+	assert.equal(payload.max_tokens, 8192);
+	assert.equal("max_completion_tokens" in payload, false);
+	assert.equal(payload.temperature, 0.7);
+});
+
+test("思考测试微型请求遵守策略：max_completion_tokens 恒 256（不受 25k 下限影响）、温度按规则不发", async () => {
+	await capture();
+	respond = () => ({ status: 200, json: { choices: [{ message: { content: "2" } }] } });
+	await client.thinkingProbe(
+		{
+			baseUrl: "https://api.openai.com/v1",
+			apiKey: "sk",
+			model: "gpt-5.6-sol",
+			timeoutSeconds: 30,
+			requestPolicy: OPENAI_REQUEST_POLICY,
+		},
+		null
+	);
+	const payload = JSON.parse(captured[0].body!);
+	assert.equal(payload.max_completion_tokens, 256, "探测恒定 256");
+	assert.equal("max_tokens" in payload, false);
+	assert.equal("temperature" in payload, false, "基线不发 effort ⇒ 温度不发");
+});
+
+test("思考测试微型请求：探 reasoning_effort:none 时温度照发（同一套策略）", async () => {
+	await capture();
+	respond = () => ({ status: 200, json: { choices: [{ message: { content: "2" } }] } });
+	await client.thinkingProbe(
+		{
+			baseUrl: "https://api.openai.com/v1",
+			apiKey: "sk",
+			model: "gpt-5.2",
+			timeoutSeconds: 30,
+			requestPolicy: OPENAI_REQUEST_POLICY,
+		},
+		{ name: "reasoning_effort", value: "none" }
+	);
+	const payload = JSON.parse(captured[0].body!);
+	assert.equal(payload.reasoning_effort, "none");
+	assert.equal(payload.temperature, 0);
+	assert.equal(payload.max_completion_tokens, 256);
 });

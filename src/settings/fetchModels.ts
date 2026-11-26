@@ -8,6 +8,7 @@
 
 import { listModels, type RequestFn } from "../ai/client";
 import { apiStyleOf } from "../core/apiStyle";
+import { filterModelCatalog } from "../core/modelCatalogFilter";
 import type { ModelProvider } from "../types";
 import { requiresSecret } from "./providerSettings";
 
@@ -72,6 +73,10 @@ export async function runFetchModelsFlow(
 	} catch (error) {
 		return { kind: "failed", error };
 	}
+
+	// 清单过滤（#106）：拉取成功后、写「模型清单」前，按供应商 id 选取规则——
+	// 只有 OpenAI 预设只收对话模型；过滤后为空照实记账（现有「空清单」结局）。
+	models = filterModelCatalog(provider.id, models);
 
 	// 成功即记账（含空表）：清单是拉取历史，「已失效」判定据此区分「从未拉取」。
 	slice.refreshModelCatalog(provider.id, models);

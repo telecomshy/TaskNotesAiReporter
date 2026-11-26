@@ -122,6 +122,31 @@ export interface ReportTemplate {
  */
 export type ApiStyle = "openai" | "anthropic";
 
+/** 输出额度字段名（#106，ADR-0030）：OpenAI 官方的「含推理 token 的输出预算」只有 `max_completion_tokens`。 */
+export type OutputTokenField = "max_tokens" | "max_completion_tokens";
+
+/**
+ * 温度规则（#106）：`send`＝恒发；`omit-unless-none`＝仅在本次生效的
+ * `reasoning_effort` 为 `none` 时发；`omit-always`＝永不发。
+ */
+export type TemperatureRule = "send" | "omit-unless-none" | "omit-always";
+
+/**
+ * 「模型请求策略」（#106，见 CONTEXT.md）：叠加在「接口方言」基线上的窄化——
+ * 只决定该模型不接受的参数与下限，不加回方言已删的参数（ADR-0030）。
+ * 0＝无下限。
+ */
+export interface RequestPolicy {
+	/** 输出额度字段名（`max_tokens` / `max_completion_tokens`）。 */
+	outputField: OutputTokenField;
+	/** 温度可发条件（由策略 × 本次生效 effort 决定，见 core/requestPolicy）。 */
+	temperature: TemperatureRule;
+	/** 生成请求的输出预算下限（token）；0＝无。 */
+	minMaxTokens: number;
+	/** 生成与探测请求的超时下限（秒）；0＝无。清单拉取不受它影响。 */
+	minTimeoutSeconds: number;
+}
+
 /** 单个模型供应商配置 */
 export interface ModelProvider {
 	id: string; // 唯一标识
@@ -235,6 +260,11 @@ export interface ActiveModelConfig {
 	model: string;
 	maxTokens?: number;
 	contextLength?: number;
+	/**
+	 * 「模型请求策略」（#106）：随解析结果带出，执行层只消费、不判断供应商类型。
+	 * 缺省（无解析结果 / 界面手填配置）＝空策略（现状：`max_tokens` + 温度恒发）。
+	 */
+	requestPolicy?: RequestPolicy;
 	/** 「思考」两档与能力表解析结果（ADR-0024 / ADR-0026）。 */
 	thinking: ThinkingResolution;
 }
@@ -288,6 +318,15 @@ export const PRESET_PROVIDERS: Omit<ModelProvider, "apiKeySecretId" | "authType"
 		type: "preset",
 		baseUrl: "https://api.anthropic.com/v1",
 		apiStyle: "anthropic",
+		models: [],
+	},
+	// OpenAI 官方预设（#106）：OpenAI 兼容方言（缺省，无需写 apiStyle）、地址预填；
+	// 模型级的请求差异由「模型请求策略」按（供应商, 模型）窄化（ADR-0030）。
+	{
+		id: "openai",
+		name: "OpenAI",
+		type: "preset",
+		baseUrl: "https://api.openai.com/v1",
 		models: [],
 	},
 ];

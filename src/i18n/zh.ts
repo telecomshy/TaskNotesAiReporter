@@ -143,6 +143,7 @@ export const zh: Strings = {
 		providersIntro: "配置供应商的 API 密钥后，即可在下方选择「当前模型」。",
 		addProvider: "+ 添加模型供应商",
 		presetAnthropicName: "Anthropic（Claude）",
+		presetOpenaiName: "OpenAI",
 		activeHeading: "当前模型",
 		noModels: "还没有可用模型，请先配置供应商的 API 密钥。",
 		selectModelName: "选择模型",

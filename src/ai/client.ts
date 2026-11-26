@@ -11,10 +11,16 @@
 import { requestUrlTransport } from "./transport";
 import { buildChatCompletionsUrl, buildMessagesUrl, buildModelsUrl } from "../core/aiUrl";
 import { isAnthropic } from "../core/apiStyle";
+import {
+	EMPTY_REQUEST_POLICY,
+	requestMaxTokens,
+	requestTimeoutSeconds,
+	shouldSendTemperature,
+} from "../core/requestPolicy";
 import { probeOutcomeOfError, type ThinkingProbeOutcome } from "../core/thinking";
 import { AIClientError } from "./errors";
 import { requestJson, type RequestFn } from "./request";
-import type { ApiStyle, ThinkingParam } from "../types";
+import type { ApiStyle, RequestPolicy, ThinkingParam } from "../types";
 
 export { AIClientError };
 export type { AIClientErrorCode, AIClientErrorDetails } from "./errors";
@@ -36,6 +42,11 @@ export interface AIClientConfig {
 	timeoutSeconds: number;
 	/** 思考开关参数（单键，一次只发一个，见 ADR-0024）；缺省不发思考参数。 */
 	thinking?: ThinkingParam;
+	/**
+	 * 「模型请求策略」（#106）：由当前模型解析带出，执行层只消费（ADR-0030）。
+	 * 缺省＝空策略（现状：`max_tokens` + 温度恒发 + 无下限）——自定义卡的「测试」不传策略。
+	 */
+	requestPolicy?: RequestPolicy;
 }
 
 /** 一次对话的结果：正文 + 是否残留推理段（假关判定读面，见 ADR-0024）。 */
@@ -48,10 +59,17 @@ export interface ChatResult {
 export interface ThinkingProbeConfig {
 	/** 「接口方言」（#105）：探测请求与基线同样按方言构造。 */
 	apiStyle?: ApiStyle;
+	/** 供应商 id（#106）：思考测试候选按它分派（内置 OpenAI 预设只探 reasoning_effort）。 */
+	providerId?: string;
 	baseUrl: string;
 	apiKey: string;
 	model: string;
 	timeoutSeconds: number;
+	/**
+	 * 「模型请求策略」（#106）：基线 / 逐字段探测与生成请求同一套构造规则
+	 * （不该发的温度不发、输出额度字段与超时下限生效）；预算恒 256、不受下限影响。
+	 */
+	requestPolicy?: RequestPolicy;
 }
 
 /** 思考测试微型请求的提示与输出上限（#89）：越小越省，够读出推理段读面即可。 */
@@ -207,16 +225,8 @@ export async function chatCompletion(
 			url: buildChatCompletionsUrl(config.baseUrl),
 			method: "POST",
 			apiKey: config.apiKey,
-			body: JSON.stringify({
-				model: config.model,
-				messages,
-				temperature: config.temperature,
-				max_tokens: clampMaxTokens(config.maxTokens),
-				stream: false,
-				// 思考开关参数并入请求体顶层（一次只发一个，见 ADR-0024）
-				...(config.thinking ? { [config.thinking.name]: config.thinking.value } : {}),
-			}),
-			timeoutSeconds: config.timeoutSeconds,
+			body: JSON.stringify(openAIRequestBody(config, messages)),
+			timeoutSeconds: requestTimeoutSeconds(policyOf(config), config.timeoutSeconds),
 		},
 		(json) => {
 			const data = json as {
@@ -229,6 +239,31 @@ export async function chatCompletion(
 		},
 		request
 	);
+}
+
+/**
+ * OpenAI 兼容方言的请求体（#106）：模型请求策略在这里被消费——
+ * 输出额度字段名与预算下限、温度可发条件；思考参数仍是单键并入顶层（ADR-0024）。
+ */
+function openAIRequestBody(config: AIClientConfig, messages: ChatMessage[]): Record<string, unknown> {
+	const policy = policyOf(config);
+	const body: Record<string, unknown> = {
+		model: config.model,
+		messages,
+		// 额度字段名随策略：OpenAI 预设发 max_completion_tokens（含推理 token 的输出预算）。
+		[policy.outputField]: requestMaxTokens(policy, config.maxTokens),
+		stream: false,
+	};
+	// 温度判定输入是「策略 × 本次生效 effort」，不是用户的思考开关（ADR-0030）。
+	if (shouldSendTemperature(policy, config.thinking)) body.temperature = config.temperature;
+	// 思考开关参数并入请求体顶层（一次只发一个，见 ADR-0024）
+	if (config.thinking) body[config.thinking.name] = config.thinking.value;
+	return body;
+}
+
+/** 请求策略的读取侧缺省：未带策略＝空策略（现状零变更，#106 裁决 4）。 */
+function policyOf(config: { requestPolicy?: RequestPolicy }): RequestPolicy {
+	return config.requestPolicy ?? EMPTY_REQUEST_POLICY;
 }
 
 /**
@@ -261,7 +296,7 @@ function anthropicChatCompletion(
 				// 思考开关参数并入请求体顶层（`thinking: {type:…}`，一次只发一个，见 ADR-0024）
 				...(config.thinking ? { [config.thinking.name]: config.thinking.value } : {}),
 			}),
-			timeoutSeconds: config.timeoutSeconds,
+			timeoutSeconds: requestTimeoutSeconds(policyOf(config), config.timeoutSeconds),
 		},
 		(json) => {
 			const body = json as { content?: unknown } | null;
@@ -362,33 +397,37 @@ export async function thinkingProbe(
 	}
 }
 
-/** OpenAI 方言的微型请求：与生成请求同形（含温度），只读响应推理段。 */
+/** OpenAI 方言的微型请求：与生成请求同一套策略（温度规则 / 额度字段），预算恒 256。 */
 function openaiThinkingProbe(
 	config: ThinkingProbeConfig,
 	param: ThinkingParam | null,
 	request: RequestFn
 ): Promise<boolean> {
+	const policy = policyOf(config);
+	const body: Record<string, unknown> = {
+		model: config.model,
+		messages: [{ role: "user", content: THINKING_PROBE_PROMPT }],
+		// 探测预算恒定 256，不受 25k 下限影响（不烧钱，#106 裁决 7）。
+		[policy.outputField]: THINKING_PROBE_MAX_TOKENS,
+		stream: false,
+	};
+	// 不该发的温度不发（基线 / 开 / 强制 / 无思考 / 未知时模型按默认 effort 运行）。
+	if (shouldSendTemperature(policy, param)) body.temperature = 0;
+	if (param) body[param.name] = param.value;
 	return requestJson(
 		{
 			op: "chat",
 			url: buildChatCompletionsUrl(config.baseUrl),
 			method: "POST",
 			apiKey: config.apiKey,
-			body: JSON.stringify({
-				model: config.model,
-				messages: [{ role: "user", content: THINKING_PROBE_PROMPT }],
-				temperature: 0,
-				max_tokens: THINKING_PROBE_MAX_TOKENS,
-				stream: false,
-				...(param ? { [param.name]: param.value } : {}),
-			}),
-			timeoutSeconds: config.timeoutSeconds,
+			body: JSON.stringify(body),
+			timeoutSeconds: requestTimeoutSeconds(policy, config.timeoutSeconds),
 		},
 		(json) => {
 			// 200 不算证据（AC2）：响应体不是对话补全体（如错误体回 200）时读面不可信，
 			// 抛出后按中断归类，不落结论。
-			const body = json as { choices?: unknown };
-			if (!Array.isArray(body.choices) || body.choices.length === 0) {
+			const payload = json as { choices?: unknown };
+			if (!Array.isArray(payload.choices) || payload.choices.length === 0) {
 				throw new AIClientError("chat.parse");
 			}
 			return detectReasoning(json);
@@ -418,7 +457,7 @@ function anthropicThinkingProbe(
 				stream: false,
 				...(param ? { [param.name]: param.value } : {}),
 			}),
-			timeoutSeconds: config.timeoutSeconds,
+			timeoutSeconds: requestTimeoutSeconds(policyOf(config), config.timeoutSeconds),
 		},
 		(json) => {
 			const content = (json as { content?: unknown } | null)?.content;

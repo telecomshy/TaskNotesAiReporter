@@ -11,6 +11,7 @@ import {
 	THINKING_CAPABILITIES,
 	THINKING_OFF_CANDIDATES,
 	ANTHROPIC_THINKING_OFF_CANDIDATES,
+	OPENAI_THINKING_OFF_CANDIDATES,
 	thinkingOffCandidates,
 } from "../src/core/thinking";
 
@@ -317,6 +318,64 @@ test("百炼仅思考型号（qwen3.8-2.4t-a95b / kimi-k3）：forced；旧命�
 	}
 });
 
+// ===== OpenAI 官方预设（#106）：能力表 openai 行 =====
+
+test("OpenAI 能力表（#106）：强制思考族不发参数（关态发 none 会 400）", () => {
+	for (const model of ["gpt-6-astra", "gpt-6.1-sol", "gpt-6.2-astra", "gpt-6.2-sol"]) {
+		for (const setting of ["on", "off"] as const) {
+			const r = resolveThinking({ providerId: "openai", model, setting });
+			assert.equal(r.param, null, `${model} ${setting}`);
+			assert.equal(r.note, "forced", `${model} ${setting}`);
+		}
+	}
+});
+
+test("OpenAI 能力表（#106）：可关族关＝reasoning_effort:\"none\"、开＝\"high\"", () => {
+	for (const model of [
+		"gpt-6.1-terra",
+		"gpt-6-sol",
+		"gpt-6-luna",
+		"gpt-5.2",
+		"gpt-5.4-mini",
+		"gpt-5.6-terra",
+	]) {
+		const off = resolveThinking({ providerId: "openai", model, setting: "off" });
+		assert.deepEqual(off.param, { name: "reasoning_effort", value: "none" }, model);
+		assert.equal(off.note, null, model);
+		const on = resolveThinking({ providerId: "openai", model, setting: "on" });
+		assert.deepEqual(on.param, { name: "reasoning_effort", value: "high" }, model);
+	}
+});
+
+test("OpenAI 能力表（#106）：无思考族不发参数、标注 none", () => {
+	for (const model of ["gpt-4.1", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini"]) {
+		const r = resolveThinking({ providerId: "openai", model, setting: "on" });
+		assert.equal(r.param, null, model);
+		assert.equal(r.note, "none", model);
+	}
+});
+
+test("OpenAI 能力表（#106）：未登记族（gpt-5.5 / gpt-6-cyber）为未知——不擅自假定，测试入口可点", () => {
+	for (const model of ["gpt-5.5", "gpt-6-cyber"]) {
+		const r = resolveThinking({ providerId: "openai", model, setting: "off" });
+		assert.equal(r.param, null, model);
+		assert.equal(r.note, "unknown", model);
+		assert.equal(thinkingDisplay(r).testEntry, "available", model);
+	}
+});
+
+test("OpenAI 能力表（#106）：强制族行排在通用族之前，逐族各归其位（不被前缀行吞掉）", () => {
+	assert.equal(resolveThinking({ providerId: "openai", model: "gpt-6.1-sol", setting: "off" }).note, "forced");
+	assert.equal(resolveThinking({ providerId: "openai", model: "gpt-6.1-terra", setting: "off" }).param !== null, true);
+	assert.deepEqual(thinkingDisplay(resolveThinking({ providerId: "openai", model: "gpt-6.2-astra", setting: "off" })), {
+		state: "forced",
+		badge: "warn",
+		toggleEnabled: false,
+		footnoteWarn: true,
+		testEntry: "done",
+	});
+});
+
 // ===== 思考测试纯状态机（#89，缝 1） =====
 
 test("思考测试（#89）：先发基线微型请求（不发思考参数）", () => {
@@ -346,8 +405,27 @@ test("Anthropic 候选（#105）：单字段 thinking{type:\"disabled\"}，不�
 	assert.deepEqual(ANTHROPIC_THINKING_OFF_CANDIDATES, [
 		{ name: "thinking", value: { type: "disabled" } },
 	]);
-	assert.deepEqual(thinkingOffCandidates("openai"), THINKING_OFF_CANDIDATES, "OpenAI 候选保持现状三字段");
+	assert.deepEqual(thinkingOffCandidates("openai"), THINKING_OFF_CANDIDATES, "OpenAI 方言缺省三字段保持现状");
 	assert.deepEqual(thinkingOffCandidates("anthropic"), ANTHROPIC_THINKING_OFF_CANDIDATES);
+});
+
+test("OpenAI 预设候选（#106）：按供应商 id 收窄为单字段 reasoning_effort:\"none\"", () => {
+	assert.deepEqual(OPENAI_THINKING_OFF_CANDIDATES, [{ name: "reasoning_effort", value: "none" }]);
+	assert.deepEqual(
+		thinkingOffCandidates("openai", "openai"),
+		OPENAI_THINKING_OFF_CANDIDATES,
+		"内置 OpenAI 预设只探 reasoning_effort"
+	);
+	assert.deepEqual(
+		thinkingOffCandidates("openai", "custom_x"),
+		THINKING_OFF_CANDIDATES,
+		"自定义供应商即使走 OpenAI 方言也不收窄"
+	);
+	assert.deepEqual(
+		thinkingOffCandidates("anthropic", "anthropic"),
+		ANTHROPIC_THINKING_OFF_CANDIDATES,
+		"Anthropic 路径不变"
+	);
 });
 
 test("Anthropic 状态机（#105）：候选注入后语义不变——基线有推理段 → 试 thinking 关字段", () => {

@@ -272,8 +272,73 @@ test("Anthropic 方言：首屏空（data:[] 且 has_more=false）→ 空清单�
 	assert.deepEqual(catalogs, [{ providerId: "kimi", models: [] }]);
 });
 
-// ===== 空表 / 失败 =====
+// ===== OpenAI 预设清单过滤（#106） =====
 
+test("OpenAI 预设：拉取成功后过滤，写回的清单只含对话模型、顺序保留、结局 fetched", async () => {
+	const { slice, catalogs } = fakeSlice({ [SECRET_NAME]: "sk-live" });
+	const { request } = fakeRequest(
+		modelsResponse([
+			"gpt-6.2-astra",
+			"text-embedding-3-large",
+			"gpt-4.1",
+			"gpt-image-2.6-sunburst",
+			"gpt-5.5-pro",
+			"sora-2",
+			"gpt-6.7-terra",
+		])
+	);
+	const outcome = await runFetchModelsFlow(
+		slice,
+		providerOf({ id: "openai", baseUrl: "https://api.openai.com/v1" }),
+		30,
+		request
+	);
+	assert.deepEqual(outcome, {
+		kind: "fetched",
+		models: ["gpt-6.2-astra", "gpt-4.1", "gpt-6.7-terra"],
+	});
+	assert.deepEqual(catalogs, [
+		{ providerId: "openai", models: ["gpt-6.2-astra", "gpt-4.1", "gpt-6.7-terra"] },
+	], "写回的是过滤后的完整快照");
+});
+
+test("OpenAI 预设：全部被过滤 ⇒ 结局 empty、清单照实为空（不新增错误码）", async () => {
+	const { slice, catalogs } = fakeSlice({ [SECRET_NAME]: "sk-live" });
+	const { request } = fakeRequest(
+		modelsResponse(["text-embedding-3-small", "gpt-oss-20b", "gpt-5.6-cyber", "chat-latest"])
+	);
+	const outcome = await runFetchModelsFlow(
+		slice,
+		providerOf({ id: "openai", baseUrl: "https://api.openai.com/v1" }),
+		30,
+		request
+	);
+	assert.deepEqual(outcome, { kind: "empty" });
+	assert.deepEqual(catalogs, [{ providerId: "openai", models: [] }]);
+});
+
+test("其它供应商：清单不过滤（四家国产预设与自定义零变更）", async () => {
+	const { slice, catalogs } = fakeSlice({ [SECRET_NAME]: "sk-live" });
+	const { request } = fakeRequest(modelsResponse(["gpt-6.2-astra", "text-embedding-3-large"]));
+	const outcome = await runFetchModelsFlow(slice, providerOf(), 30, request);
+	assert.deepEqual(outcome, { kind: "fetched", models: ["gpt-6.2-astra", "text-embedding-3-large"] });
+	assert.deepEqual(catalogs, [{ providerId: "kimi", models: ["gpt-6.2-astra", "text-embedding-3-large"] }]);
+});
+
+test("OpenAI 预设：请求失败仍不写清单（过滤只在成功路径）", async () => {
+	const { slice, catalogs } = fakeSlice({ [SECRET_NAME]: "sk-live" });
+	const { request } = fakeRequest({ status: 401, json: { error: { message: "bad key" } }, text: "" });
+	const outcome = await runFetchModelsFlow(
+		slice,
+		providerOf({ id: "openai", baseUrl: "https://api.openai.com/v1" }),
+		30,
+		request
+	);
+	assert.ok(outcome.kind === "failed");
+	assert.deepEqual(catalogs, []);
+});
+
+// ===== 空表 / 失败 =====
 test("空表是正常状态：empty 且清单照实刷为空", async () => {
 	const { slice, catalogs } = fakeSlice({ [SECRET_NAME]: "sk-live" });
 	const { request } = fakeRequest(modelsResponse([]));

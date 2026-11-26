@@ -167,8 +167,65 @@ test("Anthropic 方言（#105）：探测走 /messages + x-api-key，基线不�
 	assert.deepEqual(slice.recorded[0][2].off, { name: "thinking", value: { type: "disabled" } });
 });
 
-// ===== 共享界面动作（#97）：跑 + 报 + 回调 =====
+// ===== OpenAI 预设（#106）：候选单字段 + 探测服从请求策略 =====
 
+test("OpenAI 预设（#106）：只试 reasoning_effort:none；基线与逐字段都服从策略（不发温度、max_completion_tokens 256）", async () => {
+	const calls: RequestParams[] = [];
+	let index = 0;
+	const responses: HttpResponse[] = [
+		{
+			status: 200,
+			json: { choices: [{ message: { content: "2", reasoning_content: "想想" } }] },
+			text: "",
+		},
+		{ status: 200, json: { choices: [{ message: { content: "2" } }] }, text: "" },
+	];
+	const request: RequestFn = async (params) => {
+		calls.push(params);
+		return responses[Math.min(index++, responses.length - 1)];
+	};
+
+	const policy = {
+		outputField: "max_completion_tokens" as const,
+		temperature: "omit-unless-none" as const,
+		minMaxTokens: 25000,
+		minTimeoutSeconds: 120,
+	};
+	const slice = fakeSlice({
+		ok: true,
+		providerId: "openai",
+		config: {
+			apiStyle: "openai",
+			baseUrl: "https://api.openai.com/v1",
+			apiKey: "sk",
+			model: "gpt-5.2",
+			thinking: {
+				setting: "off",
+				param: { name: "reasoning_effort", value: "none" },
+				note: null,
+				learned: null,
+			},
+			requestPolicy: policy,
+		},
+	});
+	const result = await runThinkingTestFlow(slice, 5, false, request);
+
+	assert.ok(result);
+	assert.equal(result.verdict, "switchable");
+	assert.equal(calls.length, 2, "基线 + 单字段 candidate（其余 OpenAI 字段不试）");
+	assert.equal(calls[0].url, "https://api.openai.com/v1/chat/completions");
+	const baseline = JSON.parse(calls[0].body!);
+	const probe = JSON.parse(calls[1].body!);
+	assert.equal(baseline.max_completion_tokens, 256, "探测恒定 256，不受 25k 下限影响");
+	assert.equal("max_tokens" in baseline, false);
+	assert.equal("temperature" in baseline, false, "基线不发 effort ⇒ 温度不发");
+	assert.deepEqual(probe.reasoning_effort, "none");
+	assert.equal(probe.max_completion_tokens, 256);
+	assert.equal(probe.temperature, 0, "生效 effort 为 none 时温度合法");
+	assert.deepEqual(slice.recorded[0][2].off, { name: "reasoning_effort", value: "none" });
+});
+
+// ===== 共享界面动作（#97）：跑 + 报 + 回调 =====
 test("共享动作：成功路径提示结论并回调刷新", async () => {
 	notices.length = 0;
 	const t = createTranslator(BUNDLES.zh);

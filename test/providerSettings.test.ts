@@ -284,6 +284,34 @@ test("resolveActive 带出方言：Anthropic 供应商解析为 anthropic（调�
 	assert.equal(result.ok && result.config.apiStyle, "anthropic");
 });
 
+test("resolveActive 带出请求策略（#106）：OpenAI 预设按模型族解析，其它供应商空策略", () => {
+	const openai = provider({
+		id: "openai",
+		type: "preset",
+		baseUrl: "https://api.openai.com/v1",
+		apiKeySecretId: "tnar-openai",
+		models: ["gpt-6.2-astra"],
+	});
+	const s = state({ providers: [openai], activeProviderId: "openai", activeModel: "gpt-6.2-astra" });
+	const result = resolveActive(s, () => "sk");
+	assert.deepEqual(result.ok && result.config.requestPolicy, {
+		outputField: "max_completion_tokens",
+		temperature: "omit-always",
+		minMaxTokens: 25000,
+		minTimeoutSeconds: 120,
+	});
+
+	const qwen = provider({ id: "qwen", type: "preset", apiKeySecretId: "k", models: ["qwen3.8-max"] });
+	const qs = state({ providers: [qwen], activeProviderId: "qwen", activeModel: "qwen3.8-max" });
+	const qresult = resolveActive(qs, () => "sk");
+	assert.deepEqual(qresult.ok && qresult.config.requestPolicy, {
+		outputField: "max_tokens",
+		temperature: "send",
+		minMaxTokens: 0,
+		minTimeoutSeconds: 0,
+	});
+});
+
 test("setAuthType 切到 none：清空密钥名", () => {
 	const p = provider({ id: "c", type: "custom", authType: "bearer", apiKeySecretId: "k" });
 	const s = state({ providers: [p] });
@@ -412,6 +440,12 @@ test("resolveActive 成功：解析出地址与密钥值", () => {
 			apiKey: "sk",
 			model: "m",
 			thinking: { setting: "off", param: null, note: "unknown", learned: null },
+			requestPolicy: {
+				outputField: "max_tokens",
+				temperature: "send",
+				minMaxTokens: 0,
+				minTimeoutSeconds: 0,
+			},
 		},
 	});
 });

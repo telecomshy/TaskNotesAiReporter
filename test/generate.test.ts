@@ -307,6 +307,31 @@ test("思考参数透传：当前模型的思考参数随 chat 配置交出（�
 	assert.deepEqual(captured.chatConfig?.thinking, { name: "thinking", value: { type: "disabled" } });
 });
 
+test("请求策略透传（#106）：当前模型解析出的策略随 chat 配置交出（生成层不判断供应商）", async () => {
+	const policy = {
+		outputField: "max_completion_tokens" as const,
+		temperature: "omit-unless-none" as const,
+		minMaxTokens: 25000,
+		minTimeoutSeconds: 120,
+	};
+	const { deps, captured } = setup({
+		resolveModel: () => ({
+			ok: true,
+			providerId: "openai",
+			config: {
+				apiStyle: "openai",
+				baseUrl: "https://api.openai.com/v1",
+				apiKey: "sk",
+				model: "gpt-5.6-sol",
+				thinking: { setting: "off", param: null, note: null, learned: null },
+				requestPolicy: policy,
+			},
+		}),
+	});
+	await createGeneration(deps)(baseIntent());
+	assert.deepEqual(captured.chatConfig?.requestPolicy, policy);
+});
+
 test("假关告警：设关发参而响应仍带推理段 → 成功结果带 fakeOff", async () => {
 	const { deps } = setup({
 		resolveModel: () => ({
