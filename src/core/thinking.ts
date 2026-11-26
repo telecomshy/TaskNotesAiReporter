@@ -33,7 +33,13 @@ export type ThinkingCapability =
 	/** 强制思考（关参数会 400 或无关闭档），不发参数。 */
 	| { kind: "forced" }
 	/** 无思考模型（不支持思考参数），不发参数。 */
-	| { kind: "none" };
+	| { kind: "none" }
+	/**
+	 * 显式「未知」（#110）：为挡住同族通配行而设——按（供应商, 模型）查表是首个命中，
+	 * 这些族若没有自己的行，会被相邻前缀行（如 `gpt-5.4*`）当成可关族，
+	 * 从而在另一套报文上发出该协议不存在的字段。`kind:"unknown"` 与「表未命中」同义。
+	 */
+	| { kind: "unknown" };
 
 /** 能力表一行：按（供应商, 模型）匹配，首个命中行生效。 */
 export interface ThinkingCapabilityRow {
@@ -123,6 +129,13 @@ export const THINKING_CAPABILITIES: readonly ThinkingCapabilityRow[] = [
 	{ providerId: "openai", modelPattern: "gpt-6.1-terra*", capability: reasoningEffortSwitch() },
 	{ providerId: "openai", modelPattern: "gpt-6-sol*", capability: reasoningEffortSwitch() },
 	{ providerId: "openai", modelPattern: "gpt-6-luna*", capability: reasoningEffortSwitch() },
+	// Responses-only 族（#110）：官方未给出 `none` 支持 ⇒ 不登记（ADR-0026），但必须用显式
+	// 「未知」行挡住下面的 `gpt-5.2*` / `gpt-5.4*` / `gpt-5.6*` 前缀行——否则
+	// `gpt-5.4-pro` 会被当成 Chat 的可关族，在 `/responses` 上发出不存在的顶层 `reasoning_effort`。
+	// 开关因而置灰、思考测试可点（探嵌套 `reasoning.effort`），习得结论照旧盖过。
+	{ providerId: "openai", modelPattern: "*-pro", capability: { kind: "unknown" } },
+	{ providerId: "openai", modelPattern: "gpt-oss-*", capability: { kind: "unknown" } },
+	{ providerId: "openai", modelPattern: "gpt-5.6-cyber", capability: { kind: "unknown" } },
 	{ providerId: "openai", modelPattern: "gpt-5.2*", capability: reasoningEffortSwitch() },
 	{ providerId: "openai", modelPattern: "gpt-5.4*", capability: reasoningEffortSwitch() },
 	{ providerId: "openai", modelPattern: "gpt-5.6*", capability: reasoningEffortSwitch() },
@@ -177,6 +190,7 @@ export function resolveThinking(
 	if (!row) return unknownThinking(setting);
 
 	const cap = row.capability;
+	if (cap.kind === "unknown") return unknownThinking(setting);
 	if (cap.kind === "forced") return { setting, param: null, note: "forced", learned: null };
 	if (cap.kind === "none") return { setting, param: null, note: "none", learned: null };
 

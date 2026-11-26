@@ -417,11 +417,15 @@ export function resolveActive(
 		return { ok: false, reason: "missing-credentials" };
 	}
 
+	const apiStyle = apiStyleOf(provider);
 	const config: ActiveModelConfig = {
 		// 「接口方言」（#105）：生成 / 测试 / 拉取清单全部按解析结果分派。
-		apiStyle: apiStyleOf(provider),
-		// 「接口协议」（#110）：与方言 / 策略同路产出，执行层只消费（ADR-0031）。
-		protocol: resolveWireProtocol(provider.id, state.activeModel),
+		apiStyle,
+		// 「接口协议」（#110）：只属于 OpenAI 方言（ADR-0031）——Anthropic 永远 Messages，
+		// 不查协议表，配置里也不带该字段（避免「有值却被忽略」的误导）。
+		...(apiStyle === "openai"
+			? { protocol: resolveWireProtocol(provider.id, state.activeModel) }
+			: {}),
 		baseUrl: provider.baseUrl,
 		apiKey,
 		model: state.activeModel,

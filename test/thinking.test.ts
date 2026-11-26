@@ -365,6 +365,20 @@ test("OpenAI 能力表（#106）：未登记族（gpt-5.5 / gpt-6-cyber）为未
 	}
 });
 
+test("Responses-only 族（#110）：显式「未知」行挡住同族前缀行——不发 Chat 的 reasoning_effort，测试可点", () => {
+	for (const model of ["gpt-5.2-pro", "gpt-5.4-pro", "gpt-5.5-pro", "gpt-oss-120b", "gpt-5.6-cyber"]) {
+		for (const setting of ["off", "on"] as const) {
+			const r = resolveThinking({ providerId: "openai", model, setting });
+			assert.equal(r.param, null, `${model} ${setting}：不发任何思考参数`);
+			assert.equal(r.note, "unknown", `${model} ${setting}：能力未知，不擅自假定`);
+		}
+		assert.equal(thinkingDisplay(resolveThinking({ providerId: "openai", model, setting: "off" })).testEntry, "available", model);
+	}
+	// 同族前缀行的既有行为不变：gpt-5.4 / gpt-5.6-sol 仍是可关族（Chat 协议）。
+	assert.equal(resolveThinking({ providerId: "openai", model: "gpt-5.4", setting: "off" }).param?.name, "reasoning_effort");
+	assert.equal(resolveThinking({ providerId: "openai", model: "gpt-5.6-sol", setting: "off" }).param?.name, "reasoning_effort");
+});
+
 test("OpenAI 能力表（#106）：强制族行排在通用族之前，逐族各归其位（不被前缀行吞掉）", () => {
 	assert.equal(resolveThinking({ providerId: "openai", model: "gpt-6.1-sol", setting: "off" }).note, "forced");
 	assert.equal(resolveThinking({ providerId: "openai", model: "gpt-6.1-terra", setting: "off" }).param !== null, true);

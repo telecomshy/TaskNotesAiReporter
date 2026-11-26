@@ -702,6 +702,16 @@ const responsesConfig = {
 	requestPolicy: OPENAI_REQUEST_POLICY,
 };
 
+/** Responses 探测配置（生成配置之外只换模型与超时；两处测试共用）。 */
+const responsesProbeConfig = {
+	baseUrl: "https://api.openai.com/v1",
+	apiKey: "sk",
+	model: "gpt-5.5-pro",
+	protocol: "responses" as const,
+	timeoutSeconds: 30,
+	requestPolicy: OPENAI_REQUEST_POLICY,
+};
+
 test("Responses 协议：发 input / max_output_tokens / store:false；无 messages 与两个 chat 额度字段", async () => {
 	await capture();
 	respond = () => ({
@@ -792,14 +802,7 @@ test("Responses 微型探测：同一请求构造、预算恒 256；读 output �
 	await capture();
 	respond = () => ({ status: 200, json: { output: [{ type: "reasoning", summary: [] }, { type: "message", content: [{ type: "output_text", text: "2" }] }] } });
 	const outcome = await client.thinkingProbe(
-		{
-			baseUrl: "https://api.openai.com/v1",
-			apiKey: "sk",
-			model: "gpt-5.5-pro",
-			protocol: "responses",
-			timeoutSeconds: 30,
-			requestPolicy: OPENAI_REQUEST_POLICY,
-		},
+		responsesProbeConfig,
 		{ name: "reasoning", value: { effort: "none" } }
 	);
 	assert.equal(outcome, "reasoning-present");
@@ -816,14 +819,7 @@ test("Responses 微型探测：output 不是数组 → 中断（chat.parse 不�
 	await capture();
 	respond = () => ({ status: 200, json: {} });
 	const outcome = await client.thinkingProbe(
-		{
-			baseUrl: "https://api.openai.com/v1",
-			apiKey: "sk",
-			model: "gpt-5.5-pro",
-			protocol: "responses",
-			timeoutSeconds: 30,
-			requestPolicy: OPENAI_REQUEST_POLICY,
-		},
+		responsesProbeConfig,
 		null
 	);
 	assert.equal(outcome, "interrupted");

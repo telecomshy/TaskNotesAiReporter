@@ -243,7 +243,7 @@ export async function chatCompletion(
 			method: "POST",
 			apiKey: config.apiKey,
 			body: JSON.stringify(
-				openAIRequestBody({
+				chatCompletionsRequestBody({
 					model: config.model,
 					messages,
 					policy: policyOf(config),
@@ -262,7 +262,7 @@ export async function chatCompletion(
 			};
 			const content = data.choices?.[0]?.message?.content;
 			if (!content) throw new AIClientError("chat.empty");
-			return { content, hasReasoning: detectReasoning(data) };
+			return { content, hasReasoning: detectChatCompletionsReasoning(data) };
 		},
 		request
 	);
@@ -285,18 +285,27 @@ interface WireRequest {
 	maxTokens: number;
 }
 
-function openAIRequestBody(input: WireRequest): Record<string, unknown> {
+function chatCompletionsRequestBody(input: WireRequest): Record<string, unknown> {
 	const body: Record<string, unknown> = {
 		model: input.model,
 		messages: input.messages,
 		[input.policy.outputField]: input.maxTokens,
 		stream: false,
 	};
+	applyPolicyFields(body, input);
+	return body;
+}
+
+/**
+ * 策略决定的字段并入（Chat Completions 与 Responses 共用，#110）：温度按
+ * 「策略 × 本次生效 effort」判定，思考参数按类型表的单键并入（一次只发一个，ADR-0024）。
+ * 两条报文路径不各算一遍，策略规则不会分叉。
+ */
+function applyPolicyFields(body: Record<string, unknown>, input: WireRequest): void {
 	// 温度判定输入是「策略 × 本次生效 effort」，不是用户的思考开关（ADR-0030）。
 	if (shouldSendTemperature(input.policy, input.thinking)) body.temperature = input.temperature;
 	// 思考开关参数并入请求体顶层（一次只发一个，见 ADR-0024）
 	if (input.thinking) body[input.thinking.name] = input.thinking.value;
-	return body;
 }
 
 /**
@@ -315,8 +324,7 @@ function responsesRequestBody(input: WireRequest): Record<string, unknown> {
 		stream: false,
 		store: false,
 	};
-	if (shouldSendTemperature(input.policy, input.thinking)) body.temperature = input.temperature;
-	if (input.thinking) body[input.thinking.name] = input.thinking.value;
+	applyPolicyFields(body, input);
 	return body;
 }
 
@@ -498,10 +506,10 @@ function detectAnthropicReasoning(data: unknown): boolean {
 }
 
 /**
- * 响应是否残留推理段：`reasoning_content` 非空或 `reasoning_tokens` 计量大于零。
+ * Chat Completions 的推理段读面：`reasoning_content` 非空或 `reasoning_tokens` 计量大于零。
  * 假关判定的唯一读面——不看 HTTP 200（错误参数名会得到 200＋正常思考）。
  */
-function detectReasoning(data: unknown): boolean {
+function detectChatCompletionsReasoning(data: unknown): boolean {
 	const body = data as {
 		choices?: Array<{ message?: { reasoning_content?: unknown } }>;
 		usage?: { completion_tokens_details?: { reasoning_tokens?: unknown } };
@@ -559,7 +567,7 @@ function openaiThinkingProbe(
 			method: "POST",
 			apiKey: config.apiKey,
 			body: JSON.stringify(
-				openAIRequestBody({
+				chatCompletionsRequestBody({
 					model: config.model,
 					messages: [{ role: "user", content: THINKING_PROBE_PROMPT }],
 					policy,
@@ -578,7 +586,7 @@ function openaiThinkingProbe(
 			if (!Array.isArray(payload.choices) || payload.choices.length === 0) {
 				throw new AIClientError("chat.parse");
 			}
-			return detectReasoning(json);
+			return detectChatCompletionsReasoning(json);
 		},
 		request
 	);

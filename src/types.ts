@@ -129,7 +129,6 @@ export type ApiStyle = "openai" | "anthropic";
  */
 export type WireProtocol = "chat-completions" | "responses";
 
-
 /** 输出额度字段名（#106，ADR-0030）：OpenAI 官方的「含推理 token 的输出预算」只有 `max_completion_tokens`。只对 Chat Completions 生效——Responses 协议固定 `max_output_tokens`（#110，ADR-0031）。 */
 export type OutputTokenField = "max_tokens" | "max_completion_tokens";
 

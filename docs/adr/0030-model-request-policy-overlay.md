@@ -1,5 +1,10 @@
 # 模型请求策略：方言之上的第二层窄化
 
+> **部分被 [ADR-0031](0031-wire-protocol-per-model.md) 取代（#110）**：本 ADR 第 4 条「OpenAI 官方预设本轮只走
+> Chat Completions、Responses-only 不进清单」已在 #110 反转——`*-pro` / `gpt-oss-*` / `gpt-5.6-cyber`
+> 现由「接口协议」路由到 `/responses` 并重新进入清单。其余裁决（方言定基线、策略只能窄化、
+> 只按供应商 id 命中）不变。
+
 > 规格见 issue #106。与 [ADR-0028](0028-api-dialect-as-provider-property.md)（接口方言是供应商属性）衔接；
 > 本 ADR **只修订** ADR-0028 里「请求体参数策略由方言固定」这一句——方言仍是基线，
 > 模型请求策略只能在其上窄化，不能加回方言已删的参数。

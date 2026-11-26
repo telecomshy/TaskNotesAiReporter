@@ -89,7 +89,7 @@
 6. **请求体（Responses）**：`model`、`input`（复用现有 `ChatMessage[]`，`system` 角色留在原位——官方迁移指南认定纯文本消息可一一对应）、`max_output_tokens`、`stream: false`、`store: false`；温度按策略判定；思考参数并入顶层（`reasoning: { effort }`）；超时取策略下限。
 7. **预算与超时**：与 Chat 共用 `effectiveMaxTokens` / `effectiveTimeoutSeconds`；Responses 的 minimum 16 远低于策略下限，不另加钳制。微型探测恒 256、不受下限影响（沿用 #106）。
 8. **温度的生效 effort 读法**：`requestPolicy` 增加「从思考参数提取 effort」的纯函数，认识顶层 `reasoning_effort`（字符串）与嵌套 `reasoning.effort`（对象）两种形态；`shouldSendTemperature` 改用它。规则本身（`send` / `omit-unless-none` / `omit-always`）不变。
-9. **能力表不登记新族**：官方未给出 `*-pro` / `gpt-oss-*` / `gpt-5.6-cyber` 的 `none` 支持，按 ADR-0026「不登记＝未知」——开关置灰、测试可点、习得结论盖过。生成期不发思考参数（官方缺省 `medium`）。
+9. **能力表不登记新族，但必须显式挡位**：官方未给出 `*-pro` / `gpt-oss-*` / `gpt-5.6-cyber` 的 `none` 支持，按 ADR-0026「不登记＝未知」——开关置灰、测试可点、习得结论盖过。**但表按首个命中匹配，这些族必须先有显式「未知」行**：否则 `gpt-5.4-pro` / `gpt-5.2-pro` / `gpt-5.6-cyber` 会被相邻的 `gpt-5.4*` / `gpt-5.2*` / `gpt-5.6*` 前缀行当成 Chat 的可关族，在 Responses 上发出不存在的顶层 `reasoning_effort`（并按 `omit-unless-none` 误发温度）。生成期对它们不发思考参数（官方缺省 `medium`）。
 10. **思考测试候选**：协议为 `responses` 时用单字段候选 `{ name: "reasoning", value: { effort: "none" } }`；顶层 `reasoning_effort` 在 Responses 上是不存在的字段。状态机与四值判定不变。
 11. **响应读取（Responses）**：`output` 不是数组 ⇒ `chat.parse`；遍历 `type:"message"` 的 `content[]`，拼接 `type:"output_text"` 的 `text`；正文为空（含 `incomplete` 的只推理态）⇒ `chat.empty`。推理段读面＝任一 `type:"reasoning"` 条目，或 `usage.output_tokens_details.reasoning_tokens > 0`。
 12. **微型探测（Responses）**：同一请求构造，预算恒 256；`output` 不是数组 ⇒ `chat.parse`（不认 200）；否则按推理段读面判 `reasoning-present` / `reasoning-absent`；400 仍是探测信号，其它异常中断（沿用 #89）。
@@ -104,7 +104,7 @@
 好测试只断言外部行为：从可注入请求函数抓「发了什么」（网址、方法、请求头、请求体），用伪造响应断言「读出了什么」（正文、推理段、错误码）。**沿用现有四个缝，不新增。**
 
 - **主缝（沿用）：AI 客户端边界**。Responses 生成请求：URL 以 `/responses` 结尾、body 有 `input` 且无 `messages`、发 `max_output_tokens` 且无 `max_completion_tokens` / `max_tokens`、`store:false`、`stream:false`、温度按策略、思考嵌套形状、超时下限。Responses 读取：`output[]` 多 message / 多 `output_text` 块拼接；`incomplete` 空正文 ⇒ `chat.empty`；`output` 非数组 ⇒ `chat.parse`；reasoning 项与 `reasoning_tokens` 两种读面；探测同一策略但预算恒 256。Chat 路径逐字段回归。先例：`test/client.test.ts`。
-- **纯函数缝（沿用）：协议表 / 匹配 / 温度读法 / 候选分派 / 过滤表**。协议表首个命中、`*-pro` 后缀、缺省 chat、其它供应商零命中；`matchModelPattern` 后缀分支（既有前缀语义不变）；`shouldSendTemperature` 认识嵌套 effort；`thinkingOffCandidates` 按协议分派；过滤表放回三类、继续排除 `gpt-rosalind-research` 与 `chat-latest`。先例：`test/requestPolicy.test.ts`、`test/thinking.test.ts`。
+- **纯函数缝（沿用）：协议表 / 匹配 / 温度读法 / 候选分派 / 过滤表 / 能力表挡位**。协议表首个命中、`*-pro` 后缀、缺省 chat、其它供应商零命中；`matchModelPattern` 后缀分支（既有前缀语义不变）；`shouldSendTemperature` 认识嵌套 effort；`thinkingOffCandidates` 按协议分派；过滤表放回三类、继续排除 `gpt-rosalind-research` 与 `chat-latest`；能力表的 `*-pro` / `gpt-oss-*` / `gpt-5.6-cyber` 显式「未知」行挡住同族前缀行（含 `gpt-5.4-pro` 这类会被 `gpt-5.4*` 吞掉的模型），同族 Chat 模型（`gpt-5.4` / `gpt-5.6-sol`）行为不变。先例：`test/requestPolicy.test.ts`、`test/thinking.test.ts`。
 - **设置缝（沿用）：当前模型解析**。`resolveActive` 带出 protocol：`gpt-5.5-pro` ⇒ responses、`gpt-6.2-astra` ⇒ chat-completions、四家国产预设与自定义 ⇒ chat-completions、Anthropic ⇒ 不参与。先例：`test/providerSettings.test.ts`。
 - **流程缝（沿用）：获取模型列表**。OpenAI 假响应含 `gpt-5.5-pro` / `gpt-oss-120b` ⇒ 清单保留它们、结局 fetched；`gpt-rosalind-research` 仍被过滤。先例：`test/fetchModelsFlow.test.ts`。
 - **UI 人工验收**（无 DOM 视觉测试）：清单多出 pro / oss 条目；思考卡对它们显示「未知」且测试入口可点；Chat 模型外观不变。

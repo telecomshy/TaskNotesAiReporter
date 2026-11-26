@@ -338,6 +338,20 @@ test("resolveActive 带出接口协议（#110）：Responses-only 模型走 resp
 		() => "sk"
 	);
 	assert.equal(ds.ok && ds.config.protocol, "chat-completions", "不按模型名嗅探官方端点");
+
+	const claude = provider({
+		id: "anthropic",
+		type: "preset",
+		baseUrl: "https://api.anthropic.com/v1",
+		apiStyle: "anthropic",
+		apiKeySecretId: "k",
+		models: ["claude-sonnet-4-6"],
+	});
+	const claudeResult = resolveActive(
+		state({ providers: [claude], activeProviderId: "anthropic", activeModel: "claude-sonnet-4-6" }),
+		() => "sk"
+	);
+	assert.equal(claudeResult.ok && claudeResult.config.protocol, undefined, "Anthropic 方言不参与协议层");
 });
 
 test("setAuthType 切到 none：清空密钥名", () => {
