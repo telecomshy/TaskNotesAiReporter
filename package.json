@@ -8,6 +8,7 @@
 		"deploy": "npm run build && node scripts/deploy.mjs",
 		"lint": "eslint . --max-warnings 0",
 		"dev": "node esbuild.config.mjs",
+		"check": "npm run typecheck && npm run lint && npm test",
 		"test": "node --import tsx --import ./test/fakes/obsidian-shim.mjs --experimental-test-module-mocks --test \"test/*.test.ts\"",
 		"test:one": "node --import tsx --import ./test/fakes/obsidian-shim.mjs --experimental-test-module-mocks --test",
 		"typecheck": "tsc -noEmit -skipLibCheck",

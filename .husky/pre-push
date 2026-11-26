@@ -1,2 +1,2 @@
-# Push gate: full test suite before origin sees the commit (CI re-runs it on main).
-npm test
+# Push gate: full checks (typecheck / lint / test) before origin sees the commit (CI re-runs them on main).
+npm run check

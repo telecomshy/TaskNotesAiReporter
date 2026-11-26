@@ -79,6 +79,7 @@ npm run build      # production build (with type checking)
 npm run deploy     # build, then copy the artifacts into your local test vault
 npm run lint       # ESLint (fails on warnings)
 npm run typecheck  # tsc -noEmit
+npm run check      # typecheck + lint + tests (the gate pre-push and CI run)
 npm test           # run unit tests
 ```
 

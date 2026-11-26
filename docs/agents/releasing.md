@@ -10,7 +10,7 @@ Operational steps for shipping a version. The workflow lives in `.github/workflo
    - `npm version X.Y.Z --no-git-tag-version` — updates `package.json` and `package-lock.json`.
    - `manifest.json`: set `"version": "X.Y.Z"`.
    - `versions.json`: add `"X.Y.Z": "<minAppVersion>"`, using the same value as `manifest.json`'s `minAppVersion`.
-4. `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`. `test/versions.test.ts` already fails on a package / manifest / versions mismatch.
+4. `npm run check`（typecheck / lint / test）与 `npm run build`。`test/versions.test.ts` already fails on a package / manifest / versions mismatch.
 5. Commit `chore: 发布 X.Y.Z`; push `main`.
 
 ## Publish
