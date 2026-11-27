@@ -32,6 +32,7 @@ OpenAI 官方打破了这个前提：同一家供应商同时提供 `POST /v1/ch
 ## Consequences
 
 - **两张表同源漂移**：协议表（`src/core/wireProtocol.ts`）与清单排除表（`src/core/modelCatalogFilter.ts`）都要随新模型族更新，事实源是研究笔记，维护流程与思考能力表一致。
+  **漂移已有执法面（#114）**：协议行 / 能力表挡位行 / 清单放回三处同步点由生成式交叉测试看守，见 [ADR-0035](0035-cross-table-invariant-enforcement.md)；这是加法，不改变本记录的裁决。
 - **第二个请求构造与读取面**：客户端多一套 body 与 parse 分支；共享的温度判定、思考参数并键、额度与超时下限仍只有一处实现，避免策略规则在两条路径上分叉。
 - **错误语义零新增**：Responses 的「只推理、无正文」仍归 `chat.empty`；`output[]` 形态不对归 `chat.parse`；其余沿用 `timeout` / `chat.http` / `chat.network` / `models.*`。
 - **能力表不登记新族（但显式挡位）**：官方未给出 `*-pro` / `gpt-oss-*` 的 `none` 支持，按 ADR-0026「不登记＝未知」——开关置灰、思考测试可点，习得结论照旧盖过内置表。表是首个命中匹配，因此这些族必须排在 `gpt-5.2*` / `gpt-5.4*` / `gpt-5.6*` 前缀行之前，用显式「未知」行挡住，否则会在 Responses 上发出 Chat 专有的 `reasoning_effort`。
