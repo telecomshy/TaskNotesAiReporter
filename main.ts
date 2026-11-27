@@ -3,7 +3,7 @@
  * 提供：设置页、左侧 Ribbon 按钮、命令面板命令，打开"生成报告"交互弹窗。
  */
 
-import { getLanguage, Plugin } from "obsidian";
+import { getLanguage, Notice, Plugin } from "obsidian";
 import { TaskNotesAIHelperSettingTab } from "./src/settings";
 import { ReportModal } from "./src/ui/ReportModal";
 import { obsidianTaskRepository } from "./src/tasks/obsidian";
@@ -84,8 +84,13 @@ export default class TaskNotesAIHelperPlugin extends Plugin {
 		// 设置 owner：自持状态与落盘（见 ADR-0012 推广 / #46）。接线层不再逐字段搬运设置切片。
 		this.settingsOwner = createSettingsOwner(await loadSettingsFromIO(io), io);
 		this.settings = this.settingsOwner.get();
-		this.providers = createProviderSettings({ owner: this.settingsOwner });
-		this.appSettings = createAppSettings(this.settingsOwner);
+		// 落盘失败由两个门面统一上报到这里（ADR-0034）：留底到控制台 + 用户可见 Notice。
+		const onSaveError = (error: unknown): void => {
+			console.error("[TaskNotes AI Reporter] Failed to save settings", error);
+			new Notice(this.t("settings.saveFailed"));
+		};
+		this.providers = createProviderSettings({ owner: this.settingsOwner, onSaveError });
+		this.appSettings = createAppSettings({ owner: this.settingsOwner, onSaveError });
 
 	}
 

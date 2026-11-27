@@ -16,6 +16,7 @@ import {
 } from "../src/settings/appSettings";
 import { createSettingsOwner } from "../src/settings/owner";
 import { DEFAULT_SETTINGS, type TaskNotesAIHelperSettings } from "../src/types";
+import { flush } from "./fakes/flush";
 
 /** 构造测试用设置（整份，含供应商切片），可被命令直接作用。 */
 function state(over: Partial<TaskNotesAIHelperSettings> = {}): TaskNotesAIHelperSettings {
@@ -28,15 +29,19 @@ function state(over: Partial<TaskNotesAIHelperSettings> = {}): TaskNotesAIHelper
 	};
 }
 
-/** 构造测试用 owner：落盘计数 + 可读密钥。 */
+/** 构造测试用 owner：落盘计数 + 可读密钥；`saveError` 提供时落盘改为拒绝。 */
 function ownerOver(
 	live: TaskNotesAIHelperSettings,
-	opts: { onSave?: () => void; getSecret?: (id: string) => string | null } = {}
+	opts: {
+		onSave?: () => void;
+		saveError?: unknown;
+		getSecret?: (id: string) => string | null;
+	} = {}
 ) {
 	return createSettingsOwner(live, {
 		save: () => {
 			opts.onSave?.();
-			return Promise.resolve();
+			return opts.saveError === undefined ? Promise.resolve() : Promise.reject(opts.saveError);
 		},
 		getSecret: (id) => opts.getSecret?.(id) ?? null,
 	});
@@ -186,10 +191,28 @@ test("setSelectedTemplateId 空串：不选模板", () => {
 test("门面：命令落盘一次，并保留引用", () => {
 	const live = state();
 	let saves = 0;
-	const facade = createAppSettings(ownerOver(live, { onSave: () => saves++ }));
+	const facade = createAppSettings({ owner: ownerOver(live, { onSave: () => saves++ }), onSaveError: () => {} });
 	facade.setReportFolder("  X  ");
 	assert.equal(live.reportFolder, "X");
 	assert.equal(saves, 1);
+});
+
+test("门面：落盘失败上报一次且不回滚——命令仍在内存生效，调用点不抛（ADR-0034）", async () => {
+	const live = state();
+	const saveError = new Error("disk full");
+	const reported: unknown[] = [];
+	const facade = createAppSettings({
+		owner: ownerOver(live, { saveError }),
+		onSaveError: (error) => reported.push(error),
+	});
+
+	assert.doesNotThrow(() => facade.setReportFolder("  X  "), "语句式调用点不抛");
+
+	await flush();
+
+	assert.equal(live.reportFolder, "X", "命令改写仍在内存生效（失败不回滚界面）");
+	assert.equal(reported.length, 1, "onSaveError 恰好被调一次");
+	assert.equal(reported[0], saveError, "上报携带原错误");
 });
 
 test("门面：删除当前模板清空选择并落盘一次", () => {
@@ -198,7 +221,7 @@ test("门面：删除当前模板清空选择并落盘一次", () => {
 		selectedTemplateId: "tpl_a",
 	});
 	let saves = 0;
-	const facade = createAppSettings(ownerOver(live, { onSave: () => saves++ }));
+	const facade = createAppSettings({ owner: ownerOver(live, { onSave: () => saves++ }), onSaveError: () => {} });
 	facade.removeTemplate("tpl_a");
 	assert.deepEqual(live.templates, []);
 	assert.equal(live.selectedTemplateId, "");

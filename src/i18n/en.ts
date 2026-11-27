@@ -145,6 +145,7 @@ export const en = {
 		uiLanguageAuto: "Auto (follow Obsidian)",
 		uiLanguageZh: "Chinese (Simplified)",
 		uiLanguageEn: "English",
+		saveFailed: "Failed to save settings — changes may be lost after restart.",
 	},
 	model: {
 		providersHeading: "AI providers",

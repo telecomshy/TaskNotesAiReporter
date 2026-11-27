@@ -44,7 +44,7 @@ export function renderModelTabHarness(options: ModelTabHarnessOptions): ModelTab
 		save: async () => {},
 		getSecret: (id) => secrets[id] ?? null,
 	});
-	const providers = createProviderSettings({ owner });
+	const providers = createProviderSettings({ owner, onSaveError: () => {} });
 	const ctx: ModelTabContext = {
 		app: {} as App,
 		settings: owner.get(),

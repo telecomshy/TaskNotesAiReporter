@@ -133,28 +133,40 @@ export function setSelectedTemplateId(state: AppState, id: string): AppState {
 
 // ===== 绑定门面 =====
 
-/** 非供应商设置门面：视图只与它对话。命令返回落盘的 Promise，失败可等待 / 传播。 */
+/**
+ * 非供应商设置门面：视图只与它对话。写命令一律返回 void——
+ * 落盘失败由门面统一经 `onSaveError` 上报（ADR-0034），调用点保持语句式。
+ */
 export interface AppSettings {
-	setReportFolder(folder: string): Promise<void>;
-	toggleDateField(field: DateField, on: boolean): Promise<void>;
-	setWeekStartsOnMonday(value: boolean): Promise<void>;
-	setReportLanguage(language: string): Promise<void>;
-	setUiLanguage(value: unknown): Promise<void>;
-	setGenerationParams(params: GenerationParams): Promise<void>;
-	addTemplate(name: string, content: string): Promise<void>;
-	updateTemplate(id: string, name: string, content: string): Promise<void>;
-	removeTemplate(id: string): Promise<void>;
-	setSelectedTemplateId(id: string): Promise<void>;
+	setReportFolder(folder: string): void;
+	toggleDateField(field: DateField, on: boolean): void;
+	setWeekStartsOnMonday(value: boolean): void;
+	setReportLanguage(language: string): void;
+	setUiLanguage(value: unknown): void;
+	setGenerationParams(params: GenerationParams): void;
+	addTemplate(name: string, content: string): void;
+	updateTemplate(id: string, name: string, content: string): void;
+	removeTemplate(id: string): void;
+	setSelectedTemplateId(id: string): void;
 
+}
+
+/** 门面依赖：设置 owner（自持状态与落盘）+ 落盘失败的统一上报（见 ./owner、ADR-0034）。 */
+export interface AppSettingsDeps {
+	owner: SettingsOwner;
+	/** 落盘失败统一上报：命令一律返回 void，失败在此汇合（必填，漏接即编译错误）。 */
+	onSaveError: (error: unknown) => void;
 }
 
 /**
  * 构造绑定门面：命令落在设置 owner 上，由 owner 自持状态与落盘。
- * 接线层不再逐字段搬运设置切片（见 #46）。
+ * 接线层不再逐字段搬运设置切片（见 #46）；落盘 Promise 的失败在此统一上报。
  */
-export function createAppSettings(owner: SettingsOwner): AppSettings {
-	const run = (command: (state: TaskNotesAIHelperSettings) => void): Promise<void> =>
-		owner.apply(command);
+export function createAppSettings(deps: AppSettingsDeps): AppSettings {
+	const { owner, onSaveError } = deps;
+	const run = (command: (state: TaskNotesAIHelperSettings) => void): void => {
+		owner.apply(command).catch(onSaveError);
+	};
 	return {
 		setReportFolder: (folder) => run((s) => void setReportFolder(s, folder)),
 		toggleDateField: (field, on) => run((s) => void toggleDateField(s, field, on)),

@@ -137,6 +137,7 @@ export const zh: Strings = {
 		uiLanguageAuto: "自动（跟随 Obsidian）",
 		uiLanguageZh: "中文（简体）",
 		uiLanguageEn: "英文",
+		saveFailed: "设置保存失败，重启后改动可能丢失。",
 	},
 	model: {
 		providersHeading: "AI 提供商",

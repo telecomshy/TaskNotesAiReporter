@@ -30,6 +30,7 @@ import {
 import { enabledModels } from "../src/settings/providerModels";
 import { createSettingsOwner } from "../src/settings/owner";
 import { DEFAULT_SETTINGS, type LearnedCapability, type ModelProvider } from "../src/types";
+import { flush } from "./fakes/flush";
 
 function provider(over: Partial<ModelProvider> & { id: string }): ModelProvider {
 	return {
@@ -483,18 +484,39 @@ test("门面：命令落盘一次，并保留引用", () => {
 		},
 		getSecret: () => null,
 	});
-	const facade = createProviderSettings({ owner });
+	const facade = createProviderSettings({ owner, onSaveError: () => {} });
 	facade.selectActiveModel("a", "m");
 	assert.equal(live.activeProviderId, "a");
 	assert.equal(live.activeModel, "m");
 	assert.equal(saves, 1);
 });
 
+test("门面：落盘失败上报一次且不回滚——命令仍在内存生效，调用点不抛（ADR-0034）", async () => {
+	const p = provider({ id: "a", type: "preset", models: ["m"] });
+	const live = { ...DEFAULT_SETTINGS, ...state({ providers: [p] }) };
+	const saveError = new Error("disk full");
+	const reported: unknown[] = [];
+	const owner = createSettingsOwner(live, {
+		save: () => Promise.reject(saveError),
+		getSecret: () => null,
+	});
+	const facade = createProviderSettings({ owner, onSaveError: (error) => reported.push(error) });
+
+	assert.doesNotThrow(() => facade.selectActiveModel("a", "m"), "语句式调用点不抛");
+
+	await flush();
+
+	assert.equal(live.activeProviderId, "a", "命令改写仍在内存生效（失败不回滚界面）");
+	assert.equal(live.activeModel, "m");
+	assert.equal(reported.length, 1, "onSaveError 恰好被调一次");
+	assert.equal(reported[0], saveError, "上报携带原错误");
+});
+
 test("门面：refreshModelCatalog 只刷清单，不改动启用集", () => {
 	const p = provider({ id: "a", type: "preset", models: ["m"], modelCatalog: ["m"] });
 	const live = { ...DEFAULT_SETTINGS, ...state({ providers: [p], activeProviderId: "a", activeModel: "m" }) };
 	const owner = createSettingsOwner(live, { save: () => Promise.resolve(), getSecret: () => null });
-	const facade = createProviderSettings({ owner });
+	const facade = createProviderSettings({ owner, onSaveError: () => {} });
 	facade.refreshModelCatalog("a", ["m", "new1", "new2"]);
 	assert.deepEqual(live.providers[0].modelCatalog, ["m", "new1", "new2"]);
 	assert.deepEqual(live.providers[0].models, ["m"], "启用集不改动");
@@ -504,7 +526,7 @@ test("门面：applyPickedModels 落盘启用集，当前模型受保护", () =>
 	const p = provider({ id: "a", type: "preset", models: ["m", "x"], modelCatalog: ["m", "x"] });
 	const live = { ...DEFAULT_SETTINGS, ...state({ providers: [p], activeProviderId: "a", activeModel: "m" }) };
 	const owner = createSettingsOwner(live, { save: () => Promise.resolve(), getSecret: () => null });
-	const facade = createProviderSettings({ owner });
+	const facade = createProviderSettings({ owner, onSaveError: () => {} });
 	facade.applyPickedModels("a", ["x"]);
 	assert.deepEqual(live.providers[0].models, ["x", "m"]);
 	assert.equal(facade.isModelProtected("a", "m"), true);
@@ -517,7 +539,7 @@ test("门面：resolveActive 与 isSecretMissing 用注入的密钥读取", () =
 		live,
 		{ save: () => Promise.resolve(), getSecret: (id: string) => (id === "k" ? "sk" : null) }
 	);
-	const facade = createProviderSettings({ owner });
+	const facade = createProviderSettings({ owner, onSaveError: () => {} });
 	const result = facade.resolveActive();
 	assert.equal(result.ok && result.config.apiKey, "sk");
 	assert.equal(facade.isSecretMissing("k"), false);
@@ -664,7 +686,7 @@ test("习得能力门面（#89）：recordThinkingTest 落档并落盘，clearLe
 		},
 		getSecret: () => null,
 	});
-	const facade = createProviderSettings({ owner });
+	const facade = createProviderSettings({ owner, onSaveError: () => {} });
 	facade.recordThinkingTest("p", "m", LEARNED_SWITCHABLE);
 	assert.deepEqual(p.learnedByModel, { m: LEARNED_SWITCHABLE });
 	assert.ok(saved > 0, "随设置持久化（切走再切回直接可用）");
@@ -816,7 +838,7 @@ test("activeModelInfo 门面：选择当前模型后读面跟着变；与 resolv
 		save: () => Promise.resolve(),
 		getSecret: () => null,
 	});
-	const facade = createProviderSettings({ owner });
+	const facade = createProviderSettings({ owner, onSaveError: () => {} });
 	assert.equal(facade.activeModelInfo().model, "", "未选模型 → 空");
 
 	facade.selectActiveModel("deepseek", "b");

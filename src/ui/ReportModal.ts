@@ -160,7 +160,7 @@ export class ReportModal extends Modal {
 		templateSelect.addEventListener("change", () => {
 			this.selectedTemplateId = templateSelect.value;
 			// 记住本次选择，下次打开弹窗自动恢复
-			void this.ctx.appSettings.setSelectedTemplateId(templateSelect.value);
+			this.ctx.appSettings.setSelectedTemplateId(templateSelect.value);
 		});
 
 		const btn = actions.createEl("button", { text: t("report.generate") });

@@ -16,6 +16,7 @@ import {
 } from "../src/settings/providerSettings";
 import { createSettingsOwner } from "../src/settings/owner";
 import { DEFAULT_SETTINGS, type LearnedCapability, type ModelProvider } from "../src/types";
+import { flush } from "./fakes/flush";
 
 const PROVIDER_ID = "custom-1";
 const ROW_ID = "mc-1";
@@ -25,7 +26,14 @@ const LEARNED: LearnedCapability = {
 	testedAt: "2026-11-25T00:00:00.000Z",
 };
 
-function makeFacade(): ProviderSettings {
+interface FacadeOptions {
+	/** 提供时落盘以该错误拒绝（缺省落盘成功）。 */
+	saveError?: unknown;
+	/** 落盘失败上报；缺省不关心（仅防未处理拒绝）。 */
+	onSaveError?: (error: unknown) => void;
+}
+
+function makeFacade(options: FacadeOptions = {}): ProviderSettings {
 	const provider: ModelProvider = {
 		id: PROVIDER_ID,
 		name: "自定义供应商",
@@ -41,10 +49,12 @@ function makeFacade(): ProviderSettings {
 	state.activeProviderId = PROVIDER_ID;
 	state.activeModel = "";
 	const owner = createSettingsOwner(state, {
-		save: async () => {},
+		save: async () => {
+			if (options.saveError !== undefined) throw options.saveError;
+		},
 		getSecret: () => null,
 	});
-	return createProviderSettings({ owner });
+	return createProviderSettings({ owner, onSaveError: options.onSaveError ?? (() => {}) });
 }
 
 interface CommandCase {
@@ -153,6 +163,23 @@ for (const c of CASES) {
 		assert.deepEqual(kinds, [c.kind], `${c.name} 应发布一次 ${c.kind}，实际：${JSON.stringify(kinds)}`);
 	});
 }
+
+test("落盘失败：发布照常且上报被调（失败不回滚刷新，ADR-0029 / ADR-0034）", async () => {
+	const saveError = new Error("disk full");
+	const errors: unknown[] = [];
+	const providers = makeFacade({ saveError, onSaveError: (error) => errors.push(error) });
+	const kinds: ProviderChangeKind[] = [];
+	providers.subscribe((kind) => kinds.push(kind));
+
+	assert.doesNotThrow(() => providers.setProviderBaseUrl(PROVIDER_ID, "https://new.example/v1"));
+
+	assert.deepEqual(kinds, ["selectable"], "发布先于落盘完成，失败不回滚刷新");
+
+	await flush();
+
+	assert.equal(errors.length, 1, "onSaveError 恰好被调一次");
+	assert.equal(errors[0], saveError, "上报携带原错误");
+});
 
 test("退订后不再收到通知（生命周期）", () => {
 	const providers = makeFacade();

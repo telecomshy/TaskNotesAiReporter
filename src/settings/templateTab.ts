@@ -78,7 +78,7 @@ function addTemplate(ctx: TemplateTabContext): void {
 		ctx.t,
 		{ name: NEW_TEMPLATE_NAME, content: "" },
 		(name, content) => {
-			void ctx.appSettings.addTemplate(name, content);
+			ctx.appSettings.addTemplate(name, content);
 			ctx.refresh();
 		}
 	);
@@ -86,7 +86,7 @@ function addTemplate(ctx: TemplateTabContext): void {
 }
 
 function deleteTemplate(id: string, ctx: TemplateTabContext): void {
-	void ctx.appSettings.removeTemplate(id);
+	ctx.appSettings.removeTemplate(id);
 	ctx.refresh();
 }
 
@@ -96,7 +96,7 @@ function editTemplate(template: ReportTemplate, ctx: TemplateTabContext): void {
 		ctx.t,
 		template,
 		(name, content) => {
-			void ctx.appSettings.updateTemplate(template.id, name, content);
+			ctx.appSettings.updateTemplate(template.id, name, content);
 			ctx.refresh();
 		}
 	);
@@ -112,7 +112,7 @@ class TemplateEditModal extends Modal {
 		app: App,
 		private t: Translator,
 		private template: { name: string; content: string },
-		private onSave: (name: string, content: string) => void | Promise<void>
+		private onSave: (name: string, content: string) => void
 	) {
 		super(app);
 	}
@@ -164,7 +164,7 @@ class TemplateEditModal extends Modal {
 			new Notice(this.t("template.needName"));
 			return;
 		}
-		void this.onSave(name, this.contentInput.value);
+		this.onSave(name, this.contentInput.value);
 		this.close();
 	}
 }

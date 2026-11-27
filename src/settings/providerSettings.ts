@@ -496,15 +496,17 @@ function findProvider(state: ProviderStateRead, providerId: string): ModelProvid
 
 // ===== 绑定门面 =====
 
-/** 门面依赖：设置 owner（自持状态与落盘）+ 按名取密钥值（见 ./owner）。 */
+/** 门面依赖：设置 owner（自持状态与落盘）+ 落盘失败的统一上报（见 ./owner、ADR-0034）。 */
 export interface ProviderSettingsDeps {
 	owner: SettingsOwner;
+	/** 落盘失败统一上报：命令一律返回 void，失败在此汇合（必填，漏接即编译错误）。 */
+	onSaveError: (error: unknown) => void;
 }
 
 /** 供应商写命令发布的变化类别（#108）：视图按类别决定失效方式（规格见 docs/specs/provider-change-notification.md）。 */
 export type ProviderChangeKind = "selectable" | "layout" | "quiet";
 
-/** 供应商配置门面：视图只与它对话。 */
+/** 供应商配置门面：视图只与它对话。写命令一律返回 void——落盘失败由门面统一经 `onSaveError` 上报（ADR-0034）。 */
 export interface ProviderSettings {
 	/** 订阅供应商变更；返回退订函数。每条写命令执行后发布一次自己的类别（含空转）。 */
 	subscribe(listener: (kind: ProviderChangeKind) => void): () => void;
@@ -570,16 +572,17 @@ const COMMAND_KINDS: Record<ProviderCommandKey, ProviderChangeKind> = {
 
 /** 构造绑定门面。命令落在设置 owner 上，由 owner 自持状态与落盘（接线层不再逐字段搬运）。 */
 export function createProviderSettings(deps: ProviderSettingsDeps): ProviderSettings {
-	const { owner } = deps;
+	const { owner, onSaveError } = deps;
 	const listeners = new Set<(kind: ProviderChangeKind) => void>();
 	const publish = (kind: ProviderChangeKind): void => {
 		for (const listener of listeners) listener(kind);
 	};
 	const run = (key: ProviderCommandKey, command: (state: ProviderState) => void): void => {
-		void owner.apply((state) => {
+		// 命令同步改写状态；落盘 Promise 的失败在此统一上报（ADR-0034），调用点保持语句式、不吞不炸。
+		owner.apply((state) => {
 			command(state);
-		});
-		// owner.apply 同步改写状态；通知紧随其后发布（落盘异步失败不回滚界面刷新）。
+		}).catch(onSaveError);
+		// 通知紧随其后发布（落盘异步失败不回滚界面刷新，ADR-0029）。
 		publish(COMMAND_KINDS[key]);
 	};
 	return {

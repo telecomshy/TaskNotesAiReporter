@@ -31,7 +31,7 @@ export function renderGeneralTab(container: HTMLElement, ctx: GeneralTabContext)
 				.setPlaceholder(DEFAULT_SETTINGS.reportFolder)
 				.setValue(ctx.settings.reportFolder)
 				.onChange((value) => {
-					void ctx.appSettings.setReportFolder(value);
+					ctx.appSettings.setReportFolder(value);
 				})
 		);
 
@@ -49,7 +49,7 @@ export function renderGeneralTab(container: HTMLElement, ctx: GeneralTabContext)
 				toggle
 					.setValue(ctx.settings.dateFields.includes(field))
 					.onChange((value) => {
-						void ctx.appSettings.toggleDateField(field, value);
+						ctx.appSettings.toggleDateField(field, value);
 					})
 			);
 	}
@@ -61,7 +61,7 @@ export function renderGeneralTab(container: HTMLElement, ctx: GeneralTabContext)
 			toggle
 				.setValue(ctx.settings.weekStartsOnMonday)
 				.onChange((value) => {
-					void ctx.appSettings.setWeekStartsOnMonday(value);
+					ctx.appSettings.setWeekStartsOnMonday(value);
 				})
 		);
 
@@ -73,7 +73,7 @@ export function renderGeneralTab(container: HTMLElement, ctx: GeneralTabContext)
 				.setPlaceholder(t("settings.reportLanguagePlaceholder"))
 				.setValue(ctx.settings.language)
 				.onChange((value) => {
-					void ctx.appSettings.setReportLanguage(value);
+					ctx.appSettings.setReportLanguage(value);
 				})
 		);
 
@@ -88,7 +88,7 @@ export function renderGeneralTab(container: HTMLElement, ctx: GeneralTabContext)
 				.addOption("en", t("settings.uiLanguageEn"))
 				.setValue(ctx.settings.uiLanguage)
 				.onChange((value) => {
-					void ctx.appSettings.setUiLanguage(value);
+					ctx.appSettings.setUiLanguage(value);
 					ctx.applyLanguage();
 					ctx.refresh();
 				})
