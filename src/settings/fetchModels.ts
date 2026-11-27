@@ -6,7 +6,7 @@
  * 纯编排 + 注入的状态切片：不依赖 obsidian / DOM，可单元测试。
  */
 
-import { listModels, type RequestFn } from "../ai/client";
+import { AIClientError, listModels, type RequestFn } from "../ai/client";
 import { apiStyleOf } from "../core/apiStyle";
 import { filterModelCatalog } from "../core/modelCatalogFilter";
 import type { ModelProvider } from "../types";
@@ -24,6 +24,7 @@ export interface FetchModelsSlice {
  * 一次「获取模型列表」的结局；视图按 kind 穷尽映射为提示 / 挑选框。
  * - need-url / need-key / secret-missing：守卫拦截，未发请求；
  * - failed：请求失败，带原始错误（由视图翻译，服务端详情原样带入）；
+ * - failed-no-model-list：上游未提供模型清单（HTTP 404），且该供应商可改用手填模型行；
  * - empty：拉取成功但上游没有模型（正常状态，清单照实刷为空）；
  * - fetched：拉取成功，清单已刷新，携带模型全集。
  */
@@ -32,6 +33,7 @@ export type FetchModelsOutcome =
 	| { kind: "need-key" }
 	| { kind: "secret-missing" }
 	| { kind: "failed"; error: unknown }
+	| { kind: "failed-no-model-list"; error: unknown }
 	| { kind: "empty" }
 	| { kind: "fetched"; models: string[] };
 
@@ -58,6 +60,9 @@ export async function runFetchModelsFlow(
 
 	onStart?.();
 
+	// 「接口方言」只读一次：清单请求与失败分类看的是同一个方言。
+	const apiStyle = apiStyleOf(provider);
+
 	let models: string[];
 	try {
 		models = await listModels(
@@ -66,11 +71,22 @@ export async function runFetchModelsFlow(
 				apiKey,
 				timeoutSeconds,
 				// 「接口方言」透传（#105）：清单地址 / 认证头 / 翻页全由它决定。
-				apiStyle: apiStyleOf(provider),
+				apiStyle,
 			},
 			request
 		);
 	} catch (error) {
+		// 失败分类是这条动作的领域知识（#116）：只有「自定义供应商 + Anthropic 方言 + 404」
+		// 才意味着「上游没实现 /models，但有手填模型行这条兜底路径」。分类只此一处。
+		if (
+			provider.type === "custom" &&
+			apiStyle === "anthropic" &&
+			error instanceof AIClientError &&
+			error.code === "models.http" &&
+			error.details.status === 404
+		) {
+			return { kind: "failed-no-model-list", error };
+		}
 		return { kind: "failed", error };
 	}
 

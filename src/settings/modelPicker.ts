@@ -52,9 +52,11 @@ class ModelPickerModal extends Modal {
 		const actions = this.contentEl.createDiv({ cls: "tah-model-picker-actions" });
 		const selectAllBtn = actions.createEl("button", { text: t("model.pickerSelectAll") });
 		selectAllBtn.addClass("tah-auth-btn");
+		selectAllBtn.addClass("tah-model-picker-select-all");
 		selectAllBtn.addEventListener("click", () => this.setCheckedAll(true));
 		const selectNoneBtn = actions.createEl("button", { text: t("model.pickerSelectNone") });
 		selectNoneBtn.addClass("tah-auth-btn");
+		selectNoneBtn.addClass("tah-model-picker-select-none");
 		selectNoneBtn.addEventListener("click", () => this.setCheckedAll(false));
 
 		const list = this.contentEl.createDiv({ cls: "tah-model-picker-list" });
@@ -63,9 +65,11 @@ class ModelPickerModal extends Modal {
 		const footer = this.contentEl.createDiv({ cls: "tah-modal-footer" });
 		const cancelBtn = footer.createEl("button", { text: t("model.pickerCancel") });
 		cancelBtn.addClass("tah-auth-btn");
+		cancelBtn.addClass("tah-model-picker-cancel");
 		cancelBtn.addEventListener("click", () => this.close());
 		const confirmBtn = footer.createEl("button", { text: t("model.pickerConfirm") });
 		confirmBtn.addClass("tah-generate-btn");
+		confirmBtn.addClass("tah-model-picker-confirm");
 		confirmBtn.addEventListener("click", () => this.confirm());
 	}
 

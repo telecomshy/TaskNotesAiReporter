@@ -415,6 +415,64 @@ test("请求失败：failed 带结构化错误，不写清单", async () => {
 	assert.deepEqual(catalogs, []);
 });
 
+// ===== 失败分类（#116）：只有「自定义 + Anthropic 方言 + 404」才是 failed-no-model-list =====
+
+/** 上游不实现 `/models` 的典型回应。 */
+function notFoundResponse(): HttpResponse {
+	return { status: 404, json: { error: { message: "Not Found" } }, text: "" };
+}
+
+test("自定义 Anthropic + 404 → failed-no-model-list，携带同一 AIClientError，不写清单", async () => {
+	const { slice, catalogs } = fakeSlice({ [SECRET_NAME]: "sk-live" });
+	const { request, calls } = fakeRequest(notFoundResponse());
+	const outcome = await runFetchModelsFlow(
+		slice,
+		providerOf({ type: "custom", apiStyle: "anthropic", customModels: [{ id: "mc-1", modelId: "m1" }] }),
+		30,
+		request
+	);
+	assert.ok(outcome.kind === "failed-no-model-list", "自定义 Anthropic 404 ⇒ 无模型清单兜底");
+	assert.ok(outcome.error instanceof AIClientError);
+	assert.equal(outcome.error.code, "models.http");
+	assert.equal(outcome.error.details.status, 404);
+	assert.equal(calls.length, 1);
+	assert.deepEqual(catalogs, [], "失败不写清单");
+});
+
+test("自定义 Anthropic + 401 → failed（不是 404 不提示手填兜底）", async () => {
+	const { slice, catalogs } = fakeSlice({ [SECRET_NAME]: "sk-live" });
+	const { request } = fakeRequest({ status: 401, json: { error: { message: "bad key" } }, text: "" });
+	const outcome = await runFetchModelsFlow(
+		slice,
+		providerOf({ type: "custom", apiStyle: "anthropic", customModels: [{ id: "mc-1", modelId: "m1" }] }),
+		30,
+		request
+	);
+	assert.equal(outcome.kind, "failed");
+	assert.deepEqual(catalogs, []);
+});
+
+test("Anthropic 预设 + 404 → failed（预设卡片没有手填入口，边界收紧）", async () => {
+	const { slice, catalogs } = fakeSlice({ [SECRET_NAME]: "sk-live" });
+	const { request } = fakeRequest(notFoundResponse());
+	const outcome = await runFetchModelsFlow(slice, providerOf({ apiStyle: "anthropic" }), 30, request);
+	assert.equal(outcome.kind, "failed", "预设供应商 404 不应提示手动添加模型 ID");
+	assert.deepEqual(catalogs, []);
+});
+
+test("自定义 OpenAI + 404 → failed（分类不放宽到其它方言）", async () => {
+	const { slice, catalogs } = fakeSlice({ [SECRET_NAME]: "sk-live" });
+	const { request } = fakeRequest(notFoundResponse());
+	const outcome = await runFetchModelsFlow(
+		slice,
+		providerOf({ type: "custom", apiStyle: "openai", customModels: [{ id: "mc-1", modelId: "m1" }] }),
+		30,
+		request
+	);
+	assert.equal(outcome.kind, "failed");
+	assert.deepEqual(catalogs, []);
+});
+
 test("超时用调用方给的值：20ms 即中断，不回落 30s 缺省", async () => {
 	const { slice } = fakeSlice({ [SECRET_NAME]: "sk-live" });
 	const never: RequestFn = () => new Promise<HttpResponse>(() => {});

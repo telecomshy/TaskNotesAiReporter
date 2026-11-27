@@ -10,7 +10,7 @@ import { Notice, SecretComponent, type App } from "obsidian";
 import type { ModelProvider } from "../types";
 import { apiStyleOf } from "../core/apiStyle";
 import type { Translator } from "../i18n";
-import { AIClientError, chatCompletion } from "../ai/client";
+import { chatCompletion } from "../ai/client";
 import { connectionTestRequest } from "./connectionTest";
 import { describeAIError } from "../ai/errorMessage";
 import { runAndAnnounceThinkingTest } from "../ui/thinkingTestAction";
@@ -414,19 +414,16 @@ async function fetchModels(provider: ModelProvider, ctx: ModelTabContext): Promi
 		case "secret-missing":
 			new Notice(t("model.fetchSecretMissing"));
 			return;
-		case "failed": {
-			// Anthropic 方言的网关常只实现 `/messages`、不实现 `/v1/models`（#105 US12）：
-			// 404 时把「手动填模型 ID」的兜底路径一并提示，否则用户只看到一句 404。
-			const hint =
-				apiStyleOf(provider) === "anthropic" &&
-				outcome.error instanceof AIClientError &&
-				outcome.error.code === "models.http" &&
-				outcome.error.details.status === 404
-					? `\n${t("model.fetchFailedNoModelList")}`
-					: "";
-			new Notice(`${t("model.fetchFailed", { error: describeAIError(outcome.error, t) })}${hint}`);
+		case "failed":
+			new Notice(t("model.fetchFailed", { error: describeAIError(outcome.error, t) }));
 			return;
-		}
+		case "failed-no-model-list":
+			// 上游没有模型清单，但这家供应商有手填模型行的入口：失败详情之后再给兜底路径。
+			// 「有无手填入口」由流程结局分类（#116），视图只按 kind 映射。
+			new Notice(
+				`${t("model.fetchFailed", { error: describeAIError(outcome.error, t) })}\n${t("model.fetchFailedNoModelList")}`
+			);
+			return;
 		case "empty":
 			new Notice(t("model.fetchEmpty", { name: provider.name }));
 			ctx.refresh();

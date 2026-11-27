@@ -27,6 +27,8 @@ interface Scenario {
 	secrets: Record<string, string>;
 	/** 初始启用模型（未配置时应为空；有值用于验证清空联动）。 */
 	models?: string[];
+	/** 覆盖默认（Kimi 预设）供应商的字段，用于自定义 / 方言变体。 */
+	providerOverrides?: Partial<ModelProvider>;
 }
 
 function makeHarness(scenario: Scenario): ModelTabHarness {
@@ -40,6 +42,7 @@ function makeHarness(scenario: Scenario): ModelTabHarness {
 		authType: "bearer",
 		apiKeySecretId: scenario.secretId,
 		modelCatalog: [...MODELS],
+		...scenario.providerOverrides,
 	};
 	return renderModelTabHarness({ provider, secrets: scenario.secrets });
 }
@@ -160,6 +163,59 @@ test("模型列表为空（如 Kimi For Coding 密钥）：提示「密钥下无
 		notices.some((n) => n.includes("没有可用模型") && n.includes("Kimi")),
 		`应提示「该密钥下没有可用模型」并带供应商名，实际：${JSON.stringify(notices)}`
 	);
+});
+
+// ===== 失败提示（#116）：404 分类由流程给出，视图只按结局映射 =====
+
+test("404 的视图呈现：自定义 Anthropic 追加手填兜底，Anthropic 预设只报失败", async () => {
+	// 判定边界在流程（#116）；视图只按结局映射。预设卡片没有「+ 手动添加模型 ID」入口，
+	// 因此它的 404 必须落回普通 failed（AC2）——两条用例共用同一次点击接线。
+	const cases = [
+		{
+			name: "自定义 Anthropic 供应商",
+			providerOverrides: {
+				type: "custom",
+				name: "自定义 Anthropic",
+				baseUrl: "https://gateway.example/v1",
+				apiStyle: "anthropic",
+				customModels: [{ id: "mc-1", modelId: "claude-sonnet-4-5" }],
+			} as Partial<ModelProvider>,
+			expectNoModelListHint: true,
+		},
+		{
+			name: "Anthropic 预设",
+			providerOverrides: {
+				id: "anthropic",
+				name: "Anthropic",
+				apiStyle: "anthropic",
+			} as Partial<ModelProvider>,
+			expectNoModelListHint: false,
+		},
+	];
+	for (const testCase of cases) {
+		resetFakes();
+		resetRequests({ status: 404, json: { error: { message: "Not Found" } } });
+		const h = makeHarness({
+			name: testCase.name,
+			secretId: SECRET_NAME,
+			secrets: { [SECRET_NAME]: "sk-live" },
+			models: [],
+			providerOverrides: testCase.providerOverrides,
+		});
+		await flush();
+		fetchButton(h.root).fire("click");
+		await flush();
+
+		assert.equal(requests.length, 1, `${testCase.name}：一次拉取请求`);
+		assert.equal(Modal.opened.length, 0, `${testCase.name}：失败不弹挑选框`);
+		const notice = notices[notices.length - 1] ?? "";
+		assert.ok(notice.includes("获取失败"), `${testCase.name}：应含失败详情，实际：${JSON.stringify(notices)}`);
+		assert.equal(
+			notice.includes("手动添加模型 ID"),
+			testCase.expectNoModelListHint,
+			`${testCase.name}：手填兜底提示是否符合边界，实际：${JSON.stringify(notices)}`
+		);
+	}
 });
 
 // ===== 未配置 ⇒ 无启用模型（清空联动在 UI 层可见） =====
