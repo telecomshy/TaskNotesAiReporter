@@ -146,7 +146,7 @@ async function main(): Promise<void> {
 				model,
 				maxTokens,
 				// chat 为桩，参数被桩吞掉；不夹带特定厂商的开关参数
-				thinking: { setting: "on", param: null, note: null, learned: null },
+				thinking: { setting: "on", param: null, note: null, learned: null, staleLearned: null },
 				requestPolicy: EMPTY_REQUEST_POLICY,
 			},
 		}),
@@ -228,7 +228,12 @@ async function main(): Promise<void> {
 		const tiny = tasks.slice(0, 1);
 		// baseline 载荷与插件发运默认一致（每模型「思考」缺省＝关，ADR-0024）：
 		// 按能力表带出该（供应商, 模型）的关参数，--budget 量的就是「关思考生成」。
-		const shipped = resolveThinking({ providerId, model, setting: "off" });
+		const shipped = resolveThinking({
+			providerId,
+			model,
+			setting: "off",
+			source: { apiStyle: "openai", protocol: "chat-completions" },
+		});
 		const shippedExtra = shipped.param ? { [shipped.param.name]: shipped.param.value } : {};
 		const probes: Array<[string, string]> = [
 			[`baseline ${taskCount} 任务`, promptFor(tasks, bodies)],

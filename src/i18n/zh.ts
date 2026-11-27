@@ -169,6 +169,7 @@ export const zh: Strings = {
 		thinkingNoteLearnedSwitchable: "实测可关",
 		thinkingNoteLearnedNotDetected: "未检出思考",
 		thinkingNoteLearnedNotSwitchable: "实测 {{count}} 个字段未能关闭",
+		thinkingNoteLearnedStale: "接口方言/协议已变更或无法确认，此实测结论不再适用，请重新测试。",
 		thinkingTestVerdictNotDetected: "测试结论：未检出思考（不代表模型无思考）。",
 		thinkingTestVerdictSwitchable: "测试结论：可关闭思考。",
 		thinkingTestVerdictNotSwitchable: "测试结论：未能关闭思考（不代表模型强制思考）。",

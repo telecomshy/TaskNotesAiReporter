@@ -15,7 +15,7 @@
  */
 
 import type { WireProtocol } from "../types";
-import { matchModelPattern } from "./thinking";
+import { matchModelPattern } from "./modelPattern";
 
 /** 缺省协议：Chat Completions（存量行为零变更）。 */
 export const DEFAULT_WIRE_PROTOCOL: WireProtocol = "chat-completions";

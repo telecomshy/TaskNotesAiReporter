@@ -71,7 +71,7 @@ function activeResolution(): ActiveModelResolution {
 			baseUrl: "https://api.example.com",
 			apiKey: "sk",
 			model: "model-y",
-			thinking: { setting: "off", param: null, note: null, learned: null },
+			thinking: { setting: "off", param: null, note: null, learned: null, staleLearned: null },
 			requestPolicy: EMPTY_REQUEST_POLICY,
 		},
 	};
@@ -90,6 +90,11 @@ test("落习得键单一来源：取自解析结果的（供应商, 模型），
 		"落习得条目用解析结果的键"
 	);
 	assert.equal(slice.recorded[0][2].verdict, "switchable");
+	assert.deepEqual(
+		slice.recorded[0][2].source,
+		{ apiStyle: "openai", protocol: "chat-completions" },
+		"条目出生即带事实解析出的来源（#112），流程层零补字段"
+	);
 });
 
 test("重测先清习得并重跑（清习得并重跑）", async () => {
@@ -127,6 +132,7 @@ function anthropicResolution(): ActiveModelResolution {
 				param: { name: "thinking", value: { type: "disabled" } },
 				note: null,
 				learned: null,
+				staleLearned: null,
 			},
 			requestPolicy: EMPTY_REQUEST_POLICY,
 		},
@@ -168,6 +174,7 @@ test("Anthropic 方言（#105）：探测走 /messages + x-api-key，基线不�
 	assert.equal(probe.max_tokens, 256);
 	assert.deepEqual(slice.recorded[0].slice(0, 2), ["anthropic", "claude-sonnet-4-6"]);
 	assert.deepEqual(slice.recorded[0][2].off, { name: "thinking", value: { type: "disabled" } });
+	assert.deepEqual(slice.recorded[0][2].source, { apiStyle: "anthropic" });
 });
 
 // ===== OpenAI 预设（#106）：候选单字段 + 探测服从请求策略 =====
@@ -207,6 +214,7 @@ test("OpenAI 预设（#106）：只试 reasoning_effort:none；基线与逐字�
 				param: { name: "reasoning_effort", value: "none" },
 				note: null,
 				learned: null,
+				staleLearned: null,
 			},
 			requestPolicy: policy,
 		},
@@ -262,7 +270,7 @@ test("Responses 协议（#110）：探嵌套 reasoning.effort、请求 /response
 			baseUrl: "https://api.openai.com/v1",
 			apiKey: "sk",
 			model: "gpt-5.5-pro",
-			thinking: { setting: "off", param: null, note: "unknown", learned: null },
+			thinking: { setting: "off", param: null, note: "unknown", learned: null, staleLearned: null },
 			requestPolicy: EMPTY_REQUEST_POLICY,
 		},
 	});

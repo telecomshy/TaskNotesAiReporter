@@ -9,9 +9,13 @@
 
 import type { ApiStyle, WireProtocol } from "../types";
 import { resolveApiStyle } from "./apiStyle";
+import { matchModelPattern } from "./modelPattern";
+import { protocolOf, resolveWireProtocol } from "./wireProtocol";
 import type {
 	LearnedCapability,
+	LearnedSource,
 	ModelProvider,
+	ThinkingNote,
 	ThinkingParam,
 	ThinkingResolution,
 	ThinkingSetting,
@@ -23,7 +27,12 @@ export interface ThinkingInput {
 	providerId: string;
 	model: string;
 	setting: ThinkingSetting;
-	/** 习得能力条目（#89）：命中即盖过内置能力表（习得 ＞ 内置 ＞ 未知）。 */
+	/**
+	 * 当前（供应商, 模型）的接口形状（#112）：习得条目只有来源一致才生效。
+	 * 必填——来源是判定前提，不允许调用方漏传后静默照信。
+	 */
+	source: LearnedSource;
+	/** 习得能力条目（#89）：来源一致且命中才盖过内置能力表（习得 ＞ 内置 ＞ 未知）。 */
 	learned?: LearnedCapability | null;
 }
 
@@ -155,17 +164,61 @@ export const THINKING_CAPABILITIES: readonly ThinkingCapabilityRow[] = [
 ];
 
 /**
+ * 当前（供应商, 模型）的接口形状归一（#112，ADR-0033）：经 `resolveApiStyle` 与
+ * `protocolOf` 的缺省口径——Anthropic 方言没有协议；OpenAI 方言缺省 Chat Completions。
+ * 用于「当前来源」与「测试条目出生时的来源」同一份事实解析。
+ */
+export function learnedSourceOf(apiStyle?: ApiStyle, protocol?: WireProtocol): LearnedSource {
+	if (resolveApiStyle(apiStyle) === "anthropic") return { apiStyle: "anthropic" };
+	return { apiStyle: "openai", protocol: protocolOf({ protocol }) };
+}
+
+/**
+ * 存档来源结构的严格解析（#112）：结构不可读返回 null（＝来源不明）。
+ * 与 `learnedSourceOf` 的宽松缺省**刻意不对称**：存档里缺字段（含 OpenAI 缺 protocol）
+ * 不是可确认的来源，不能拿缺省补章（ADR-0033 Considered Options 第一条）。
+ */
+export function parseLearnedSource(raw: unknown): LearnedSource | null {
+	if (typeof raw !== "object" || raw === null) return null;
+	const source = raw as Record<string, unknown>;
+	if (source.apiStyle === "anthropic") return { apiStyle: "anthropic" };
+	if (source.apiStyle !== "openai") return null;
+	if (source.protocol !== "chat-completions" && source.protocol !== "responses") return null;
+	return { apiStyle: "openai", protocol: source.protocol };
+}
+
+/** 两个来源是否同形（#112）：Anthropic 无协议，OpenAI 按协议区分。 */
+function sameLearnedSource(a: LearnedSource, b: LearnedSource): boolean {
+	if (a.apiStyle !== b.apiStyle) return false;
+	if (a.apiStyle === "openai" && b.apiStyle === "openai") return a.protocol === b.protocol;
+	return true;
+}
+
+/**
+ * 内置能力表分支的结果（形状单源）：习得两栏恒空。把「无习得」六处重复收到一处。
+ */
+function builtinThinking(
+	setting: ThinkingSetting,
+	param: ThinkingParam | null,
+	note: ThinkingNote | null
+): ThinkingResolution {
+	return { setting, param, note, learned: null, staleLearned: null };
+}
+
+/**
  * 「未知能力」的解析结果（形状单源）：能力表未命中、或尚未选出可用（供应商, 模型）时共用。
  * 只带两档取值，不发明参数与习得条目。
  */
 export function unknownThinking(setting: ThinkingSetting): ThinkingResolution {
-	return { setting, param: null, note: "unknown", learned: null };
+	return { setting, param: null, note: "unknown", learned: null, staleLearned: null };
 }
 
 /**
  * 解析「思考」两档到请求参数与 UI 标注（#88 两档语义）：
- * - 习得能力命中即生效（习得 ＞ 内置能力表 ＞ 未知，#89）：「可关」的「关」发习得关参数，
- *   「开」无开参数则不发；「未检出思考」「未能关闭」不发参数（措辞在呈现层，诚实化）；
+ * - 习得条目**来源一致**才生效（习得 ＞ 内置能力表 ＞ 未知，#89 / #112）：「可关」的「关」发
+ *   习得关参数，「开」无开参数则不发；「未检出思考」「未能关闭」不发参数（措辞在呈现层，诚实化）；
+ * - 来源缺失 / 不符 / 不可解析 → 条目不生效（`param: null`、`note: "unknown"`），
+ *   原条目经 `staleLearned` 带出供呈现；**绝不回落内置表**（旧结论不能冒充当前能力）；
  * - 「开」发开参数（该模型无开参数则不发）；「关」发关参数；一次请求只发一个参数；
  * - 强制思考 / 无思考模型无论两档都不发参数，给出置灰标注；
  * - 能力表未命中（含自定义供应商）不发参数、标注未知（对未知模型降级，见研究笔记 9.6）。
@@ -178,11 +231,15 @@ export function resolveThinking(
 	const learned = input.learned ?? null;
 
 	if (learned) {
+		const learnedSource = parseLearnedSource(learned.source);
+		if (!learnedSource || !sameLearnedSource(learnedSource, input.source)) {
+			return { setting, param: null, note: "unknown", learned: null, staleLearned: learned };
+		}
 		if (learned.verdict === "switchable") {
 			const off = learned.off ?? null;
-			return { setting, param: setting === "off" ? off : null, note: null, learned };
+			return { setting, param: setting === "off" ? off : null, note: null, learned, staleLearned: null };
 		}
-		return { setting, param: null, note: null, learned };
+		return { setting, param: null, note: null, learned, staleLearned: null };
 	}
 
 	const row = table.find(
@@ -192,27 +249,31 @@ export function resolveThinking(
 
 	const cap = row.capability;
 	if (cap.kind === "unknown") return unknownThinking(setting);
-	if (cap.kind === "forced") return { setting, param: null, note: "forced", learned: null };
-	if (cap.kind === "none") return { setting, param: null, note: "none", learned: null };
+	if (cap.kind === "forced") return builtinThinking(setting, null, "forced");
+	if (cap.kind === "none") return builtinThinking(setting, null, "none");
 
-	if (setting === "off") return { setting, param: cap.off, note: null, learned: null };
-	if (setting === "on" && cap.on) return { setting, param: cap.on, note: null, learned: null };
-	return { setting, param: null, note: null, learned: null };
+	if (setting === "off") return builtinThinking(setting, cap.off, null);
+	if (setting === "on" && cap.on) return builtinThinking(setting, cap.on, null);
+	return builtinThinking(setting, null, null);
 }
 
 /**
  * 读取某个模型的「思考」解析结果：该模型的「思考开关」取值（缺省＝关）经能力层映射，
  * 请求参数与置灰标注一并带出（ADR-0024）。设置页与当前模型 解析共用这一个读面。
- * 能力层优先级（#89）：习得能力 ＞ 内置能力表 ＞ 未知——自定义供应商与预设同路（ADR-0026）。
+ * 能力层优先级（#89）：习得能力（来源一致）＞ 内置能力表 ＞ 未知——自定义供应商与预设同路。
+ * 当前来源由（供应商, 模型）当场解析（#112，ADR-0033）：方言＋协议，与 #111 facts 同源。
  *
  * #111 起本函数落在 core：请求装配（ai/modelRequest）要读它，而 ai 不得依赖 settings 侧模块
  * （ADR-0032 防环）；settings/providerSettings 原位 re-export，既有调用方零改动。
  */
 export function thinkingFor(provider: ModelProvider, model: string): ThinkingResolution {
+	const apiStyle = resolveApiStyle(provider.apiStyle);
 	return resolveThinking({
 		providerId: provider.id,
 		model,
 		setting: provider.thinkingByModel?.[model] ?? "off",
+		// 来源与 #111 facts 同一来源（ADR-0033）：Anthropic 由 learnedSourceOf 丢掉协议。
+		source: learnedSourceOf(apiStyle, resolveWireProtocol(provider.id, model)),
 		learned: provider.learnedByModel?.[model] ?? null,
 	});
 }
@@ -251,7 +312,8 @@ export interface ThinkingDisplay {
 /**
  * 显示矩阵的行状态（#86 / #88 / #89）：builtin＝内置能力表·可关 / forced＝强制思考 /
  * none＝无思考 / unknown＝未知能力；learned-*＝习得档（实测）三值——
- * 可关 / 未检出思考（措辞不写「无思考」）/ 未能关闭（措辞不写「强制思考」）。
+ * 可关 / 未检出思考（措辞不写「无思考」）/ 未能关闭（措辞不写「强制思考」）；
+ * learned-stale＝来源不符或无法确认的实测结论（#112，琥珀徽标 + 重测）。
  */
 export type ThinkingDisplayState =
 	| "builtin"
@@ -260,7 +322,8 @@ export type ThinkingDisplayState =
 	| "unknown"
 	| "learned-switchable"
 	| "learned-not-detected"
-	| "learned-not-switchable";
+	| "learned-not-switchable"
+	| "learned-stale";
 
 /** 显示矩阵（#86 / #89）：行状态 → 呈现数据。习得档转「重新测试」文字入口（清习得并重跑）。 */
 const THINKING_DISPLAY: Record<ThinkingDisplayState, ThinkingDisplay> = {
@@ -289,6 +352,14 @@ const THINKING_DISPLAY: Record<ThinkingDisplayState, ThinkingDisplay> = {
 		footnoteWarn: true,
 		testEntry: "retest",
 	},
+	"learned-stale": {
+		state: "learned-stale",
+		// 琥珀徽标沿用「实测 {{date}}」文案（#112）：消失会被读成数据丢失，习得过期要显性。
+		badge: "warn",
+		toggleEnabled: false,
+		footnoteWarn: true,
+		testEntry: "retest",
+	},
 };
 
 /** 习得判定 → 显示矩阵行状态。 */
@@ -298,8 +369,9 @@ const LEARNED_DISPLAY_STATE: Record<LearnedCapability["verdict"], ThinkingDispla
 	"not-switchable": "learned-not-switchable",
 };
 
-/** 由思考解析结果推导「当前模型」区呈现（显示矩阵，#88 落地；习得档 #89 增补）。 */
+/** 由思考解析结果推导「当前模型」区呈现（显示矩阵，#88 落地；习得档 #89 / 习得过期档 #112）。 */
 export function thinkingDisplay(resolution: ThinkingResolution): ThinkingDisplay {
+	if (resolution.staleLearned) return THINKING_DISPLAY["learned-stale"];
 	if (resolution.learned) return THINKING_DISPLAY[LEARNED_DISPLAY_STATE[resolution.learned.verdict]];
 	const state: ThinkingDisplayState = resolution.note === null ? "builtin" : resolution.note;
 	return THINKING_DISPLAY[state];
@@ -318,16 +390,10 @@ export function isThinkingFakeOff(
 }
 
 /**
- * 模型匹配：`*` 结尾为前缀匹配、`*` 开头为后缀匹配，否则精确匹配（`*` 单独恒命中）。
- * 策略表、能力表与协议表共用同一判定（行键形状同构，ADR-0030 / ADR-0031）。
- * 后缀分支由 #110 引入：`*-pro` 覆盖未来 pro 族，避免每上新一版就补一行。
+ * 模型匹配（跨表共用）：见 `core/modelPattern`（#112 抽出以断开 thinking ↔ wireProtocol 的环）。
+ * 原位 re-export，既有调用方零改动。
  */
-export function matchModelPattern(pattern: string, model: string): boolean {
-	if (pattern === "*") return true;
-	if (pattern.startsWith("*")) return model.endsWith(pattern.slice(1));
-	if (pattern.endsWith("*")) return model.startsWith(pattern.slice(0, -1));
-	return pattern === model;
-}
+export { matchModelPattern } from "./modelPattern";
 
 // ===== 思考测试纯状态机（#89，缝 1） =====
 
@@ -412,21 +478,25 @@ export type ThinkingTestAction =
 
 /**
  * 思考测试状态：基线 → 逐字段（待试候选下标）→ 判定。纯状态，无 IO。
- * 候选清单随状态携带（按方言注入，#105 裁决 10）——状态机的语义与判定规则不因方言分叉。
+ * 候选清单随状态携带（按方言注入，#105 裁决 10）；接口形状随状态携带（#112）——
+ * 条目出生即带来源，流程层不事后补字段。状态机的语义与判定规则不因方言分叉。
  */
 export interface ThinkingTestState {
 	phase: "baseline" | "probe";
 	candidateIndex: number;
 	/** 本次测试的关字段候选（缺省 OpenAI 兼容三字段）。 */
 	candidates: readonly ThinkingParam[];
+	/** 本次测试的接口形状（#112）：落档条目原样带上。 */
+	source: LearnedSource;
 }
 
 /** 开始思考测试：第一步是基线微型请求（不发思考参数，先判会不会思考）。 */
 export function startThinkingTest(
-	candidates: readonly ThinkingParam[] = THINKING_OFF_CANDIDATES
+	candidates: readonly ThinkingParam[],
+	source: LearnedSource
 ): { state: ThinkingTestState; action: ThinkingTestAction } {
 	return {
-		state: { phase: "baseline", candidateIndex: 0, candidates },
+		state: { phase: "baseline", candidateIndex: 0, candidates, source },
 		action: { kind: "probe", param: null },
 	};
 }
@@ -455,12 +525,12 @@ export function stepThinkingTest(
 				action: {
 					kind: "conclude",
 					verdict: "not-detected",
-					entry: { verdict: "not-detected", testedAt: now() },
+					entry: { verdict: "not-detected", testedAt: now(), source: state.source },
 				},
 			};
 		}
 		return {
-			state: { phase: "probe", candidateIndex: 0, candidates: state.candidates },
+			state: { ...state, phase: "probe", candidateIndex: 0 },
 			action: { kind: "probe", param: state.candidates[0] },
 		};
 	}
@@ -472,7 +542,7 @@ export function stepThinkingTest(
 			action: {
 				kind: "conclude",
 				verdict: "switchable",
-				entry: { verdict: "switchable", off: current, testedAt: now() },
+				entry: { verdict: "switchable", off: current, testedAt: now(), source: state.source },
 			},
 		};
 	}
@@ -480,7 +550,7 @@ export function stepThinkingTest(
 	const next = state.candidateIndex + 1;
 	if (next < state.candidates.length) {
 		return {
-			state: { phase: "probe", candidateIndex: next, candidates: state.candidates },
+			state: { ...state, phase: "probe", candidateIndex: next },
 			action: { kind: "probe", param: state.candidates[next] },
 		};
 	}
@@ -493,6 +563,7 @@ export function stepThinkingTest(
 				verdict: "not-switchable",
 				triedFields: state.candidates.length,
 				testedAt: now(),
+				source: state.source,
 			},
 		},
 	};

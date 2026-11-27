@@ -231,8 +231,17 @@ export type ThinkingNote = "forced" | "none" | "unknown";
 export type ThinkingTestVerdict = "not-detected" | "switchable" | "not-switchable" | "interrupted";
 
 /**
+ * 习得来源（#112，ADR-0033）：取得「习得能力」时的接口形状——接口方言，
+ * 以及 OpenAI 方言下的接口协议（Anthropic 方言没有协议，ADR-0031）。
+ * 只描述报文形状，不记 API 地址。
+ */
+export type LearnedSource =
+	| { apiStyle: "openai"; protocol: WireProtocol }
+	| { apiStyle: "anthropic" };
+
+/**
  * 习得能力（#89）：「思考测试」实测结论，按（供应商, 模型）键随设置持久化，
- * 解析优先级 习得 ＞ 内置能力表 ＞ 未知（见 CONTEXT.md「习得能力」）。
+ * 解析优先级 习得（来源一致）＞ 内置能力表 ＞ 未知（见 CONTEXT.md「习得能力」）。
  * 「中断」不留条目；条目自带测试时间戳。
  */
 export interface LearnedCapability {
@@ -244,6 +253,8 @@ export interface LearnedCapability {
 	triedFields?: number;
 	/** 测试时间戳（ISO 8601）。 */
 	testedAt: string;
+	/** 取得结论时的接口形状（#112）；缺失＝旧版本条目＝来源不明，按未知呈现。 */
+	source?: LearnedSource;
 }
 
 /** 思考解析结果（core/thinking 产出）：请求参数 + UI 标注 + 习得能力来源。 */
@@ -254,8 +265,13 @@ export interface ThinkingResolution {
 	param: ThinkingParam | null;
 	/** UI 置灰标注；null＝正常可交互。习得条目命中时呈现走习得档，note 不参与。 */
 	note: ThinkingNote | null;
-	/** 习得能力条目（#89）：命中即盖过内置能力表，含测试时间戳；null＝内置或未知。 */
+	/** 习得能力条目（#89）：来源一致且命中即盖过内置能力表，含测试时间戳；null＝内置或未知。 */
 	learned: LearnedCapability | null;
+	/**
+	 * 来源不符 / 无法确认的习得条目（#112）：条目本身保留，但绝不参与请求；
+	 * 呈现为「习得过期」并引导重测。null＝没有习得过期条目。
+	 */
+	staleLearned: LearnedCapability | null;
 }
 
 /**

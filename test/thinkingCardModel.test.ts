@@ -19,6 +19,9 @@ import type { ModelProvider } from "../src/types";
 const TESTED_AT = "2026-11-04T08:00:00.000Z";
 const TESTED_DATE = "2026-11-04";
 
+/** 习得来源（#112）：卡片用例的当前供应商默认为 OpenAI 方言 + Chat 协议。 */
+const LEARNED_SOURCE = { apiStyle: "openai", protocol: "chat-completions" } as const;
+
 /** 预设供应商速造（已配置；默认 DeepSeek 直连，命中内置能力表·可关）。 */
 function preset(overrides: Partial<ModelProvider> = {}): ModelProvider {
 	return {
@@ -122,6 +125,7 @@ const cardCases: CardCase[] = [
 					verdict: "switchable",
 					off: { name: "thinking", value: { type: "disabled" } },
 					testedAt: TESTED_AT,
+					source: LEARNED_SOURCE,
 				},
 			},
 		}),
@@ -142,6 +146,7 @@ const cardCases: CardCase[] = [
 					verdict: "switchable",
 					off: { name: "thinking", value: { type: "disabled" } },
 					testedAt: TESTED_AT,
+					source: LEARNED_SOURCE,
 				},
 			},
 		}),
@@ -156,7 +161,7 @@ const cardCases: CardCase[] = [
 	{
 		name: "learned-not-detected：实测未检出思考（开关不可用，retest 入口）",
 		provider: preset({
-			learnedByModel: { "deepseek-v4-pro": { verdict: "not-detected", testedAt: TESTED_AT } },
+			learnedByModel: { "deepseek-v4-pro": { verdict: "not-detected", testedAt: TESTED_AT, source: LEARNED_SOURCE } },
 		}),
 		model: "deepseek-v4-pro",
 		expected: {
@@ -170,7 +175,7 @@ const cardCases: CardCase[] = [
 		name: "learned-not-switchable：实测未能关闭（备注带实测字段数，警示）",
 		provider: preset({
 			learnedByModel: {
-				"deepseek-v4-pro": { verdict: "not-switchable", triedFields: 3, testedAt: TESTED_AT },
+				"deepseek-v4-pro": { verdict: "not-switchable", triedFields: 3, testedAt: TESTED_AT, source: LEARNED_SOURCE },
 			},
 		}),
 		model: "deepseek-v4-pro",
@@ -185,7 +190,7 @@ const cardCases: CardCase[] = [
 		name: "learned-not-switchable：无 triedFields → 兜底候选清单长度（view 不再 import 测试算法）",
 		provider: preset({
 			learnedByModel: {
-				"deepseek-v4-pro": { verdict: "not-switchable", testedAt: TESTED_AT },
+				"deepseek-v4-pro": { verdict: "not-switchable", testedAt: TESTED_AT, source: LEARNED_SOURCE },
 			},
 		}),
 		model: "deepseek-v4-pro",
@@ -197,6 +202,26 @@ const cardCases: CardCase[] = [
 				warn: true,
 				vars: { count: THINKING_OFF_CANDIDATES.length },
 			},
+			test: { kind: "retest", labelKey: "model.thinkingTestRetest", disabled: false },
+		},
+	},
+	{
+		name: "learned-stale：来源不符（琥珀徽标沿用实测日期、过期脚注、retest 入口可点、开关置灰）",
+		provider: preset({
+			learnedByModel: {
+				"deepseek-v4-pro": {
+					verdict: "switchable",
+					off: { name: "thinking", value: { type: "disabled" } },
+					testedAt: TESTED_AT,
+					source: { apiStyle: "anthropic" },
+				},
+			},
+		}),
+		model: "deepseek-v4-pro",
+		expected: {
+			toggle: { checked: false, enabled: false, titleKey: "model.thinkingOff" },
+			badge: { tone: "warn", key: "model.thinkingBadgeLearned", vars: { date: TESTED_DATE } },
+			footnote: { key: "model.thinkingNoteLearnedStale", warn: true },
 			test: { kind: "retest", labelKey: "model.thinkingTestRetest", disabled: false },
 		},
 	},

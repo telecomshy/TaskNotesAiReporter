@@ -105,6 +105,10 @@ export const thinkingDisplayCopy: Record<
 		badge: "model.thinkingBadgeLearned",
 		footnote: "model.thinkingNoteLearnedNotSwitchable",
 	},
+	"learned-stale": {
+		badge: "model.thinkingBadgeLearned",
+		footnote: "model.thinkingNoteLearnedStale",
+	},
 };
 
 /** 「思考测试」四值判定 → 结论提示文案键（#89）；措辞诚实（不写「强制思考」「无思考」）。 */

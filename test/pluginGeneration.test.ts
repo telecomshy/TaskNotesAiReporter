@@ -106,7 +106,7 @@ function resolveOk(): ActiveModelResolution {
 			baseUrl: "https://api.example.com",
 			apiKey: "sk",
 			model: "m",
-			thinking: { setting: "off", param: null, note: "unknown", learned: null },
+			thinking: { setting: "off", param: null, note: "unknown", learned: null, staleLearned: null },
 			requestPolicy: EMPTY_REQUEST_POLICY,
 		},
 	};

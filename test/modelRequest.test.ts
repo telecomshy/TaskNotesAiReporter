@@ -41,7 +41,7 @@ function facts(over: Partial<ModelFacts> = {}): ModelFacts {
 	return {
 		apiStyle: "openai",
 		protocol: "chat-completions",
-		thinking: { setting: "off", param: null, note: "unknown", learned: null },
+		thinking: { setting: "off", param: null, note: "unknown", learned: null, staleLearned: null },
 		requestPolicy: EMPTY_REQUEST_POLICY,
 		...over,
 	};
@@ -50,6 +50,9 @@ function facts(over: Partial<ModelFacts> = {}): ModelFacts {
 const target = { baseUrl: "https://api.example.com", apiKey: "sk", model: "m" };
 const messages: ChatMessage[] = [{ role: "user", content: "hi" }];
 const globals: RequestGlobals = { temperature: 0.7, maxTokens: 8192, timeoutSeconds: 30 };
+
+/** 习得来源固定件（#112）：以下（供应商, 模型）的当前来源是 OpenAI 方言 + Chat 协议。 */
+const OPENAI_CHAT_SOURCE = { apiStyle: "openai", protocol: "chat-completions" } as const;
 
 /** 一个思考参数（顶层 reasoning_effort 形态）。 */
 function effort(value: string): { name: string; value: unknown } {
@@ -69,7 +72,7 @@ test("事实解析：OpenAI 预设未登记模型回落缺省策略、Chat 协�
 	assert.equal(resolved.apiStyle, "openai");
 	assert.equal(resolved.protocol, "chat-completions");
 	assert.deepEqual(resolved.requestPolicy, OPENAI_REQUEST_POLICY);
-	assert.deepEqual(resolved.thinking, { setting: "off", param: null, note: "unknown", learned: null });
+	assert.deepEqual(resolved.thinking, { setting: "off", param: null, note: "unknown", learned: null, staleLearned: null });
 	assert.equal(resolved.maxTokens, undefined, "未设行参数＝缺席（生成回落全局）");
 });
 
@@ -105,6 +108,7 @@ test("事实解析：思考读能力表与习得条目（委托 core/thinking �
 				verdict: "switchable",
 				off: { name: "thinking", value: { type: "disabled" } },
 				testedAt: "2026-11-25T00:00:00.000Z",
+				source: OPENAI_CHAT_SOURCE,
 			},
 		},
 	});
@@ -137,7 +141,7 @@ test("温度判定：send 恒发（含无参数与任意 effort）", () => {
 			target,
 			facts: facts({
 				requestPolicy: policy,
-				thinking: { setting: "off", param: thinking, note: null, learned: null },
+				thinking: { setting: "off", param: thinking, note: null, learned: null, staleLearned: null },
 			}),
 			messages,
 			globals,
@@ -153,7 +157,7 @@ test("温度判定：omit-always 永不发（含生效 effort 为 none）", () =
 			target,
 			facts: facts({
 				requestPolicy: policy,
-				thinking: { setting: "off", param: thinking, note: null, learned: null },
+				thinking: { setting: "off", param: thinking, note: null, learned: null, staleLearned: null },
 			}),
 			messages,
 			globals,
@@ -168,7 +172,7 @@ test("温度判定：omit-unless-none 仅在生效 effort 为 none 时发", () =
 			target,
 			facts: facts({
 				requestPolicy: OPENAI_REQUEST_POLICY,
-				thinking: { setting: "off", param: thinking, note: null, learned: null },
+				thinking: { setting: "off", param: thinking, note: null, learned: null, staleLearned: null },
 			}),
 			messages,
 			globals,
@@ -191,7 +195,7 @@ test("温度判定（#110）：嵌套 reasoning.effort 与顶层 reasoning_effor
 			target,
 			facts: facts({
 				requestPolicy: OPENAI_REQUEST_POLICY,
-				thinking: { setting: "off", param: { name: "reasoning", value }, note: null, learned: null },
+				thinking: { setting: "off", param: { name: "reasoning", value }, note: null, learned: null, staleLearned: null },
 			}),
 			messages,
 			globals,
@@ -209,7 +213,7 @@ test("温度判定：非法 effort 形态不解释（非字符串 / 缺字段 �
 			target,
 			facts: facts({
 				requestPolicy: OPENAI_REQUEST_POLICY,
-				thinking: { setting: "off", param: { name: "reasoning_effort", value }, note: null, learned: null },
+				thinking: { setting: "off", param: { name: "reasoning_effort", value }, note: null, learned: null, staleLearned: null },
 			}),
 			messages,
 			globals,
@@ -263,7 +267,7 @@ test("Anthropic 变体：无 protocol / 无温度 / 无 outputField；messages �
 		facts: facts({
 			apiStyle: "anthropic",
 			protocol: undefined,
-			thinking: { setting: "off", param: { name: "thinking", value: { type: "disabled" } }, note: null, learned: null },
+			thinking: { setting: "off", param: { name: "thinking", value: { type: "disabled" } }, note: null, learned: null, staleLearned: null },
 		}),
 		messages,
 		globals,
@@ -346,6 +350,7 @@ test("探测：超时仍吃下限；param 并入覆盖事实思考（基线 null
 			param: { name: "reasoning_effort", value: "none" },
 			note: null,
 			learned: null,
+			staleLearned: null,
 		},
 	});
 	const baseline = assembleProbeRequest({ target, facts: base, timeoutSeconds: 5, param: null });
@@ -409,6 +414,7 @@ test("按钮 ≡ 生成等价：同一（供应商, 模型）与同一 globals �
 				verdict: "switchable",
 				off: { name: "thinking", value: { type: "disabled" } },
 				testedAt: "2026-11-25T00:00:00.000Z",
+				source: OPENAI_CHAT_SOURCE,
 			},
 		},
 	});
@@ -472,4 +478,100 @@ test("按钮 ≡ 生成等价：OpenAI 预设的响应协议与策略同样一�
 	});
 	assert.deepEqual({ ...button, messages: generation.messages }, generation);
 	assert.equal(generation.dialect === "openai" && generation.protocol, "responses");
+});
+
+// ===== 习得来源（#112，ADR-0033）：来源不符的习得行绝不进请求 =====
+
+test("方言不符的习得行：生成与「测试」按钮都不含思考参数，条目保留为过期", () => {
+	const p = provider({
+		apiStyle: "anthropic",
+		customModels: [{ id: "mc1", modelId: "m" }],
+		thinkingByModel: { m: "off" },
+		learnedByModel: {
+			m: {
+				verdict: "switchable",
+				off: { name: "thinking", value: { type: "disabled" } }, // OpenAI 方言学到的字段
+				testedAt: "2026-11-25T00:00:00.000Z",
+				source: OPENAI_CHAT_SOURCE,
+			},
+		},
+	});
+	const state = { providers: [p], activeProviderId: "custom_x", activeModel: "m" };
+	const resolved = resolveActive(state, () => null);
+	assert.equal(resolved.ok, true);
+	if (!resolved.ok) return;
+
+	const generation = assembleChatRequest({
+		target: resolved.config,
+		facts: resolved.config,
+		messages,
+		globals,
+	});
+	const button = connectionTestRequest({ provider: p, modelId: "m", apiKey: "", globals });
+	assert.equal(generation.thinking, null, "生成不发旧方言的关参数");
+	assert.equal(button.thinking, null, "「测试」按钮同样不发");
+	assert.ok(resolved.config.thinking.staleLearned, "呈现仍能读到过期条目");
+});
+
+test("协议不符的习得行：Chat 学到的字段不发给 Responses 报文（#112）", () => {
+	const p = provider({
+		id: "openai",
+		type: "preset",
+		baseUrl: "https://api.openai.com/v1",
+		apiKeySecretId: "k",
+		models: ["gpt-5.5-pro"],
+		learnedByModel: {
+			"gpt-5.5-pro": {
+				verdict: "switchable",
+				off: { name: "reasoning_effort", value: "none" },
+				testedAt: "2026-11-25T00:00:00.000Z",
+				source: OPENAI_CHAT_SOURCE,
+			},
+		},
+	});
+	const state = { providers: [p], activeProviderId: "openai", activeModel: "gpt-5.5-pro" };
+	const resolved = resolveActive(state, () => "sk");
+	assert.equal(resolved.ok, true);
+	if (!resolved.ok) return;
+
+	const generation = assembleChatRequest({
+		target: resolved.config,
+		facts: resolved.config,
+		messages,
+		globals,
+	});
+	const button = connectionTestRequest({ provider: p, modelId: "gpt-5.5-pro", apiKey: "sk", globals });
+	assert.equal(generation.thinking, null, "顶层 reasoning_effort 在 /responses 上不存在");
+	assert.equal(button.thinking, null);
+	assert.deepEqual(resolved.config.thinking.param, null);
+	assert.ok(resolved.config.thinking.staleLearned);
+});
+
+test("来源一致的习得行仍发参数（#112 对照）", () => {
+	const p = provider({
+		customModels: [{ id: "mc1", modelId: "m" }],
+		thinkingByModel: { m: "off" },
+		learnedByModel: {
+			m: {
+				verdict: "switchable",
+				off: { name: "thinking", value: { type: "disabled" } },
+				testedAt: "2026-11-25T00:00:00.000Z",
+				source: OPENAI_CHAT_SOURCE,
+			},
+		},
+	});
+	const state = { providers: [p], activeProviderId: "custom_x", activeModel: "m" };
+	const resolved = resolveActive(state, () => null);
+	assert.equal(resolved.ok, true);
+	if (!resolved.ok) return;
+
+	const generation = assembleChatRequest({
+		target: resolved.config,
+		facts: resolved.config,
+		messages,
+		globals,
+	});
+	const button = connectionTestRequest({ provider: p, modelId: "m", apiKey: "", globals });
+	assert.deepEqual(generation.thinking, { name: "thinking", value: { type: "disabled" } });
+	assert.deepEqual(button.thinking, generation.thinking);
 });

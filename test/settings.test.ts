@@ -412,6 +412,185 @@ test("normalizeSettings 习得能力归一化幂等：归一后载入原样保�
 	assert.deepEqual(twice.providers.find((x) => x.id === "p")!.learnedByModel, { a: entry }, "幂等");
 });
 
+// ===== 习得来源归一（#112，ADR-0033） =====
+
+test("normalizeSettings 习得来源：缺失来源的存量条目原样保留为来源不明（不补章）", () => {
+	const entry = {
+		verdict: "switchable",
+		off: { name: "thinking", value: { type: "disabled" } },
+		testedAt: "2026-11-04T08:00:00.000Z",
+	};
+	const settings = load({
+		providers: [
+			{
+				id: "p",
+				name: "p",
+				type: "preset",
+				baseUrl: "https://x",
+				apiKeySecretId: "k",
+				models: ["a"],
+				authType: "bearer",
+				learnedByModel: { a: entry },
+			},
+		],
+	});
+	const p = settings.providers.find((x) => x.id === "p")!;
+	assert.deepEqual(p.learnedByModel, { a: entry }, "原样保留，不凭空补 source");
+});
+
+test("normalizeSettings 习得来源：来源结构不可读也保留为来源不明（cookie 字段不冒充）", () => {
+	const settings = load({
+		providers: [
+			{
+				id: "p",
+				name: "p",
+				type: "preset",
+				baseUrl: "https://x",
+				apiKeySecretId: "k",
+				models: ["a"],
+				authType: "bearer",
+				learnedByModel: {
+					a: {
+						verdict: "not-detected",
+						testedAt: "2026-11-04T08:00:00.000Z",
+						source: { apiStyle: "bogus" },
+					},
+					b: {
+						verdict: "not-detected",
+						testedAt: "2026-11-04T08:00:00.000Z",
+						source: "not-an-object",
+					},
+					c: {
+						verdict: "not-detected",
+						testedAt: "2026-11-04T08:00:00.000Z",
+						source: { apiStyle: "openai" }, // 缺 protocol：存档形状不完整，不补章
+					},
+				},
+			},
+		],
+	});
+	const p = settings.providers.find((x) => x.id === "p")!;
+	assert.deepEqual(p.learnedByModel, {
+		a: { verdict: "not-detected", testedAt: "2026-11-04T08:00:00.000Z" },
+		b: { verdict: "not-detected", testedAt: "2026-11-04T08:00:00.000Z" },
+		c: { verdict: "not-detected", testedAt: "2026-11-04T08:00:00.000Z" },
+	}, "条目保留，来源字段丢弃（按来源不明）");
+});
+
+test("normalizeSettings 习得来源：关参数不属于自称来源的候选清单 → 剔除（内部矛盾）", () => {
+	const settings = load({
+		providers: [
+			{
+				id: "openai",
+				name: "OpenAI",
+				type: "preset",
+				baseUrl: "https://api.openai.com/v1",
+				apiKeySecretId: "k",
+				models: ["gpt-5.5-pro", "gpt-5.2"],
+				authType: "bearer",
+				learnedByModel: {
+					// Responses 来源却学得 Chat 的顶层字段：矛盾 → 剔除
+					"gpt-5.5-pro": {
+						verdict: "switchable",
+						off: { name: "reasoning_effort", value: "none" },
+						testedAt: "2026-11-04T08:00:00.000Z",
+						source: { apiStyle: "openai", protocol: "responses" },
+					},
+					// Chat 来源 + 顶层字段：合法 → 保留
+					"gpt-5.2": {
+						verdict: "switchable",
+						off: { name: "reasoning_effort", value: "none" },
+						testedAt: "2026-11-04T08:00:00.000Z",
+						source: { apiStyle: "openai", protocol: "chat-completions" },
+					},
+				},
+			},
+		],
+	});
+	const p = settings.providers.find((x) => x.id === "openai")!;
+	assert.deepEqual(
+		p.learnedByModel,
+		{
+			"gpt-5.2": {
+				verdict: "switchable",
+				off: { name: "reasoning_effort", value: "none" },
+				testedAt: "2026-11-04T08:00:00.000Z",
+				source: { apiStyle: "openai", protocol: "chat-completions" },
+			},
+		},
+		"矛盾的条目剔除（按未知，不显示过期）"
+	);
+});
+
+test("normalizeSettings 习得来源：两个合法变体原样保留（Anthropic 丢协议 / OpenAI 带协议）", () => {
+	const settings = load({
+		providers: [
+			{
+				id: "p",
+				name: "p",
+				type: "preset",
+				baseUrl: "https://x",
+				authType: "none",
+				apiKeySecretId: "",
+				models: ["a", "b"],
+				learnedByModel: {
+					a: {
+						verdict: "switchable",
+						off: { name: "thinking", value: { type: "disabled" } },
+						testedAt: "2026-11-04T08:00:00.000Z",
+						source: { apiStyle: "anthropic", protocol: "responses" },
+					},
+					b: {
+						verdict: "not-detected",
+						testedAt: "2026-11-04T08:00:00.000Z",
+						source: { apiStyle: "openai", protocol: "responses" },
+					},
+				},
+			},
+		],
+	});
+	const p = settings.providers.find((x) => x.id === "p")!;
+	assert.deepEqual(p.learnedByModel, {
+		a: {
+			verdict: "switchable",
+			off: { name: "thinking", value: { type: "disabled" } },
+			testedAt: "2026-11-04T08:00:00.000Z",
+			source: { apiStyle: "anthropic" },
+		},
+		b: {
+			verdict: "not-detected",
+			testedAt: "2026-11-04T08:00:00.000Z",
+			source: { apiStyle: "openai", protocol: "responses" },
+		},
+	}, "Anthropic 丢掉多余协议；OpenAI 保留协议");
+});
+
+test("normalizeSettings 习得来源幂等：带来源的条目二次载入原样保留", () => {
+	const entry = {
+		verdict: "not-detected",
+		testedAt: "2026-11-04T08:00:00.000Z",
+		source: { apiStyle: "openai", protocol: "chat-completions" },
+	};
+	const once = load({
+		providers: [
+			{
+				id: "p",
+				name: "p",
+				type: "preset",
+				baseUrl: "https://x",
+				apiKeySecretId: "k",
+				models: ["a"],
+				authType: "bearer",
+				learnedByModel: { a: entry },
+			},
+		],
+	});
+	const p1 = once.providers.find((x) => x.id === "p")!;
+	assert.deepEqual(p1.learnedByModel, { a: entry });
+	const twice = load({ providers: [p1] });
+	assert.deepEqual(twice.providers.find((x) => x.id === "p")!.learnedByModel, { a: entry }, "幂等");
+});
+
 // ===== 模型清单与启用集迁移（#87，ADR-0026） =====
 
 test("normalizeSettings 迁移：存量模型成为启用集且模型清单初值＝启用集", () => {

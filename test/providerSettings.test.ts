@@ -225,7 +225,7 @@ test("setSecretId 无认证（none）供应商清空密钥名：启用集不动�
 
 // ===== 接口方言（#105） =====
 
-test("setProviderApiStyle：只写方言，模型行 / 启用集 / 当前模型 / 思考开关全部保留", () => {
+test("setProviderApiStyle：只写方言，模型行 / 启用集 / 当前模型 / 习得条目全部保留——但习得不再照信（#112）", () => {
 	const p = provider({
 		id: "c",
 		type: "custom",
@@ -233,15 +233,24 @@ test("setProviderApiStyle：只写方言，模型行 / 启用集 / 当前模型 
 		apiKeySecretId: "k",
 		customModels: [{ id: "mc1", modelId: "m", maxTokens: 2048 }],
 		modelCatalog: ["m", "n"],
-		thinkingByModel: { m: "on" },
-		learnedByModel: { m: { verdict: "switchable", off: { name: "thinking", value: { type: "disabled" } }, testedAt: "2026-11-25T00:00:00.000Z" } },
+		thinkingByModel: { m: "off" },
+		learnedByModel: {
+			m: {
+				verdict: "switchable",
+				off: { name: "thinking", value: { type: "disabled" } },
+				testedAt: "2026-11-25T00:00:00.000Z",
+				source: OPENAI_CHAT_SOURCE,
+			},
+		},
 	});
 	const s = state({ providers: [p], activeProviderId: "c", activeModel: "m" });
+	const before = thinkingFor(p, "m");
+	assert.deepEqual(before.param, { name: "thinking", value: { type: "disabled" } }, "切换前照信");
 	setProviderApiStyle(s, "c", "anthropic");
 	assert.equal(p.apiStyle, "anthropic");
 	assert.deepEqual(p.customModels, [{ id: "mc1", modelId: "m", maxTokens: 2048 }], "模型行保留");
 	assert.deepEqual(p.modelCatalog, ["m", "n"], "模型清单保留");
-	assert.deepEqual(p.thinkingByModel, { m: "on" }, "思考开关保留");
+	assert.deepEqual(p.thinkingByModel, { m: "off" }, "思考开关保留");
 	assert.deepEqual(
 		p.learnedByModel,
 		{
@@ -249,10 +258,15 @@ test("setProviderApiStyle：只写方言，模型行 / 启用集 / 当前模型 
 				verdict: "switchable",
 				off: { name: "thinking", value: { type: "disabled" } },
 				testedAt: "2026-11-25T00:00:00.000Z",
+				source: OPENAI_CHAT_SOURCE,
 			},
 		},
-		"习得能力保留"
+		"习得条目原样保留（ADR-0028 不动）"
 	);
+	const after = thinkingFor(p, "m");
+	assert.equal(after.param, null, "保留 ✓、照信 ✗：切换后不发旧方言的关参数");
+	assert.equal(after.learned, null);
+	assert.ok(after.staleLearned, "原条目经 staleLearned 带出，呈现为过期");
 	assert.equal(s.activeModel, "m", "切换方言不清「当前模型」");
 	assert.equal(s.activeProviderId, "c");
 });
@@ -576,10 +590,14 @@ test("renameModel 迁移该模型的「思考开关」；removeModel 移除不�
 
 // ===== 习得能力（#89，思考测试落档） =====
 
+/** 习得来源固定件（#112）：本文件的自定义 / 预设当前来源均为 OpenAI + Chat。 */
+const OPENAI_CHAT_SOURCE = { apiStyle: "openai", protocol: "chat-completions" } as const;
+
 const LEARNED_SWITCHABLE: LearnedCapability = {
 	verdict: "switchable",
 	off: { name: "enable_thinking", value: false },
 	testedAt: "2026-11-04T08:00:00.000Z",
+	source: OPENAI_CHAT_SOURCE,
 };
 
 test("recordThinkingTest（#89）：习得条目按（供应商, 模型）落档，thinkingFor 即刻以习得为准", () => {
@@ -596,7 +614,12 @@ test("习得盖过内置能力表（#89）：内置可关模型实测「未能�
 		type: "preset",
 		models: ["deepseek-v4-pro"],
 		learnedByModel: {
-			"deepseek-v4-pro": { verdict: "not-switchable", triedFields: 3, testedAt: "2026-11-04T08:00:00.000Z" },
+			"deepseek-v4-pro": {
+				verdict: "not-switchable",
+				triedFields: 3,
+				testedAt: "2026-11-04T08:00:00.000Z",
+				source: OPENAI_CHAT_SOURCE,
+			},
 		},
 	});
 	const r = thinkingFor(p, "deepseek-v4-pro");

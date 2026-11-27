@@ -178,6 +178,8 @@ export const en = {
 		thinkingNoteLearnedSwitchable: "Measured: can be turned off",
 		thinkingNoteLearnedNotDetected: "No thinking detected in test",
 		thinkingNoteLearnedNotSwitchable: "Tested {{count}} fields — could not turn it off",
+		thinkingNoteLearnedStale:
+			"The API dialect/protocol has changed or cannot be confirmed — this measured result no longer applies. Retest.",
 		thinkingTestVerdictNotDetected:
 			"Test result: no thinking detected. This does not mean the model never thinks.",
 		thinkingTestVerdictSwitchable: "Test result: thinking can be turned off.",

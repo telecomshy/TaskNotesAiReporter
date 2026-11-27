@@ -61,7 +61,7 @@ function setup(
 				baseUrl: "https://api.example.com",
 				apiKey: "sk",
 				model: "m",
-				thinking: { setting: "off", param: null, note: "unknown", learned: null },
+				thinking: { setting: "off", param: null, note: "unknown", learned: null, staleLearned: null },
 				requestPolicy: EMPTY_REQUEST_POLICY,
 			},
 		}),
@@ -260,6 +260,7 @@ const thinkingOffParam = {
 	param: { name: "thinking", value: { type: "disabled" } },
 	note: null,
 	learned: null,
+	staleLearned: null,
 };
 
 // 思考参数 / 请求策略 / 接口协议的「逐字段交接」已不存在（生成层只交装配好的 ModelRequest，
@@ -296,7 +297,7 @@ test("假关不误报：未发参数（强制思考）或响应无推理段 → 
 				baseUrl: "https://api.example.com",
 				apiKey: "sk",
 				model: "m",
-				thinking: { setting: "off", param: null, note: "forced", learned: null },
+				thinking: { setting: "off", param: null, note: "forced", learned: null, staleLearned: null },
 				requestPolicy: EMPTY_REQUEST_POLICY,
 			},
 		}),

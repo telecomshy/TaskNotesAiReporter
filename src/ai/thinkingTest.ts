@@ -7,7 +7,7 @@
  * 预算恒 256、超时吃下限、param 并入覆盖事实思考、候选分派收进装配缝。
  */
 
-import { startThinkingTest, stepThinkingTest } from "../core/thinking";
+import { learnedSourceOf, startThinkingTest, stepThinkingTest } from "../core/thinking";
 import { assembleProbeRequest, probeOffCandidates } from "./modelRequest";
 import type {
 	ActiveModelResolution,
@@ -39,7 +39,13 @@ export async function runThinkingTest(
 	request?: RequestFn
 ): Promise<ThinkingTestResult> {
 	// 候选按（接口方言, 供应商 id, 接口协议）取（#105 / #106 / #110）：分派收进装配缝。
-	let { state, action } = startThinkingTest(probeOffCandidates(input.facts, input.providerId));
+	// 来源与候选取自同一次事实解析（#112）：探测与落档同源，流程层不事后补字段。
+	const { state: initial, action: first } = startThinkingTest(
+		probeOffCandidates(input.facts, input.providerId),
+		learnedSourceOf(input.facts.apiStyle, input.facts.protocol)
+	);
+	let state = initial;
+	let action = first;
 	while (action.kind === "probe") {
 		// 状态机照旧拥有「基线 → 逐字段 → 四值判定」循环；每步现装配一次（ADR-0032）。
 		const probe = assembleProbeRequest({

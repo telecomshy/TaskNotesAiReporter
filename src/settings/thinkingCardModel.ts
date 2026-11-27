@@ -86,6 +86,8 @@ export function thinkingCardModel(info: ActiveModelInfo): ThinkingCardModel {
 	const hasModel = hasActiveModel(info);
 	const on = thinking.setting === "on";
 	const copy = thinkingDisplayCopy[display.state];
+	// 习得徽标带「实测 {{date}}」；习得过期条目（#112）从 staleLearned 取日期——徽标文案不变。
+	const learnedEntry = thinking.learned ?? thinking.staleLearned;
 	return {
 		toggle: {
 			checked: on,
@@ -95,8 +97,7 @@ export function thinkingCardModel(info: ActiveModelInfo): ThinkingCardModel {
 		badge: {
 			tone: display.badge,
 			key: copy.badge,
-			// 习得徽标带「实测 {{date}}」；非习得档不带 vars。
-			...(thinking.learned ? { vars: { date: thinking.learned.testedAt.slice(0, 10) } } : {}),
+			...(learnedEntry ? { vars: { date: learnedEntry.testedAt.slice(0, 10) } } : {}),
 		},
 		footnote: {
 			key: copy.footnote,

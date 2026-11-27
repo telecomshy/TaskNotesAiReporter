@@ -14,7 +14,11 @@ import {
 	type ThinkingSetting,
 } from "../types";
 import type { PendingSecret } from "./secrets";
-import { normalizeThinkingSetting } from "../core/thinking";
+import {
+	parseLearnedSource,
+	normalizeThinkingSetting,
+	thinkingOffCandidates,
+} from "../core/thinking";
 import { coerceApiStyle } from "../core/apiStyle";
 import {
 	adoptLegacyCustomModels,
@@ -126,8 +130,9 @@ export function normalizeSettings(raw: unknown): NormalizedSettings {
 				const thinkingByModel = normalizeThinkingByModel(providerRaw.thinkingByModel);
 				if (thinkingByModel) provider.thinkingByModel = thinkingByModel;
 				else delete provider.thinkingByModel;
-				// 「习得能力」（#89）：条目逐个校验，非法剔除；「中断」本就不落条目。
-				const learnedByModel = normalizeLearnedByModel(providerRaw.learnedByModel);
+				// 「习得能力」（#89 / #112）：条目逐个校验，非法剔除；「中断」本就不落条目。
+				// 缺来源的存量条目原样保留（不补章、不写盘），读取侧按来源不明呈现「习得过期」。
+				const learnedByModel = normalizeLearnedByModel(providerRaw.learnedByModel, provider.id);
 				if (learnedByModel) provider.learnedByModel = learnedByModel;
 				else delete provider.learnedByModel;
 				const legacy = providerRaw.apiKey;
@@ -255,22 +260,31 @@ function normalizeThinkingByModel(raw: unknown): Record<string, ThinkingSetting>
 }
 
 /**
- * 归一「习得能力」映射（#89）：条目须有合法判定（三档落档值，「中断」不落条目）与
+ * 归一「习得能力」映射（#89 / #112）：条目须有合法判定（三档落档值，「中断」不落条目）与
  * 非空测试时间戳，且「可关」条目必须带可解析的关参数；其余情形视为脏数据剔除。
  * 无合法条目返回 undefined（＝不发明，读取侧＝未知，测试入口保持可点）。归一幂等。
+ *
+ * 来源（#112）：结构可读则原样归一；缺失 / 不可读**原样保留为来源不明**（不发明、不写盘）。
+ * `switchable` 条目的关参数名若不属于其**自称来源**的候选清单 → 内部矛盾的脏数据剔除。
  */
-function normalizeLearnedByModel(raw: unknown): Record<string, LearnedCapability> | undefined {
+function normalizeLearnedByModel(
+	raw: unknown,
+	providerId: string
+): Record<string, LearnedCapability> | undefined {
 	if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined;
 	const out: Record<string, LearnedCapability> = {};
 	for (const [model, value] of Object.entries(raw as Record<string, unknown>)) {
-		const entry = normalizeLearnedCapability(value);
+		const entry = normalizeLearnedCapability(value, providerId);
 		if (entry !== undefined) out[model] = entry;
 	}
 	return Object.keys(out).length > 0 ? out : undefined;
 }
 
 /** 单条习得能力归一；非法返回 undefined。「可关」条目缺关参数视为脏数据剔除。 */
-function normalizeLearnedCapability(value: unknown): LearnedCapability | undefined {
+function normalizeLearnedCapability(
+	value: unknown,
+	providerId: string
+): LearnedCapability | undefined {
 	if (typeof value !== "object" || value === null) return undefined;
 	const raw = value as Record<string, unknown>;
 	const verdict = raw.verdict;
@@ -280,11 +294,24 @@ function normalizeLearnedCapability(value: unknown): LearnedCapability | undefin
 	if (typeof raw.testedAt !== "string" || raw.testedAt === "") return undefined;
 	const off = normalizeThinkingParam(raw.off);
 	if (verdict === "switchable" && !off) return undefined;
+	// 来源：可读才带上；缺失 / 不可读保持「来源不明」（不补章，ADR-0033）。
+	const source = parseLearnedSource(raw.source);
+	if (off && source) {
+		const candidates = thinkingOffCandidates(
+			source.apiStyle,
+			providerId,
+			source.apiStyle === "openai" ? source.protocol : undefined
+		);
+		if (!candidates.some((candidate) => candidate.name === off.name)) {
+			return undefined; // 参数与自称来源矛盾：脏数据，剔除
+		}
+	}
 	const entry: LearnedCapability = { verdict, testedAt: raw.testedAt };
 	if (off) entry.off = off;
 	if (typeof raw.triedFields === "number" && Number.isFinite(raw.triedFields)) {
 		entry.triedFields = raw.triedFields;
 	}
+	if (source) entry.source = source;
 	return entry;
 }
 

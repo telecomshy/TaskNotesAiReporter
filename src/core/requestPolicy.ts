@@ -11,7 +11,7 @@
  */
 
 import type { RequestPolicy } from "../types";
-import { matchModelPattern } from "./thinking";
+import { matchModelPattern } from "./modelPattern";
 
 /** 无策略（现状）：`max_tokens` + 温度恒发 + 无下限。其它供应商与自定义供应商的回落。 */
 export const EMPTY_REQUEST_POLICY: RequestPolicy = {
