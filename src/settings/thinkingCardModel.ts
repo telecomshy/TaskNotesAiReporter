@@ -8,17 +8,13 @@
  *
  * 从 view 内化的三条口径（原散在 modelTab.ts，各有单测锁定）：
  * - 习得徽标日期：`testedAt.slice(0, 10)`；
- * - 「未能关闭」备注的字段数兜底：`triedFields ?? THINKING_OFF_CANDIDATES.length`
- *   （view 不再 import 测试算法的候选清单）；
+ * - 「未能关闭」备注只认记录值：有 `triedFields` 才显示字段数，缺失改显无数字文案变体
+ *   （#114：不再拿候选清单长度兜底，呈现层与测试算法彻底脱钩）；
  * - `hasModel`（providerId 与 model 均非空）：开关可用性与测试入口置灰都吃它，
  *   以 `hasActiveModel` 导出（view 的 startTest 守卫同吃，口径不二份）。
  */
 
-import {
-	THINKING_OFF_CANDIDATES,
-	type ThinkingBadgeTone,
-	type ThinkingTestEntry,
-} from "../core/thinking";
+import type { ThinkingBadgeTone, ThinkingTestEntry } from "../core/thinking";
 import { thinkingDisplayCopy, type TranslationKey } from "../i18n";
 import type { ActiveModelInfo } from "./providerSettings";
 
@@ -43,7 +39,7 @@ export interface ThinkingBadgeModel {
 /** 备注的呈现规格：文案键（「未能关闭」带实测字段数）＋ 警示色。 */
 export interface ThinkingFootnoteModel {
 	key: TranslationKey;
-	/** 仅 learned-not-switchable：`triedFields ?? THINKING_OFF_CANDIDATES.length`。 */
+	/** 仅 learned-not-switchable 且有记录值：实测字段数（缺失时用无数字文案，不推断）。 */
 	vars?: { count: number };
 	/** 备注用警示色（琥珀）。 */
 	warn: boolean;
@@ -88,6 +84,11 @@ export function thinkingCardModel(info: ActiveModelInfo): ThinkingCardModel {
 	const copy = thinkingDisplayCopy[display.state];
 	// 习得徽标带「实测 {{date}}」；习得过期条目（#112）从 staleLearned 取日期——徽标文案不变。
 	const learnedEntry = thinking.learned ?? thinking.staleLearned;
+	const triedFields =
+		display.state === "learned-not-switchable" ? thinking.learned?.triedFields : undefined;
+	// 「未能关闭」缺记录值时改显无数字变体（#114）：候选清单长度不是实测事实，不能拿来兜底。
+	const noCount = display.state === "learned-not-switchable" && triedFields === undefined;
+	const footnoteKey = noCount ? (copy.footnoteNoCount ?? copy.footnote) : copy.footnote;
 	return {
 		toggle: {
 			checked: on,
@@ -100,11 +101,9 @@ export function thinkingCardModel(info: ActiveModelInfo): ThinkingCardModel {
 			...(learnedEntry ? { vars: { date: learnedEntry.testedAt.slice(0, 10) } } : {}),
 		},
 		footnote: {
-			key: copy.footnote,
-			// 「未能关闭」带实测字段数，兜底候选清单长度；其余状态不带 vars。
-			...(display.state === "learned-not-switchable"
-				? { vars: { count: thinking.learned?.triedFields ?? THINKING_OFF_CANDIDATES.length } }
-				: {}),
+			key: footnoteKey,
+			// 「未能关闭」只在有记录值时带实测字段数；其余状态（含缺记录值）不带 vars。
+			...(triedFields !== undefined ? { vars: { count: triedFields } } : {}),
 			warn: display.footnoteWarn,
 		},
 		test: {

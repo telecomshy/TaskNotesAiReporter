@@ -59,11 +59,21 @@ export interface ThinkingCapabilityRow {
 	capability: ThinkingCapability;
 }
 
+/*
+ * 命名形状常量（#114，ADR-0035）：能力表开关构造器与四张候选清单共用同一份关参数形状。
+ * 清单**仍显式有序**——不从能力行派生：Responses 的嵌套形状没有对应能力行（ADR-0026 不登记
+ * 未知族），派生覆盖不到。模块私有：形状是内部约定，不新增导出面。
+ */
+const THINKING_DISABLED: ThinkingParam = { name: "thinking", value: { type: "disabled" } };
+const ENABLE_THINKING_OFF: ThinkingParam = { name: "enable_thinking", value: false };
+const REASONING_EFFORT_NONE: ThinkingParam = { name: "reasoning_effort", value: "none" };
+const RESPONSES_REASONING_NONE: ThinkingParam = { name: "reasoning", value: { effort: "none" } };
+
 /** `thinking` 对象族开关参数（DeepSeek / Kimi K2.x / MiniMax / 智谱）。 */
 function thinkingTypeSwitch(onValue: string): ThinkingCapability {
 	return {
 		kind: "switchable",
-		off: { name: "thinking", value: { type: "disabled" } },
+		off: THINKING_DISABLED,
 		on: { name: "thinking", value: { type: onValue } },
 	};
 }
@@ -72,7 +82,7 @@ function thinkingTypeSwitch(onValue: string): ThinkingCapability {
 function enableThinkingSwitch(): ThinkingCapability {
 	return {
 		kind: "switchable",
-		off: { name: "enable_thinking", value: false },
+		off: ENABLE_THINKING_OFF,
 		on: { name: "enable_thinking", value: true },
 	};
 }
@@ -84,7 +94,7 @@ function enableThinkingSwitch(): ThinkingCapability {
 function reasoningEffortSwitch(): ThinkingCapability {
 	return {
 		kind: "switchable",
-		off: { name: "reasoning_effort", value: "none" },
+		off: REASONING_EFFORT_NONE,
 		on: { name: "reasoning_effort", value: "high" },
 	};
 }
@@ -133,19 +143,22 @@ export const THINKING_CAPABILITIES: readonly ThinkingCapabilityRow[] = [
 	{ providerId: "anthropic", modelPattern: "claude-*", capability: thinkingTypeSwitch("adaptive") },
 	// OpenAI 官方预设（#106）：Chat Completions 的开关是顶层 `reasoning_effort`；
 	// 开＝"high"、关＝"none"。强制族（关态发 none 会 400）行排在通用族之前。
+	//
+	// Responses-only 族（#110）：官方未给出 `none` 支持 ⇒ 不登记（ADR-0026），但必须用显式
+	// 「未知」行挡住**所有**同族通用前缀行（`*-pro` 先于 gpt-6.x / gpt-5.x 各族，
+	// `gpt-5.6-cyber` 先于 `gpt-5.6*`）——否则 `gpt-5.4-pro` 或未来的 `gpt-6.1-terra-pro`
+	// 会被当成 Chat 的可关族，在 `/responses` 上发出不存在的顶层 `reasoning_effort`。
+	// 开关因而置灰、思考测试可点（探嵌套 `reasoning.effort`），习得结论照旧盖过；
+	// 顺序由 test/modelTableInvariants 交叉测试执法（#114，ADR-0035）。
+	{ providerId: "openai", modelPattern: "*-pro", capability: { kind: "unknown" } },
+	{ providerId: "openai", modelPattern: "gpt-oss-*", capability: { kind: "unknown" } },
+	{ providerId: "openai", modelPattern: "gpt-5.6-cyber", capability: { kind: "unknown" } },
 	{ providerId: "openai", modelPattern: "gpt-6-astra", capability: { kind: "forced" } },
 	{ providerId: "openai", modelPattern: "gpt-6.1-sol", capability: { kind: "forced" } },
 	{ providerId: "openai", modelPattern: "gpt-6.2*", capability: { kind: "forced" } },
 	{ providerId: "openai", modelPattern: "gpt-6.1-terra*", capability: reasoningEffortSwitch() },
 	{ providerId: "openai", modelPattern: "gpt-6-sol*", capability: reasoningEffortSwitch() },
 	{ providerId: "openai", modelPattern: "gpt-6-luna*", capability: reasoningEffortSwitch() },
-	// Responses-only 族（#110）：官方未给出 `none` 支持 ⇒ 不登记（ADR-0026），但必须用显式
-	// 「未知」行挡住下面的 `gpt-5.2*` / `gpt-5.4*` / `gpt-5.6*` 前缀行——否则
-	// `gpt-5.4-pro` 会被当成 Chat 的可关族，在 `/responses` 上发出不存在的顶层 `reasoning_effort`。
-	// 开关因而置灰、思考测试可点（探嵌套 `reasoning.effort`），习得结论照旧盖过。
-	{ providerId: "openai", modelPattern: "*-pro", capability: { kind: "unknown" } },
-	{ providerId: "openai", modelPattern: "gpt-oss-*", capability: { kind: "unknown" } },
-	{ providerId: "openai", modelPattern: "gpt-5.6-cyber", capability: { kind: "unknown" } },
 	{ providerId: "openai", modelPattern: "gpt-5.2*", capability: reasoningEffortSwitch() },
 	{ providerId: "openai", modelPattern: "gpt-5.4*", capability: reasoningEffortSwitch() },
 	{ providerId: "openai", modelPattern: "gpt-5.6*", capability: reasoningEffortSwitch() },
@@ -389,12 +402,6 @@ export function isThinkingFakeOff(
 	return resolution.setting === "off" && resolution.param !== null && responseHasReasoning;
 }
 
-/**
- * 模型匹配（跨表共用）：见 `core/modelPattern`（#112 抽出以断开 thinking ↔ wireProtocol 的环）。
- * 原位 re-export，既有调用方零改动。
- */
-export { matchModelPattern } from "./modelPattern";
-
 // ===== 思考测试纯状态机（#89，缝 1） =====
 
 /**
@@ -403,34 +410,28 @@ export { matchModelPattern } from "./modelPattern";
  * （ADR-0024 互斥约束）。候选清单之外的暗号不猜——漏网的真暗号只能给出「未能关闭」。
  */
 export const THINKING_OFF_CANDIDATES: readonly ThinkingParam[] = [
-	{ name: "thinking", value: { type: "disabled" } },
-	{ name: "enable_thinking", value: false },
-	{ name: "reasoning_effort", value: "none" },
+	THINKING_DISABLED,
+	ENABLE_THINKING_OFF,
+	REASONING_EFFORT_NONE,
 ];
 
 /**
  * Anthropic 方言的关字段候选（#105 裁决 10）：单字段 `thinking: {type:"disabled"}`。
  * 只试该方言自己的关字段——拿 OpenAI 字段去探 Claude 只会白落「未能关闭」。
  */
-export const ANTHROPIC_THINKING_OFF_CANDIDATES: readonly ThinkingParam[] = [
-	{ name: "thinking", value: { type: "disabled" } },
-];
+export const ANTHROPIC_THINKING_OFF_CANDIDATES: readonly ThinkingParam[] = [THINKING_DISABLED];
 
 /**
  * OpenAI 官方预设的关字段候选（#106 裁决 12）：Chat Completions 上唯一的文档化开关是
  * 顶层 `reasoning_effort`，其余 OpenAI 参数名（`thinking` / `enable_thinking`）只会白落 400。
  */
-export const OPENAI_THINKING_OFF_CANDIDATES: readonly ThinkingParam[] = [
-	{ name: "reasoning_effort", value: "none" },
-];
+export const OPENAI_THINKING_OFF_CANDIDATES: readonly ThinkingParam[] = [REASONING_EFFORT_NONE];
 
 /**
  * Responses 协议下的关字段候选（#110）：开关是嵌套对象路径 `reasoning.effort`，
  * 顶层 `reasoning_effort` 在 `/responses` 上是不存在的字段。
  */
-export const RESPONSES_THINKING_OFF_CANDIDATES: readonly ThinkingParam[] = [
-	{ name: "reasoning", value: { effort: "none" } },
-];
+export const RESPONSES_THINKING_OFF_CANDIDATES: readonly ThinkingParam[] = [RESPONSES_REASONING_NONE];
 
 /**
  * 取思考测试候选清单：内置 OpenAI 预设按**供应商 id + 协议**分派（#106 / #110）——

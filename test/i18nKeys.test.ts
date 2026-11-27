@@ -134,6 +134,9 @@ test("动态键（日期口径 / 显示矩阵 / 思考判定 / 预设名）都�
 		...Object.values(thinkingDisplayCopy).flatMap((copy) => [
 			{ key: copy.badge, where: "thinkingDisplayCopy.badge" },
 			{ key: copy.footnote, where: "thinkingDisplayCopy.footnote" },
+			...(copy.footnoteNoCount
+				? [{ key: copy.footnoteNoCount, where: "thinkingDisplayCopy.footnoteNoCount" }]
+				: []),
 		]),
 		...Object.values(THINKING_VERDICT_NOTICE_KEYS).map((key) => ({
 			key,

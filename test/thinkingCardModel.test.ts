@@ -10,7 +10,6 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { THINKING_OFF_CANDIDATES } from "../src/core/thinking";
 import { activeModelInfo } from "../src/settings/providerSettings";
 import { thinkingCardModel, type ThinkingCardModel } from "../src/settings/thinkingCardModel";
 import type { ModelProvider } from "../src/types";
@@ -187,7 +186,7 @@ const cardCases: CardCase[] = [
 		},
 	},
 	{
-		name: "learned-not-switchable：无 triedFields → 兜底候选清单长度（view 不再 import 测试算法）",
+		name: "learned-not-switchable：无 triedFields → 无数字文案变体（不再推断候选清单长度）",
 		provider: preset({
 			learnedByModel: {
 				"deepseek-v4-pro": { verdict: "not-switchable", testedAt: TESTED_AT, source: LEARNED_SOURCE },
@@ -197,11 +196,7 @@ const cardCases: CardCase[] = [
 		expected: {
 			toggle: { checked: false, enabled: false, titleKey: "model.thinkingOff" },
 			badge: { tone: "warn", key: "model.thinkingBadgeLearned", vars: { date: TESTED_DATE } },
-			footnote: {
-				key: "model.thinkingNoteLearnedNotSwitchable",
-				warn: true,
-				vars: { count: THINKING_OFF_CANDIDATES.length },
-			},
+			footnote: { key: "model.thinkingNoteLearnedNotSwitchableNoCount", warn: true },
 			test: { kind: "retest", labelKey: "model.thinkingTestRetest", disabled: false },
 		},
 	},

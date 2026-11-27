@@ -87,7 +87,7 @@ export function dateFieldLabelKey(field: DateField): string {
  */
 export const thinkingDisplayCopy: Record<
 	ThinkingDisplayState,
-	{ badge: TranslationKey; footnote: TranslationKey }
+	{ badge: TranslationKey; footnote: TranslationKey; footnoteNoCount?: TranslationKey }
 > = {
 	builtin: { badge: "model.thinkingBadgeBuiltin", footnote: "model.thinkingNoteBuiltin" },
 	forced: { badge: "model.thinkingBadgeForced", footnote: "model.thinkingForced" },
@@ -104,6 +104,8 @@ export const thinkingDisplayCopy: Record<
 	"learned-not-switchable": {
 		badge: "model.thinkingBadgeLearned",
 		footnote: "model.thinkingNoteLearnedNotSwitchable",
+		// 缺 triedFields 时的无数字变体（#114）：文案键仍由本映射拥有，卡片模型只选词。
+		footnoteNoCount: "model.thinkingNoteLearnedNotSwitchableNoCount",
 	},
 	"learned-stale": {
 		badge: "model.thinkingBadgeLearned",

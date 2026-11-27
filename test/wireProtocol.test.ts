@@ -2,7 +2,7 @@
  * 「接口协议」解析（#110，ADR-0031）。
  *
  * 纯函数缝：表按（供应商, 模型）首个命中、`*-pro` 后缀匹配、缺省 Chat Completions、
- * 其它供应商零命中；读取侧缺省与模型匹配的后缀分支。
+ * 其它供应商零命中；读取侧缺省。模型匹配判定本身见 test/modelPattern.test.ts（#114 迁出）。
  * 事实锚点：docs/research/responses-api.md。
  */
 
@@ -14,7 +14,6 @@ import {
 	protocolOf,
 	resolveWireProtocol,
 } from "../src/core/wireProtocol";
-import { matchModelPattern } from "../src/core/thinking";
 
 test("协议表：只有 Chat Completions 不可用的模型走 Responses（*-pro / gpt-oss-* / gpt-5.6-cyber）", () => {
 	for (const model of [
@@ -76,16 +75,4 @@ test("读取侧缺省：未带 protocol / 显式 undefined 都读作 chat-comple
 	assert.equal(protocolOf({}), "chat-completions");
 	assert.equal(protocolOf({ protocol: undefined }), "chat-completions");
 	assert.equal(protocolOf({ protocol: "responses" }), "responses");
-});
-
-// ===== 模型匹配（共享判定，#110 新增后缀分支） =====
-
-test("matchModelPattern：精确 / 前缀 / 后缀 / 单独 *；既有前缀语义不变", () => {
-	assert.equal(matchModelPattern("gpt-6.2*", "gpt-6.2-astra"), true);
-	assert.equal(matchModelPattern("gpt-6.2*", "gpt-5.4"), false);
-	assert.equal(matchModelPattern("gpt-5.5-pro", "gpt-5.5-pro"), true);
-	assert.equal(matchModelPattern("*-pro", "gpt-5.5-pro"), true);
-	assert.equal(matchModelPattern("*-pro", "gpt-5.6-cyber"), false);
-	assert.equal(matchModelPattern("*-pro", "pro"), false, "后缀不能是空串以外的整串误配");
-	assert.equal(matchModelPattern("*", "anything"), true, "单独 * 仍恒命中");
 });
