@@ -190,8 +190,8 @@ export class TaskSelectionView {
 	/** 注入任务快照并回到初始状态。 */
 	setTasks(tasks: TaskInfo[]): void {
 		this.session = createSelectionSession(tasks, this.options.dateFields, this.options.statuses);
-		this.lastFrame = null;
-		this.render(frame(this.session), null);
+		// 首帧无上一帧可比，按「首次装配」全量渲染；落帧后首个用户转移才走差量分支（#117）。
+		this.renderFrame(frame(this.session), null);
 	}
 
 	/** 右栏当前集合，供生成报告读取。 */
@@ -208,11 +208,18 @@ export class TaskSelectionView {
 	private apply(next: SelectionSession): SelectionFrame | null {
 		if (!this.session || next === this.session) return null;
 		this.session = next;
-		const prev = this.lastFrame;
 		const f = frame(next);
+		this.renderFrame(f, this.lastFrame);
+		return f;
+	}	
+
+	/**
+	 * 落帧 + 重绘的唯一入口：存下新帧，再按 `prev` 派生本次重绘范围。
+	 * `setTasks` 与 `apply` 都经这里，避免「渲染了但没落帧」再次漂移（#117）。
+	 */
+	private renderFrame(f: SelectionFrame, prev: SelectionFrame | null): void {
 		this.lastFrame = f;
 		this.render(f, prev);
-		return f;
 	}
 
 	private update(transition: (session: SelectionSession) => SelectionSession): void {

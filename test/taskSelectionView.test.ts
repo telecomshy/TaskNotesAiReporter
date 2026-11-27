@@ -261,14 +261,12 @@ test("移动端页签：切到「已选」只换 pane 显隐与按下态", () =>
 test("快捷周期：按下态、区间文字、左栏结果与计数一起回显", () =>
 	withFixedClock(() => {
 		const h = harness();
-		const month = quickButton(h.root, h.t("taskSelection.quickThisMonth"));
-		click(month);
+		click(quickButton(h.root, h.t("taskSelection.quickThisMonth")));
 
 		assert.equal(
 			rangeLabel(h.root),
 			h.t("taskSelection.currentFilter", { start: "2024-03-01", end: "2024-03-31" })
 		);
-		// 首个转移会整块重建筛选区（#117），按下态取重建后的按钮。
 		const pressedMonth = quickButton(h.root, h.t("taskSelection.quickThisMonth"));
 		assert.equal(pressedMonth.getAttribute("aria-pressed"), "true");
 		assert.ok(pressedMonth.hasClass("tah-quick-btn-selected"));
@@ -358,16 +356,26 @@ test("标题页：查询回显解析与清空按钮，切回时间页恢复区�
 
 // ===== (c) 重绘决策 =====
 
-test("已知偏差（#117）：setTasks 后首个转移整块重建筛选区", () =>
+test("setTasks 后首个转移不重建筛选区（日历按 calendarEffect 重建）", () =>
 	withFixedClock(() => {
 		const h = harness();
 		const weekBefore = quickButton(h.root, h.t("taskSelection.quickThisWeek"));
-		const calendarBefore = calendarGrid(h.root);
+		const toggleBefore = calendarToggle(h.root);
+		const containerBefore = calendarContainer(h.root);
+		const gridBefore = calendarGrid(h.root);
+
 		click(quickButton(h.root, h.t("taskSelection.quickThisMonth")));
-		// setTasks 未把首帧存回 lastFrame，首个转移按「首次装配」全量重建。
-		// 修好 #117 后本用例应变红，改为断言对象身份不变。
-		assert.notStrictEqual(quickButton(h.root, h.t("taskSelection.quickThisWeek")), weekBefore);
-		assert.notStrictEqual(calendarGrid(h.root), calendarBefore);
+
+		// 首帧在 setTasks 时已落帧，首个转移按差量重绘：筛选区控件对象身份不变。
+		assert.strictEqual(quickButton(h.root, h.t("taskSelection.quickThisWeek")), weekBefore);
+		assert.strictEqual(calendarToggle(h.root), toggleBefore);
+		assert.strictEqual(calendarContainer(h.root), containerBefore);
+		// 日历仍按 calendarEffect 的 rebuild 处置重建一次（ADR-0023），并非 renderFilter 重跑。
+		assert.notStrictEqual(calendarGrid(h.root), gridBefore);
+		assert.equal(
+			rangeLabel(h.root),
+			h.t("taskSelection.currentFilter", { start: "2024-03-01", end: "2024-03-31" })
+		);
 	}));
 
 test("后续区间变化只刷新区间控件，不重建筛选区", () =>
