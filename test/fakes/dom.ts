@@ -24,7 +24,6 @@ export class FakeEl {
 	disabled = false;
 	label = "";
 	title = "";
-	id = "";
 	/** 测试用：视图是否请求过本元素聚焦（不模拟浏览器焦点语义）。 */
 	focused = false;
 	attributes = new Map<string, string>();
@@ -115,6 +114,15 @@ export class FakeEl {
 
 	getAttribute(name: string): string | null {
 		return this.attributes.get(name) ?? null;
+	}
+
+	/** DOM `id` 是属性：属性读法与 `getAttribute("id")` 保持一致。 */
+	get id(): string {
+		return this.attributes.get("id") ?? "";
+	}
+
+	set id(value: string) {
+		this.attributes.set("id", value);
 	}
 
 	get textContent(): string {

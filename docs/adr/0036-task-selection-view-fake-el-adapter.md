@@ -21,7 +21,7 @@ ADR-0023 成文时接受「仍无 DOM 测试」，判据是「当时视图的 se
 ## Decision
 
 1. **第二 adapter 是「真实视图 + FakeEl」**：用 `new TaskSelectionView({ container: fakeEl as unknown as HTMLElement, … })` 构造生产类，真实 `CalendarWidget` 一并渲染进 FakeEl；交互只经 FakeEl 记录的 `click` / `keydown` 等事件驱动（点按钮、点日历格）。**不新增构造参数、不公开私有成员、不加 `forTest` 分支、不加时钟 / 焦点注入口**。若某行为不开后门就观察不到，把它当发现报回，不加钩子。
-2. **FakeEl 只做加法**：在共享的 `test/fakes/dom.ts` 上补 `setAttr`（`setAttribute` 别名）、`toggleAttribute`、`id`、`focus`（记录 `focused`），语义对齐 Obsidian 扩展；现有使用 FakeEl 的测试文件零改动。另造子类会让假 DOM 分裂，换 jsdom 为几个方法引入整套运行时。
+2. **FakeEl 只做加法**：在共享的 `test/fakes/dom.ts` 上补 `setAttr`（`setAttribute` 别名）、`toggleAttribute`、`id`（读写都走 attributes，与真 DOM 一致）、`focus`（记录 `focused`），语义对齐 Obsidian 扩展；并把 `createEl` 的 `cls` 串按空白切分（真 DOM `className` 语义），`addClass` / `toggleClass` 保持单类名——两者各自对齐真 DOM 的对应 API。现有使用 FakeEl 的测试文件零改动。另造子类会让假 DOM 分裂，换 jsdom 为几个方法引入整套运行时。
 3. **`src/` 零改动**：本票只动 `test/` 与 `docs/adr/`。实施中发现真 bug → 另开 issue，本票测试按**当前行为**写并留注释指向新票。
 4. **重绘决策不抽纯函数**：现状只有三条判断、一处消费者；抽 `diffFrames(prev, next)` 等于为一处调用发明一套小语义，还会把「重绘规则只有一处」拆成规则与执行两地。触发条件（任一命中再抽）：出现第三个筛选页签、出现第二处帧消费者、`render` 的 diff 分支长出第四类判断。
 5. **覆盖「视图自己决定的事」全清单**：初值、七个转移的界面路径、重绘决策（元素身份）、日历生命周期、焦点恢复、空态与未知提示；**不重复** session 已有测试的计数口径、加入全部的集合语义、三维筛选叠加与 `rangeSource ⟺ range` 不变式。

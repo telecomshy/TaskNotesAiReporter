@@ -1,5 +1,9 @@
 # 「选择任务」session 收敛为 frame + 七个转移，不变式内化
 
+> **改订（2026-11-27，#115）**：本条「仍无 DOM 测试」的后果已由 [ADR-0036](0036-task-selection-view-fake-el-adapter.md) 取代——
+> 视图侧新增第二个 adapter（真实 `TaskSelectionView` + FakeEl，真实日历）作特征测试；重绘决策仍留在 `render` 一处、
+> 不抽纯函数。本记录的 frame + 七转移与其余结论继续有效。
+
 「选择任务」session 原有 22 个导出（17 个函数 + 5 类型；其中查询函数 9 个）近乎与其状态同宽，`TaskSelectionView` 每帧重算筛选 3–5 次，而「哪个计数进哪个标签、哪些行惰性、空态说什么」这些组合规则只活在无测试的 view 里。决定：读侧收敛为**唯一入口 `frame(session)`**——一帧一问，每次现算返回整帧（左栏行 + `state: "addable" | "joined"` 标记、计数、空态原因、右栏行、筛选摘要）；转移面冻结为 7 个具名转移（原名原签名）；9 个旧查询函数删除，其答案各归帧字段；`rangeSource ⟺ range` 不变式与 `open-custom`/`clear` 细节全部内化，`SelectionSession` 以 `unique symbol` 不透明。此决定来自 `/improve-codebase-architecture` 候选 1 的 design-it-twice 三跑裁决（最小 interface 方案为骨，借灵活性方案的行标记形状与硬封装）。
 
 ## Considered Options

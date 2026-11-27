@@ -13,8 +13,8 @@ import { FakeEl } from "./dom";
 
 export interface TaskSelectionHarnessOptions {
 	tasks: TaskInfo[];
-	/** 参与区间筛选的日期口径；缺省只算 due。 */
-	dateFields?: readonly DateField[];
+	/** 参与区间筛选的日期口径；必填——让用例自己声明口径，不替产品默认值做主。 */
+	dateFields: readonly DateField[];
 	/** 状态目录；缺省四档齐备（chip 可用）。传空数组＝目录缺失（chip 禁用）。 */
 	statuses?: readonly StatusDefinition[];
 	weekStartsOnMonday?: boolean;
@@ -43,7 +43,7 @@ export function renderTaskSelectionHarness(
 	const t = createTranslator(BUNDLES.zh);
 	const view = new TaskSelectionView({
 		container: root as unknown as HTMLElement,
-		dateFields: options.dateFields ?? ["due"],
+		dateFields: options.dateFields,
 		statuses: options.statuses ?? DEFAULT_STATUSES,
 		weekStartsOnMonday: options.weekStartsOnMonday ?? true,
 		t,

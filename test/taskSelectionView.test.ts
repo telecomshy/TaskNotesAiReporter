@@ -10,7 +10,7 @@
 
 import { test, mock } from "node:test";
 import assert from "node:assert/strict";
-import type { DateField, StatusDefinition, TaskInfo } from "../src/types";
+import type { DateField, TaskInfo } from "../src/types";
 import { FakeEl } from "./fakes/dom";
 import { renderTaskSelectionHarness, type TaskSelectionHarness } from "./fakes/taskSelectionHarness";
 import { makeTask } from "./fakes/task";
@@ -18,13 +18,6 @@ import { makeTask } from "./fakes/task";
 const FIXED_NOW = new Date(2024, 2, 15, 12, 0, 0).getTime();
 
 const dateFields: DateField[] = ["due"];
-
-const statuses: StatusDefinition[] = [
-	{ value: "open", statusClass: "todo" },
-	{ value: "in-progress", statusClass: "in-progress" },
-	{ value: "done", statusClass: "completed" },
-	{ value: "cancelled", statusClass: "cancelled" },
-];
 
 /** 2024 年 3 月：a / b 命中，c 在 4 月。 */
 const marchTasks: TaskInfo[] = [
@@ -43,7 +36,7 @@ function withFixedClock<T>(fn: () => T): T {
 }
 
 function harness(tasks: TaskInfo[] = marchTasks): TaskSelectionHarness {
-	return renderTaskSelectionHarness({ tasks, dateFields, statuses });
+	return renderTaskSelectionHarness({ tasks, dateFields });
 }
 
 // ===== DOM 读法（只用 FakeEl 支持的类选择器） =====
@@ -534,8 +527,11 @@ test("快捷区间上点「自定义」：日历选择被清，面板仍展开",
 	withFixedClock(() => {
 		const h = harness();
 		click(quickButton(h.root, h.t("taskSelection.quickThisMonth")));
+		const weekBefore = quickButton(h.root, h.t("taskSelection.quickThisWeek"));
 		click(calendarToggle(h.root));
 
+		// 来源由 preset 归零：只刷新区间控件，不重建筛选区。
+		assert.strictEqual(quickButton(h.root, h.t("taskSelection.quickThisWeek")), weekBefore);
 		assert.equal(calendarToggle(h.root).getAttribute("aria-expanded"), "true");
 		assert.ok(!calendarContainer(h.root).hasClass("tah-hidden"));
 		assert.equal(calendarToggle(h.root).text, h.t("taskSelection.hideCalendar"));
@@ -550,8 +546,11 @@ test("日历内单击保持展开，自定义来源被高亮", () =>
 		const h = harness();
 		click(quickButton(h.root, h.t("taskSelection.quickThisMonth")));
 		click(calendarToggle(h.root));
+		const weekBefore = quickButton(h.root, h.t("taskSelection.quickThisWeek"));
 		click(dayCell(h.root, "5"));
 
+		// 来源变成 custom：同样只刷新区间控件。
+		assert.strictEqual(quickButton(h.root, h.t("taskSelection.quickThisWeek")), weekBefore);
 		assert.equal(calendarHidden(h.root), false);
 		assert.equal(calendarToggle(h.root).getAttribute("aria-expanded"), "true");
 		assert.equal(calendarToggle(h.root).getAttribute("aria-pressed"), "true");
@@ -604,7 +603,6 @@ test("状态筛选：chip 按下态与「另有 N 条状态未知」提示一起
 				makeTask({ id: "d", title: "Delta", status: "mystery" }),
 			],
 			dateFields,
-			statuses,
 		});
 		click(tabs(h.root)[1]);
 		assert.equal(actionRows(h.root, "left").length, 4);
