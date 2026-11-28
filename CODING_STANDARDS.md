@@ -46,9 +46,10 @@ Rules a reviewer applies to the diff:
   `button.<class>.<class>:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }`
   so keyboard focus stays visible (existing idiom:
   `button.tah-thinking-switch.tah-thinking-switch:focus-visible`).
-- There are no DOM or visual tests. A UI change is done only after manual
-  acceptance of hover, focus-visible, selected/expanded, disabled, and the state
-  after a filter or tab re-render.
+- There are no visual tests; interaction wiring is covered by FakeEl feature tests
+  (ADR-0036). A UI change is done only after manual acceptance of hover,
+  focus-visible, selected/expanded, disabled, and the state after a filter or tab
+  re-render.
 
 ## Decision records
 
